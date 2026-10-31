@@ -2055,7 +2055,6 @@ VIEWS.home = function () {
   h += '<section class="panel hero span"><div class="hero-main"><p class="eyebrow">' + esc(dayFull(t)) + (hj ? ' · ' + hj.d + ' ' + esc(hj.m) + ' ' + hj.y + 'هـ' : '') + '</p><h1>' + (wkTxt ? esc(wkTxt) : esc(b.title)) + '</h1>';
   var nb = nextBreak(t, E); if (nb) h += '<p class="muted">' + (nb.a <= t ? 'أنت في ' + esc(nb.t) + ' حتى ' + esc(dayShort(nb.b)) : 'أقرب إجازة: ' + esc(nb.t) + ' بعد ' + cnt(nb.a - t, WORDS.day)) + '</p>';
   h += '</div></section>';
-  h += '<div class="sync span" id="sync">' + backupLine() + '</div>';
   if (!b.lessons.length) return h + '<div class="span">' + setupPanel(b) + '</div></div>';
   if (X) {
     var wi = cw >= 0 ? cw : 0, ls = [];
