@@ -101,6 +101,9 @@ var TERMS = {
   west: [['t1', 'الفصل الدراسي الأول', '2026-08-30', '2027-01-07'], ['t2', 'الفصل الدراسي الثاني', '2027-01-17', '2027-07-01']]
 };
 function eduList() { var r = P.region === 'west' ? 'west' : 'std'; return EDU_CAL.both.concat(EDU_CAL[r]).map(function (e) { return { a: parseISO(e[0]), b: parseISO(e[1]), k: e[2], t: e[3] }; }); }
+function termNow() { var t = today(), T = termsList(); return (T.filter(function (x) { return t <= parseISO(x[3]); })[0] || T[T.length - 1])[0]; }
+function guessTerm(title) { var s = String(title || ''); if (/الجزء الأول|الفصل الدراسي الأول|(^|\s)ف\s?1(\s|$)|الفصل الأول|SM1|S1\b/i.test(s)) return 't1'; if (/الجزء الثاني|الفصل الدراسي الثاني|(^|\s)ف\s?2(\s|$)|الفصل الثاني|SM2|S2\b/i.test(s)) return 't2'; return ''; }
+function termName(k) { return k === 't1' ? 'الفصل الدراسي الأول' : k === 't2' ? 'الفصل الدراسي الثاني' : ''; }
 function termsList() { return TERMS[P.region === 'west' ? 'west' : 'std']; }
 function dayInfo(i, E) {
   var hj = hijriOf(i), o = { we: wday(i) >= 5, off: '', extra: false, marks: [], ram: 0, eid: '', hj: hj };
@@ -1794,7 +1797,7 @@ function addBook(file, attachTo) {
     openModal(card('<h2>تعذّرت إضافة الكتاب</h2><p class="muted">' + (e && e.name === 'QuotaExceededError' ? 'لا توجد مساحة كافية على الجهاز.' : e && /password/i.test(e.name || e.message || '') ? 'الملف محمي بكلمة مرور.' : 'الملف ليس PDF صالحًا أو تعذّرت قراءته.') + '</p><div class="actions"><button class="btn" data-act="modal-close">حسنًا</button></div>'));
   });
 }
-ACT['bk-title-save'] = function (el) { var b = bookById(el.getAttribute('data-id')), t = document.getElementById('bk-title').value.trim(); if (b && t) { b.title = t; saveBook(b); } closeModal(); go('lessons'); };
+ACT['bk-title-save'] = function (el) { var b = bookById(el.getAttribute('data-id')), t = document.getElementById('bk-title').value.trim(); if (b && t) { b.title = t; if (!b.term) b.term = guessTerm(t); saveBook(b); } closeModal(); go('lessons'); };
 ACT['go-books'] = function () { go('books'); };
 ACT['pick-book'] = function () {
   if (BOOKS.length < 2) { go('books'); return; }
@@ -1805,7 +1808,7 @@ VIEWS.books = function () {
   var h = '<div class="page-head"><h1>كتبي</h1><p class="muted">الكتب على هذا الجهاز فقط. لكل كتاب دروسه ومساعدها وكتابتك عليه.</p></div>';
   h += BOOKS.length ? '<div class="ulist">' + BOOKS.map(function (b) {
     var ready = b.lessons.filter(function (l) { return aidOf(b, l); }).length;
-    return '<div class="urow bk' + (b.id === (curBook() || {}).id ? ' cur' : '') + '">' + ico('book', b.id === (curBook() || {}).id ? 'teal' : 'gray') + '<span><span class="u-title">' + esc(b.title) + (b.missing ? ' <span class="mchip bad"><i></i>الملف غير موجود</span>' : '') + '</span><span class="u-std">' + cnt(b.pages || 0, WORDS.page) + ' · ' + cnt(b.lessons.length, WORDS.lesson) + ' · مساعد جاهز لـ ' + ready + (b.size ? ' · ' + (b.size / 1048576).toFixed(0) + ' م.ب' : '') + '</span></span>' +
+    return '<div class="urow bk' + (b.id === (curBook() || {}).id ? ' cur' : '') + '">' + ico('book', b.id === (curBook() || {}).id ? 'teal' : 'gray') + '<span><span class="u-title">' + esc(b.title) + (b.missing ? ' <span class="mchip bad"><i></i>الملف غير موجود</span>' : '') + '</span><span class="u-std">' + (b.term ? termName(b.term) + ' · ' : '') + cnt(b.pages || 0, WORDS.page) + ' · ' + cnt(b.lessons.length, WORDS.lesson) + ' · مساعد جاهز لـ ' + ready + (b.size ? ' · ' + (b.size / 1048576).toFixed(0) + ' م.ب' : '') + '</span></span>' +
       '<span class="u-side bk-acts">' + (b.id !== (curBook() || {}).id ? '<button class="btn sm" data-act="use-book" data-id="' + b.id + '">افتحه</button>' : '<span class="mchip ok"><i></i>المفتوح</span>') + '<button class="btn ghost sm" data-act="bk-edit" data-id="' + b.id + '">إعداد</button></span></div>';
   }).join('') + '</div>' : '<p class="muted">لا كتب بعد.</p>';
   h += '<div class="actions"><button class="btn" data-act="book-add">أضف كتابًا (PDF)</button><button class="btn ghost" data-act="pack-add">أضف ملف دروس</button></div>';
@@ -1814,6 +1817,7 @@ VIEWS.books = function () {
 ACT['bk-edit'] = function (el) {
   var b = bookById(el.getAttribute('data-id')); if (!b) return;
   openModal(sheet('إعداد الكتاب', '<section class="set-sec"><label class="field"><span>اسم الكتاب</span><input type="text" id="be-title" value="' + esc(b.title) + '"></label>' +
+    '<label class="field"><span>يُدرَّس في</span><select id="be-term">' + [['', 'غير محدد'], ['t1', 'الفصل الدراسي الأول'], ['t2', 'الفصل الدراسي الثاني']].map(function (x) { return '<option value="' + x[0] + '"' + ((b.term || '') === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></label><p class="small muted">يُفتح الكتاب تلقائيًا حين يبدأ فصله، ويبدأ تقويمه على فصله.</p>' +
     '<label class="field"><span>فرق الترقيم: صفحة الملف = الصفحة المطبوعة + ؟</span><input type="number" inputmode="numeric" id="be-off" value="' + (+b.offset || 0) + '"></label><p class="small muted">مثال: إن كانت ص 1 المطبوعة هي الصفحة 9 في الملف فالفرق 8. أسهل طريقة: من «الكتاب» اضغط رقم الصفحة أعلاه ← ضبط ترقيم الصفحات.</p>' +
     '<div class="actions"><button class="btn" data-act="be-save" data-id="' + b.id + '">احفظ</button></div></section>' +
     '<section class="set-sec"><h3>مشاركة الدروس</h3><p class="small muted">صدّر دروس هذا الكتاب ومساعدها في ملف واحد، تحفظه أو ترسله لزميل يدرّس الكتاب نفسه فيضيفه إلى تطبيقه دون تكلفة. لا يحوي الملف الكتاب ولا كتابتك عليه.</p><div class="actions" style="margin-top:0"><button class="btn ghost" data-act="pack-export" data-id="' + b.id + '"' + (b.lessons.length ? '' : ' disabled') + '>صدّر ملف الدروس</button></div></section>' +
@@ -1823,6 +1827,7 @@ ACT['be-save'] = function (el) {
   var b = bookById(el.getAttribute('data-id')); if (!b) return;
   var t = document.getElementById('be-title').value.trim(); if (t) b.title = t;
   var o = parseInt(document.getElementById('be-off').value, 10); if (isFinite(o)) b.offset = o;
+  var tm = document.getElementById('be-term').value; if (tm !== (b.term || '')) { b.term = tm; if (S.plan[b.id]) { delete S.plan[b.id].termSet; } }
   saveBook(b); closeModal(); render(); toast('حُفظ');
 };
 ACT['bk-del'] = function (el) { confirmBox('حذف الكتاب؟', 'يُحذف ملف الكتاب ودروسه ومساعدها وكتابتك عليه من هذا الجهاز. لا يمكن التراجع؛ احفظ نسخة احتياطية أولًا إن أردت.', 'bk-del-yes', 'احذف الكتاب', ' data-id="' + el.getAttribute('data-id') + '"', true); };
@@ -1957,7 +1962,9 @@ function quizResult() {
 
 /* ---------- plan: lessons over the weeks of the term ---------- */
 function planOf(b) { // each term keeps its own dates, review weeks and lesson lengths
-  var P0 = S.plan[b.id] = S.plan[b.id] || {}, T = termsList(), t = T.filter(function (x) { return x[0] === P0.term; })[0];
+  var P0 = S.plan[b.id] = S.plan[b.id] || {}, T = termsList();
+  if (b.term && !P0.termSet) P0.term = b.term; // a book of one term opens on its term
+  var t = T.filter(function (x) { return x[0] === P0.term; })[0];
   if (!t) { var td = today(); t = T.filter(function (x) { return td <= parseISO(x[3]); })[0] || T[0]; P0.term = t[0]; }
   if (!P0.terms) { P0.terms = {}; if (P0.start || P0.dur) P0.terms[P0.term] = { start: P0.start, end: P0.end, review: P0.review, dur: P0.dur || {} }; ['start', 'end', 'review', 'dur', 'manual'].forEach(function (k) { delete P0[k]; }); }
   var p = P0.terms[t[0]] = P0.terms[t[0]] || {};
@@ -2032,7 +2039,7 @@ VIEWS.plan = function () {
   return h;
 };
 AFTER.push(function () { if (route.v === 'plan') { var n = document.querySelector('.wk.now'); if (n && route.jump) { route.jump = false; n.scrollIntoView({ block: 'center' }); } } });
-ACT['plan-term'] = function (el) { var b = curBook(); planOf(b); S.plan[b.id].term = el.getAttribute('data-v'); saveState(); render(true); };
+ACT['plan-term'] = function (el) { var b = curBook(); planOf(b); S.plan[b.id].term = el.getAttribute('data-v'); S.plan[b.id].termSet = true; saveState(); render(true); };
 ACT['plan-rv'] = function (el) { var p = planOf(curBook()); p.review = +el.getAttribute('data-v'); saveState(); render(true); };
 ACT['plan-fill'] = function () { autoFill(curBook()); render(true); toast('وُزّعت الدروس مبدئيًا بحسب صفحاتها؛ عدّل أي أسبوع من قائمته'); };
 ACT['plan-clear'] = function () { confirmBox('مسح دروس الأسابيع؟', 'تُفرَّغ أسابيع هذا الفصل الدراسي من الدروس لتختارها من جديد.', 'plan-clear-yes', 'امسح', '', true); };
@@ -2305,6 +2312,10 @@ Promise.all([idb().then(function () { return Promise.all([dbAll('books'), dbAll(
   BOOKS.forEach(function (b) { if (!Array.isArray(b.lessons)) b.lessons = []; if (files[b.id]) delete b.missing; else b.missing = true; });
   (r[1] || []).forEach(function (a) { AIDS[a.k] = a; });
   if (!curBook() && BOOKS[0]) S.cur = BOOKS[0].id; else if (curBook()) S.cur = curBook().id;
+  BOOKS.forEach(function (bk) { if (bk.term == null) { bk.term = guessTerm(bk.title); if (bk.term) saveBook(bk); } });
+  var tn = termNow(), tb = BOOKS.filter(function (bk) { return bk.term === tn; }), switched = false;
+  if (S.autoTerm !== tn && tb.length) { if (tb.length === 1 && S.cur !== tb[0].id) { S.cur = tb[0].id; switched = tb[0].title; } S.autoTerm = tn; saveState(); }
+  if (switched) setTimeout(function () { toast('بدأ ' + termName(tn) + ': فُتح «' + switched + '»', 4000); }, 700);
   var dd = 0; BOOKS.forEach(function (bk) { dd += dedupeBook(bk); }); if (dd) setTimeout(function () { toast('أُزيلت الدروس المكررة (' + dd + ')', 4000); }, 600);
   document.getElementById('tabs').hidden = !BOOKS.length;
   var h = (location.hash || '').slice(1), rs = null;
