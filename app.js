@@ -2117,16 +2117,30 @@ ACT['backup-restore'] = function () {
   });
 };
 function restore(o) {
-  var n = 0, jobs = [];
+  var n = 0, jobs = [], MAP = {};
+  /* a key of the backup, moved to the book it now belongs to on this device */
+  function rk(k) { k = String(k); Object.keys(MAP).forEach(function (a) { if (k.indexOf(a + ':') === 0 || k === a) k = MAP[a] + k.slice(a.length); else if (/^[bxp]:/.test(k) && k.indexOf(a + ':', 2) === 2) k = k.slice(0, 2) + MAP[a] + k.slice(2 + a.length); }); return k; }
+  function rkObj(obj) { var out = {}; Object.keys(obj || {}).forEach(function (k) { out[rk(k)] = obj[k]; }); return out; }
   return dbAll('aids').then(function (curA) {
     var haveA = {}; (curA || []).forEach(function (a) { haveA[a.k] = a.at || 0; });
     arr(o.books).forEach(function (b) {
       if (!b || !b.id || !/^[A-Za-z0-9_-]{1,40}$/.test(b.id) || !Array.isArray(b.lessons)) return;
-      var cur = bookById(b.id);
       b.lessons = b.lessons.filter(function (l) { return l && l.id && l.title && +l.from > 0; }).map(function (l) { return { id: str(l.id), unit: str(l.unit), chap: str(l.chap), title: str(l.title), from: +l.from, to: +l.to || +l.from }; });
-      if (!cur) { var nb = { id: b.id, title: str(b.title), lessons: b.lessons, offset: +b.offset || 0, pages: +b.pages || 0, added: +b.added || Date.now(), file: str(b.file), size: +b.size || 0, missing: true }; BOOKS.push(nb); jobs.push(saveBook(nb)); n++; }
-      else if ((b.t || 0) > (cur.t || 0)) { cur.lessons = b.lessons; cur.title = str(b.title) || cur.title; cur.offset = +b.offset || 0; jobs.push(saveBook(cur)); n++; }
+      var cur = bookById(b.id);
+      if (!cur) { // the same book added here from another copy of the file: same number of pages, and the same name or still without lessons
+        var same = BOOKS.filter(function (x) { return !o.books.some(function (y) { return y && y.id === x.id; }) && +x.pages === +b.pages && (norm(x.title) === norm(b.title) || !x.lessons.length); });
+        if (same.length === 1) { cur = same[0]; MAP[b.id] = cur.id; }
+      }
+      if (!cur) { var nb = { id: b.id, title: str(b.title), lessons: b.lessons, offset: +b.offset || 0, pages: +b.pages || 0, added: +b.added || Date.now(), file: str(b.file), size: +b.size || 0, missing: true }; BOOKS.push(nb); jobs.push(saveBook(nb)); n++; return; }
+      if (!cur.lessons.length || (b.t || 0) > (cur.t || 0)) { cur.lessons = b.lessons; cur.title = str(b.title) || cur.title; cur.offset = +b.offset || 0; jobs.push(saveBook(cur)); n++; }
+      else { var have = {}; cur.lessons.forEach(function (l) { have[l.id] = 1; }); var add = b.lessons.filter(function (l) { return !have[l.id]; }); if (add.length) { cur.lessons = cur.lessons.concat(add).sort(function (x, y) { return x.from - y.from; }); jobs.push(saveBook(cur)); n += add.length; } }
     });
+    if (Object.keys(MAP).length) {
+      arr(o.aids).forEach(function (a) { if (a && typeof a.k === 'string') a.k = rk(a.k); });
+      arr(o.ink).forEach(function (a) { if (a && typeof a.k === 'string') a.k = rk(a.k); });
+      arr(o.notes).forEach(function (a) { if (a && typeof a.k === 'string') { a.k = rk(a.k); if (Array.isArray(a.imgs)) a.imgs.forEach(function (m) { if (m && m.mk) m.mk = 'm:' + rk(String(m.mk).slice(2)); }); } });
+      var st0 = o.state || {}; ['taught', 'ans', 'notes', 'plan', 'last'].forEach(function (f) { if (st0[f]) st0[f] = rkObj(st0[f]); }); if (st0.cur && MAP[st0.cur]) st0.cur = MAP[st0.cur];
+    }
     arr(o.aids).forEach(function (a) {
       if (!a || typeof a.k !== 'string' || (haveA[a.k] || 0) >= (a.at || 0)) return;
       try { var d = cleanAid(a.d); var rec = { k: a.k, src: a.src === 'ai' ? 'ai' : 'pack', at: +a.at || Date.now(), model: str(a.model), d: d }; AIDS[a.k] = rec; jobs.push(dbPut('aids', rec)); n++; } catch (e) {}
