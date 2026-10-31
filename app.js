@@ -695,9 +695,15 @@ function cleanFig(f) {
   var v = cleanSvg(f.svg); return v ? { svg: v, cap: str(f.cap) } : null;
 }
 function cleanTb(t) { if (!t || typeof t !== 'object') return null; return { t: str(t.t), hd: arr(t.hd).map(str), r: arr(t.r).map(function (r) { return arr(r).map(str); }) }; }
-var BOXES = { ex: 1, pit: 1, note: 1 };
+var BOXES = { ex: 1, pit: 1, note: 1, key: 1, q: 1, life: 1 };
+function jsonish(b) { // the AI sometimes writes a block as a JSON string: {"h":"…"}
+  if (typeof b !== 'string') return b; var t = b.trim();
+  if (t.charAt(0) === '{' && t.charAt(t.length - 1) === '}') { try { var o = JSON.parse(t); if (o && typeof o === 'object') return o; } catch (e) {} }
+  return b;
+}
 function cleanBlocks(bs, depth) {
   return arr(bs).map(function (b) {
+    b = jsonish(b);
     if (typeof b === 'string') return b;
     if (!b || typeof b !== 'object') return null;
     if (b.h != null) return { h: str(b.h) };
@@ -748,15 +754,18 @@ function figure(f, zoomable) {
   if (f.img) return '<figure class="fig img"><img data-act="zoom" src="' + f.img + '" alt="' + esc(plain(f.cap || '')) + '" loading="lazy" decoding="async">' + (f.cap ? '<figcaption>' + fx(f.cap) + '</figcaption>' : '') + '</figure>';
   return '<figure class="fig' + (zoomable ? ' zf' : '') + '"' + (zoomable ? ' data-act="fig-zoom"' : '') + '>' + (f.svg || '') + (f.cap ? '<figcaption>' + fx(f.cap) + '</figcaption>' : '') + '</figure>';
 }
-var BOXK = { ex: 'ex', pit: 'pit', note: 'note' };
+var BOXK = { ex: ['green', 'مثال', 'bulb'], pit: ['amber', 'انتبه', 'warn'], note: ['blue', 'ملاحظة', 'clip'], key: ['violet', 'تذكّر', 'star'], q: ['rose', 'سؤال للطلاب', 'q'], life: ['teal', 'من حياتنا', 'leaf'] };
+ICONS.clip = '<rect x="5" y="4.5" width="14" height="16" rx="2.5"/><path d="M9 4.5v-1h6v1M8.5 10h7M8.5 14h5"/>';
+function boxHtml(k, h, inner) { var K = BOXK[k] || BOXK.note; return '<div class="x-box kb kb-' + (BOXK[k] ? k : 'note') + ' hue-' + K[0] + '"><b class="kb-h">' + svgI(K[2]) + (h ? fx(h) : K[1]) + '</b>' + inner + '</div>'; }
 function blocks(bs) {
   return (bs || []).map(function (b) {
+    b = jsonish(b);
     if (typeof b === 'string') return '<p>' + fx(b) + '</p>';
     if (b.h) return '<h4 class="x-h">' + fx(b.h) + '</h4>';
     if (b.ul) return '<ul class="x-ul">' + b.ul.map(function (x) { return '<li>' + fx(x) + '</li>'; }).join('') + '</ul>';
     if (b.ol) return '<ol class="x-steps">' + b.ol.map(function (x) { return '<li>' + fx(x) + '</li>'; }).join('') + '</ol>';
     if (b.fig) return figure(b.fig, true);
-    if (b.box) return '<div class="x-box ' + (BOXK[b.box.k] || 'note') + '">' + (b.box.h ? '<b>' + fx(b.box.h) + '</b>' : '') + blocks(b.box.b) + '</div>';
+    if (b.box) return boxHtml(b.box.k, b.box.h, blocks(b.box.b));
     if (b.tb) return table(b.tb);
     return '';
   }).join('');
@@ -949,23 +958,27 @@ ACT['aid-del'] = function (el) { confirmBox('حذف مساعد الدرس؟', '�
 ACT['aid-del-yes'] = function (el) { var k = el.getAttribute('data-k'); delete AIDS[k]; dbDel('aids', k); closeModal(); render(); };
 
 var L_TAB = {
-  goals: function (a) {
-    var h = '';
-    if (a.idea) h += '<p class="x-idea"><b>الفكرة الرئيسة:</b> ' + fx(a.idea) + '</p>';
-    if (a.goals.length) h += '<section class="panel"><h2>أهداف الدرس</h2><ol class="inds">' + a.goals.map(function (g, k) { return '<li><span class="i-num">' + (k + 1) + '</span><div class="i-body"><p>' + fx(g) + '</p></div></li>'; }).join('') + '</ol></section>';
-    if (a.vocab.length) h += '<section class="panel" style="margin-top:14px"><h2>المفردات</h2><dl class="vocab">' + a.vocab.map(function (v) { return '<div><dt>' + fx(v.t) + '</dt><dd>' + fx(v.d) + '</dd></div>'; }).join('') + '</dl></section>';
-    if (a.prior.length) h += '<div class="x-box note" style="margin-top:14px"><b>التعلم القبلي</b><ul class="x-ul">' + a.prior.map(function (x) { return '<li>' + fx(x) + '</li>'; }).join('') + '</ul></div>';
-    if (a.intro) h += '<div class="x-box ex" style="margin-top:14px"><b>تمهيد للدرس</b><p>' + fx(a.intro) + '</p></div>';
+  goals: function (a, b, l) {
+    var k = lk(b, l), h = '';
+    if (a.idea) h += '<p class="x-idea idea-big xa" id="x-' + esc(k) + ':i"><b>الفكرة الرئيسة:</b> ' + fx(a.idea) + '</p>';
+    if (a.goals.length) h += '<article class="xcard xa hue-teal" id="x-' + esc(k) + ':g"><header class="x-head"><span class="i-num">' + svgI('target') + '</span><p class="x-ind">أهداف الدرس</p></header><ol class="goal-list">' + a.goals.map(function (g, i) { return '<li class="hue-' + unitHue(i) + '"><span class="g-n">' + (i + 1) + '</span><span>' + fx(g) + '</span></li>'; }).join('') + '</ol></article>';
+    if (a.vocab.length) h += '<article class="xcard xa hue-violet" id="x-' + esc(k) + ':v"><header class="x-head"><span class="i-num">' + svgI('book') + '</span><p class="x-ind">المفردات</p></header><dl class="vocab">' + a.vocab.map(function (v, i) { return '<div class="hue-' + unitHue(i + 1) + '"><dt>' + fx(v.t) + '</dt><dd>' + fx(v.d) + '</dd></div>'; }).join('') + '</dl></article>';
+    if (a.prior.length || a.intro) h += '<article class="xcard xa hue-amber" id="x-' + esc(k) + ':p"><header class="x-head"><span class="i-num">' + svgI('bulb') + '</span><p class="x-ind">قبل الشرح</p></header>' +
+      (a.prior.length ? boxHtml('note', 'التعلم القبلي', '<ul class="x-ul">' + a.prior.map(function (x) { return '<li>' + fx(x) + '</li>'; }).join('') + '</ul>') : '') +
+      (a.intro ? boxHtml('q', 'تمهيد للدرس', '<p>' + fx(a.intro) + '</p>') : '') + '</article>';
     return h || '<p class="muted">لا أهداف في هذا المساعد.</p>';
   },
-  exp: function (a) {
+  exp: function (a, b, l) {
     if (!a.exp.length) return '<p class="muted">لا شرح في هذا المساعد.</p>';
-    return a.exp.map(function (x, k) {
-      return '<article class="xcard"><header class="x-head"><span class="i-num">' + (k + 1) + '</span><p class="x-ind">' + fx(x.h) + '</p>' + (x.page ? '<button class="pchip" data-act="go-page" data-p="' + x.page + '">ص ' + x.page + '</button>' : '') + '</header>' +
-        (x.fig >= 0 ? figure(a.figs[x.fig], true) : '') + '<div class="x-body">' + blocks(x.body) + '</div></article>';
+    var k = lk(b, l);
+    return '<p class="muted small xa-tip">اكتب على الشرح بقلم الآيباد مباشرة: قلم التحديد يظلّل الكلمات، وأقلام الكتابة تكتب بجانب الفقرة. أو حدّد نصًا بإصبعك ثم «ظلّل التحديد». <button class="link" data-act="xa-pen">أدوات التحديد</button></p>' + a.exp.map(function (x, i) {
+      var id = k + ':e' + i;
+      return '<article class="xcard xa hue-' + unitHue(i) + '" id="x-' + esc(id) + '"><header class="x-head"><span class="i-num">' + (i + 1) + '</span><p class="x-ind">' + fx(x.h) + '</p>' + (x.page ? '<button class="pchip" data-act="go-page" data-p="' + x.page + '">ص ' + x.page + '</button>' : '') + '</header>' +
+        (x.fig >= 0 ? figure(a.figs[x.fig], true) : '') + '<div class="x-body">' + blocks(x.body) + '</div>' + cardTools(id) + '</article>';
     }).join('') +
-      (a.mis.length ? '<div class="x-box pit"><b>أخطاء شائعة عند الطلاب</b><ul class="x-ul">' + a.mis.map(function (x) { return '<li>' + fx(x) + '</li>'; }).join('') + '</ul></div>' : '') +
-      (a.life.length ? '<div class="x-box ex"><b>ربط بالحياة</b><ul class="x-ul">' + a.life.map(function (x) { return '<li>' + fx(x) + '</li>'; }).join('') + '</ul></div>' : '');
+      (a.mis.length || a.life.length ? '<article class="xcard xa hue-rose" id="x-' + esc(k) + ':m"><header class="x-head"><span class="i-num">' + svgI('warn') + '</span><p class="x-ind">أخطاء شائعة وربط بالحياة</p></header>' +
+        (a.mis.length ? boxHtml('pit', 'أخطاء شائعة عند الطلاب', '<ul class="x-ul">' + a.mis.map(function (x) { return '<li>' + fx(x) + '</li>'; }).join('') + '</ul>') : '') +
+        (a.life.length ? boxHtml('life', 'ربط بالحياة', '<ul class="x-ul">' + a.life.map(function (x) { return '<li>' + fx(x) + '</li>'; }).join('') + '</ul>') : '') + cardTools(k + ':m') + '</article>' : '');
   },
   figs: function (a) {
     if (!a.figs.length) return '<p class="muted">لا رسوم في هذا المساعد.</p>';
@@ -984,11 +997,11 @@ var L_TAB = {
     if (qz.short.length) h += '<h3 class="sec-h">أسئلة مقالية قصيرة</h3>' + qz.short.map(function (q, i) { return '<details class="citem"><summary><span class="i-num">' + (i + 1) + '</span> ' + fx(q.q) + '</summary><div class="c-a">' + fx(q.a) + '</div></details>'; }).join('');
     return h;
   },
-  sum: function (a) {
-    var h = '';
-    if (a.sum.length) h += '<section class="sec"><h3>ملخص الدرس</h3><ul class="pts">' + a.sum.map(function (x) { return '<li>' + fx(x) + '</li>'; }).join('') + '</ul></section>';
-    if (a.acts.length) h += '<section class="sec"><h3>أنشطة صفية</h3>' + a.acts.map(function (x) { return '<div class="act-i"><b>' + fx(x.t) + (x.mins ? ' <span class="small muted">· ' + x.mins + ' د</span>' : '') + '</b><p>' + fx(x.d) + '</p></div>'; }).join('') + '</section>';
-    if (a.hw.length) h += '<section class="sec"><h3>واجب منزلي</h3><ul class="pts">' + a.hw.map(function (x) { return '<li>' + fx(x) + '</li>'; }).join('') + '</ul></section>';
+  sum: function (a, b, l) {
+    var k = lk(b, l), h = '';
+    if (a.sum.length) h += '<article class="xcard xa hue-teal" id="x-' + esc(k) + ':s"><header class="x-head"><span class="i-num">' + svgI('star') + '</span><p class="x-ind">ملخص الدرس</p></header><ul class="sum-list">' + a.sum.map(function (x) { return '<li>' + fx(x) + '</li>'; }).join('') + '</ul></article>';
+    if (a.acts.length) h += '<article class="xcard xa hue-amber" id="x-' + esc(k) + ':a"><header class="x-head"><span class="i-num">' + svgI('people') + '</span><p class="x-ind">أنشطة صفية</p></header>' + a.acts.map(function (x, i) { return '<div class="act-i hue-' + unitHue(i + 2) + '"><b>' + fx(x.t) + (x.mins ? '<span class="mins">' + x.mins + ' د</span>' : '') + '</b><p>' + fx(x.d) + '</p></div>'; }).join('') + '</article>';
+    if (a.hw.length) h += '<article class="xcard xa hue-blue" id="x-' + esc(k) + ':h"><header class="x-head"><span class="i-num">' + svgI('pen') + '</span><p class="x-ind">واجب منزلي</p></header><ul class="x-ul">' + a.hw.map(function (x) { return '<li>' + fx(x) + '</li>'; }).join('') + '</ul></article>';
     return h || '<p class="muted">لا ملخص في هذا المساعد.</p>';
   },
   notes: function (a, b, l) {
@@ -1133,7 +1146,7 @@ function nbMount(host, id, data) {
   }
   function redraw() { var x = base.getContext('2d'); x.clearRect(0, 0, NB_W, B.d.h + 10); B.d.s.forEach(function (st) { nbStroke(x, st); }); }
   function save() { B.d.t = Date.now(); clearTimeout(B.saveT); B.saveT = setTimeout(B.flush, 300); }
-  B.flush = function () { clearTimeout(B.saveT); B.saveT = null; var c = JSON.parse(JSON.stringify(B.d)); c.k = id; if (c.s.length) dbPut('notes', c); else dbDel('notes', id); };
+  B.flush = function () { clearTimeout(B.saveT); B.saveT = null; var c = JSON.parse(JSON.stringify(B.d)); c.k = id; xcPut(id, c.s.length ? c : null); nbBadge(id); };
   function pt(cx, cy, f) { var r = live.getBoundingClientRect(); return [Math.round((cx - r.left) / B.scale), Math.round((cy - r.top) / B.scale), Math.max(0, Math.min(99, Math.round((f == null ? 0.5 : f) * 100)))]; }
   function begin(q) { var o = nbPref(), tool = o.tool || 'pen'; B.cur = tool === 'er' ? { er: true, gone: [] } : tool === 'hl' ? { k: 'hl', p: [] } : { c: NB_INK[+o.ink || 0], w: 4, p: [] }; move(q); }
   function move(q) {
@@ -1174,11 +1187,286 @@ function nbMount(host, id, data) {
 }
 function nbBars() { NB_LIVE.forEach(function (B) { var bar = B.host.querySelector('.nb-bar'); if (bar) bar.outerHTML = nbBar(); B.host.classList.toggle('nb-finger', !!nbPref().finger); }); }
 function boardsUnmount() { NB_LIVE.forEach(function (B) { if (B.saveT) B.flush(); if (B.ro) B.ro.disconnect(); }); NB_LIVE = []; }
+var NB_OPEN = {};
+function nbHas(id) { var d = XC[id]; return !!(d && d.s && d.s.length); }
+function nbBadge(id) { Array.prototype.forEach.call(document.querySelectorAll('[data-act="nb-toggle"][data-id="' + id + '"]'), function (b) { b.classList.toggle('has', nbHas(id)); }); }
 AFTER.push(function () {
-  Array.prototype.forEach.call(document.querySelectorAll('#main .nb-slot'), function (h) {
-    var id = h.getAttribute('data-nb');
-    dbGet('notes', id).then(function (d) { if (document.body.contains(h)) nbMount(h, id, d); }, function () { nbMount(h, id, null); });
+  xcReady().then(function () {
+    Array.prototype.forEach.call(document.querySelectorAll('#main .nb-slot'), function (h) {
+      var id = h.getAttribute('data-nb'), lazy = h.hasAttribute('data-lazy'); nbBadge(id);
+      if (lazy && !((NB_OPEN[id] || nbHas(id)) && NB_OPEN[id] !== false)) return;
+      h.hidden = false; nbMount(h, id, XC[id] ? JSON.parse(JSON.stringify(XC[id])) : null);
+    });
   });
+});
+ACT['nb-toggle'] = function (el) {
+  var id = el.getAttribute('data-id'), h = document.querySelector('.nb-slot[data-nb="' + id + '"]'); if (!h) return;
+  if (h.__nb) { if (h.__nb.saveT) h.__nb.flush(); NB_LIVE = NB_LIVE.filter(function (x) { return x !== h.__nb; }); h.__nb = null; h.innerHTML = ''; h.hidden = true; NB_OPEN[id] = false; }
+  else { NB_OPEN[id] = true; h.hidden = false; nbMount(h, id, XC[id] ? JSON.parse(JSON.stringify(XC[id])) : null); try { h.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {} }
+  var c = h.closest('.xa'); if (c) xaDraw(c);
+};
+
+/* ---------- notes store in memory: boards (b:), marks on the explanation (x:), the teacher's photos (p:) ---------- */
+var XC = {}, XC_READY = null;
+function xcReady() {
+  if (!XC_READY) XC_READY = dbAll('notes').then(function (all) { (all || []).forEach(function (d) { XC[d.k] = d; }); return XC; }, function () { return XC; });
+  return XC_READY;
+}
+function xcPut(k, d) {
+  if (d) { d.k = k; d.t = d.t || Date.now(); XC[k] = d; dbPut('notes', d); }
+  else { delete XC[k]; dbDel('notes', k); }
+}
+
+/* ---------- marking the explanation: the pencil highlights words and writes beside paragraphs (from إتقان) ---------- */
+var XA_PEN = ['ink', '#C62828', '#1F5FB8'], XA_UNDO = [], XA_LIVE = null;
+var XA_HLC = [['#FFD23F', 'أصفر'], ['#6FDB98', 'أخضر'], ['#86BEFF', 'أزرق'], ['#FF92BF', 'وردي'], ['#FFAA5C', 'برتقالي']];
+function hlColor(k) { return (XA_HLC[+k || 0] || XA_HLC[0])[0]; }
+function xaPref() { var o = nbPref(); return { tool: o.xtool || 'hl', ink: +o.xink || 0, hlc: Math.min(XA_HLC.length - 1, +o.xhlc || 0), pencil: !!o.pencil }; }
+function xaData(id) { var d = XC['x:' + id]; return d ? JSON.parse(JSON.stringify(d)) : { hl: [], ink: [] }; }
+function xaSave(id, d) { d.t = Date.now(); xcPut('x:' + id, d.hl.length || d.ink.length ? d : null); }
+function xaStore(id, d, before) { XA_UNDO.push({ id: id, d: before }); if (XA_UNDO.length > 60) XA_UNDO.shift(); xaSave(id, d); setTimeout(xaBar, 0); }
+function xaCard(id) { return document.getElementById('x-' + id); }
+function xaSkip(n) { var p = n.nodeType === 1 ? n : n.parentNode; return !p || !!p.closest('.nb-slot, .actions, .xa-acts, button, svg, canvas, .mchip, .i-num, .ph-sec, .kb-h svg, .g-n'); }
+function xaTexts(card) { var out = [], w = document.createTreeWalker(card, NodeFilter.SHOW_TEXT, { acceptNode: function (n) { return xaSkip(n) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT; } }); while (w.nextNode()) out.push(w.currentNode); return out; }
+function xaOff(card, node, off) { var ns = xaTexts(card), sum = 0; for (var i = 0; i < ns.length; i++) { if (ns[i] === node) return sum + off; sum += ns[i].length; } return -1; }
+function xaCaret(x, y) {
+  var r = null;
+  try { if (document.caretRangeFromPoint) r = document.caretRangeFromPoint(x, y); else if (document.caretPositionFromPoint) { var q = document.caretPositionFromPoint(x, y); if (q) { r = document.createRange(); r.setStart(q.offsetNode, q.offset); } } } catch (e) {}
+  return r && r.startContainer && r.startContainer.nodeType === 3 ? { n: r.startContainer, o: r.startOffset } : null;
+}
+function xaAddHl(card, id, a, b, col) { // word-snapped; replaces what it covers
+  var ns = xaTexts(card), T = ns.map(function (n) { return n.data; }).join(''), ends = [], pos = 0;
+  ns.forEach(function (n) { ends.push([pos, pos + n.length]); pos += n.length; });
+  function span(o) { for (var i = 0; i < ends.length; i++) if (o >= ends[i][0] && o < ends[i][1]) return ends[i]; return [o, o]; }
+  if (a > b) { var t = a; a = b; b = t; }
+  while (a < b && /\s/.test(T[a])) a++; while (b > a && /\s/.test(T[b - 1])) b--;
+  var sa = span(a), sb = span(Math.max(a, b - 1));
+  while (a > sa[0] && !/\s/.test(T[a - 1])) a--; while (b < sb[1] && !/\s/.test(T[b])) b++;
+  if (b - a < 1) return false;
+  col = col == null ? xaPref().hlc : col;
+  var d = xaData(id), before = xaData(id), list = [];
+  d.hl.forEach(function (h) { var c = h[2] || 0, at = h[3] || 0; if (h[1] <= a || h[0] >= b) list.push([h[0], h[1], c, at]); else { if (h[0] < a) list.push([h[0], a, c, at]); if (h[1] > b) list.push([b, h[1], c, at]); } });
+  list.push([a, b, col, Date.now()]); list.sort(function (x, y) { return x[0] - y[0]; });
+  d.hl = list; xaStore(id, d, before); xaMarks(card, d); return true;
+}
+function xaMarks(card, d) {
+  Array.prototype.forEach.call(card.querySelectorAll('mark.xhl'), function (m) { var pn = m.parentNode; while (m.firstChild) pn.insertBefore(m.firstChild, m); pn.removeChild(m); pn.normalize(); });
+  if (!d || !d.hl || !d.hl.length) return;
+  var pos = 0, list = xaTexts(card).map(function (n) { var x = { n: n, a: pos, b: pos + n.length, cuts: [] }; pos += n.length; return x; });
+  d.hl.forEach(function (h) { list.forEach(function (t) { var a = Math.max(h[0], t.a), b = Math.min(h[1], t.b); if (a < b) t.cuts.push([a - t.a, b - t.a, h[2] || 0]); }); });
+  list.forEach(function (t) {
+    t.cuts.sort(function (x, y) { return y[0] - x[0]; }).forEach(function (c) {
+      var mid = t.n.splitText(c[0]); mid.splitText(c[1] - c[0]);
+      var m = document.createElement('mark'); m.className = 'xhl c' + (c[2] || 0); mid.parentNode.insertBefore(m, mid); m.appendChild(mid);
+    });
+  });
+}
+var XA_BL = '.x-head, p, li, h4, figure, tr, .x-box, .tbl-wrap, dt, dd, .act-i';
+function xaBlocks(card) { return Array.prototype.filter.call(card.querySelectorAll(XA_BL), function (e) { return !e.closest('.nb-slot, .actions, .xa-acts'); }); }
+function xaInkColor(c) { if (c !== 'ink') return c; try { return getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#1B2621'; } catch (e) { return '#1B2621'; } }
+function xaCanvas(card, make) {
+  var c = card.querySelector(':scope > canvas.xa-ink');
+  if (!c && make) { c = document.createElement('canvas'); c.className = 'xa-ink'; c.setAttribute('aria-hidden', 'true'); card.appendChild(c); }
+  if (!c) return null;
+  var w = card.offsetWidth, h = card.offsetHeight, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  while (dpr > 1 && w * h * dpr * dpr > 12e6) dpr -= 0.5;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); c.style.width = w + 'px'; c.style.height = h + 'px'; }
+  var x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); return x;
+}
+function xaPath(x, pts, st) {
+  var n = pts.length / 3; if (!n) return;
+  x.lineCap = 'round'; x.lineJoin = 'round';
+  if (st.k === 'hl') { x.save(); x.globalAlpha = 0.38; x.strokeStyle = hlColor(st.hc); x.lineWidth = 16; x.beginPath(); x.moveTo(pts[0], pts[1]); for (var i = 1; i < n; i++) x.lineTo(pts[i * 3], pts[i * 3 + 1]); x.stroke(); x.restore(); return; }
+  x.strokeStyle = xaInkColor(st.c);
+  for (var j = 1; j < n; j++) { x.lineWidth = (st.w || 2.4) * (0.5 + (pts[j * 3 + 2] + pts[j * 3 - 1]) / 200); x.beginPath(); x.moveTo(pts[j * 3 - 3], pts[j * 3 - 2]); x.lineTo(pts[j * 3], pts[j * 3 + 1]); x.stroke(); }
+}
+function xaToCard(card, blocks, st) {
+  var cr = card.getBoundingClientRect(), bl = st.b >= 0 && blocks[st.b], r = bl ? bl.getBoundingClientRect() : cr, bx = r.left - cr.left, by = r.top - cr.top, bw = r.width || 1, out = [];
+  for (var i = 0; i < st.p.length; i += 3) out.push(bx + st.p[i] * bw / 1000, by + st.p[i + 1] * bw / 1000, st.p[i + 2]);
+  return out;
+}
+function xaDraw(card) {
+  var id = card.id.slice(2), d = XC['x:' + id], has = d && d.ink && d.ink.length;
+  var x = xaCanvas(card, has); if (!x) return;
+  x.clearRect(0, 0, card.offsetWidth + 2, card.offsetHeight + 2);
+  if (!has) return;
+  var blocks = xaBlocks(card); d.ink.forEach(function (st) { xaPath(x, xaToCard(card, blocks, st), st); });
+}
+function xaBegin(card, t) {
+  var tool = xaPref().tool;
+  XA_LIVE = { card: card, id: card.id.slice(2), tool: tool, touch: t.identifier, pts: [], x0: t.clientX, y0: t.clientY, before: xaData(card.id.slice(2)) };
+  if (tool !== 'er') { var el = document.elementFromPoint(t.clientX, t.clientY), blocks = xaBlocks(card), bl = el && el.closest && el.closest(XA_BL); XA_LIVE.b = bl && card.contains(bl) ? blocks.indexOf(bl) : -1; }
+  xaMove(t);
+}
+function xaMove(t) {
+  var L = XA_LIVE; if (!L) return;
+  var cr = L.card.getBoundingClientRect(), px = t.clientX - cr.left, py = t.clientY - cr.top;
+  if (L.tool === 'er') { xaErase(L, t.clientX, t.clientY); return; }
+  var a = L.pts, n = a.length, f = t.touchType === 'stylus' ? Math.max(0, Math.min(99, Math.round((t.force || 0.5) * 100))) : 50;
+  if (n && Math.abs(a[n - 3] - px) + Math.abs(a[n - 2] - py) < 1.5) return;
+  a.push(px, py, f);
+  var x = xaCanvas(L.card, true); if (n) xaPath(x, a.slice(n - 3), { k: L.tool === 'hl' ? 'hl' : 'pen', c: XA_PEN[xaPref().ink], hc: xaPref().hlc, w: 2.4 });
+}
+function xaErase(L, cx, cy) {
+  var id = L.id; if (!XC['x:' + id]) return;
+  var card = L.card, cr = card.getBoundingClientRect(), px = cx - cr.left, py = cy - cr.top, blocks = xaBlocks(card), changed = false, d = xaData(id);
+  d.ink = d.ink.filter(function (st) { var q = xaToCard(card, blocks, st); for (var i = 0; i < q.length; i += 3) if (Math.abs(q[i] - px) < 12 && Math.abs(q[i + 1] - py) < 12) { changed = true; return false; } return true; });
+  var c = xaCaret(cx, cy), off = c && card.contains(c.n) ? xaOff(card, c.n, c.o) : -1;
+  if (off >= 0) d.hl = d.hl.filter(function (h) { if (off >= h[0] && off <= h[1]) { changed = true; return false; } return true; });
+  if (changed) { xaSave(id, d); L.erased = true; xaMarks(card, d); xaDraw(card); }
+}
+function xaEnd() {
+  var L = XA_LIVE; XA_LIVE = null; if (!L) return;
+  var card = L.card, id = L.id;
+  if (L.tool === 'er') { if (L.erased) { XA_UNDO.push({ id: id, d: L.before }); xaBar(); } return; }
+  var a = L.pts, n = a.length / 3, len = 0;
+  for (var i = 1; i < n; i++) len += Math.abs(a[i * 3] - a[i * 3 - 3]) + Math.abs(a[i * 3 + 1] - a[i * 3 - 2]);
+  if (len < 4) { xaDraw(card); return; }
+  if (L.tool === 'hl') { // over words: becomes a highlight of those words
+    var s0 = xaCaret(L.x0, L.y0), cr = card.getBoundingClientRect(), s1 = xaCaret(cr.left + a[a.length - 3], cr.top + a[a.length - 2]);
+    if (s0 && s1 && card.contains(s0.n) && card.contains(s1.n) && !xaSkip(s0.n) && !xaSkip(s1.n)) {
+      var o0 = xaOff(card, s0.n, s0.o), o1 = xaOff(card, s1.n, s1.o);
+      if (o0 >= 0 && o1 >= 0 && o0 !== o1 && xaAddHl(card, id, o0, o1)) { xaDraw(card); return; }
+    }
+  }
+  var blocks = xaBlocks(card), bl = L.b >= 0 && blocks[L.b], cr2 = card.getBoundingClientRect(), r = bl ? bl.getBoundingClientRect() : cr2;
+  var bx = r.left - cr2.left, by = r.top - cr2.top, bw = r.width || 1, p = [];
+  for (var j = 0; j < a.length; j += 3) p.push(Math.round((a[j] - bx) * 1000 / bw), Math.round((a[j + 1] - by) * 1000 / bw), a[j + 2]);
+  var d = xaData(id); d.ink.push({ b: bl ? L.b : -1, k: L.tool === 'hl' ? 'hl' : 'pen', c: XA_PEN[xaPref().ink], hc: xaPref().hlc, w: 2.4, at: Date.now(), p: p });
+  xaStore(id, d, L.before); xaDraw(card);
+}
+function xaHook(card) {
+  if (card.__xa) return; card.__xa = true;
+  card.addEventListener('touchstart', function (e) {
+    var t = e.changedTouches[0]; if (!t || t.touchType !== 'stylus') return;
+    if (XA_LIVE && Date.now() - XA_LIVE.at > 1500) XA_LIVE = null;
+    if (XA_LIVE) return;
+    if (e.target.closest && e.target.closest('button, a, input, select, textarea, summary, label, .nb-slot, .ph-sec')) return;
+    e.preventDefault(); if (!xaPref().pencil) { nbSetPref('pencil', true); xaBar(); }
+    var tg = e.target, id = t.identifier;
+    function mv(ev) { if (!XA_LIVE) return; for (var k = 0; k < ev.changedTouches.length; k++) if (ev.changedTouches[k].identifier === id) { ev.preventDefault(); XA_LIVE.at = Date.now(); xaMove(ev.changedTouches[k]); } }
+    function en(ev) { for (var k = 0; k < ev.changedTouches.length; k++) if (ev.changedTouches[k].identifier === id) { tg.removeEventListener('touchmove', mv); tg.removeEventListener('touchend', en); tg.removeEventListener('touchcancel', en); xaEnd(); } }
+    tg.addEventListener('touchmove', mv, { passive: false }); tg.addEventListener('touchend', en); tg.addEventListener('touchcancel', en);
+    xaBegin(card, t); XA_LIVE.at = Date.now();
+  }, { passive: false });
+  if (window.ResizeObserver) { var ro = new ResizeObserver(function () { xaDraw(card); }); ro.observe(card); }
+}
+function xaSelCard() {
+  var sel = window.getSelection && window.getSelection(); if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
+  var r = sel.getRangeAt(0), a = r.startContainer, b = r.endContainer, ca = (a.nodeType === 1 ? a : a.parentNode).closest('.xa'), cb = (b.nodeType === 1 ? b : b.parentNode).closest('.xa');
+  return ca && ca === cb && a.nodeType === 3 && b.nodeType === 3 ? { card: ca, r: r } : null;
+}
+function xaOn() { return route.v === 'lesson' && !!document.querySelector('#main .xa'); }
+function xaBar() {
+  var on = xaOn(), bar = document.getElementById('xa-bar'), selc = on && xaSelCard();
+  if (!on || !(xaPref().pencil || selc)) { if (bar) bar.remove(); return; }
+  if (!bar) { bar = document.createElement('div'); bar.id = 'xa-bar'; bar.className = 'xa-bar'; bar.setAttribute('role', 'toolbar'); bar.setAttribute('aria-label', 'أدوات التحديد'); document.body.appendChild(bar); bar.addEventListener('click', xaBarClick); bar.addEventListener('mousedown', function (e) { e.preventDefault(); }); }
+  var o = xaPref(), h = '';
+  if (selc) h += '<span class="xa-lbl">ظلّل التحديد:</span>' + XA_HLC.map(function (c, k) { return '<button type="button" class="xa-t xa-hl' + (k === o.hlc ? ' on' : '') + '" data-xa="sel" data-v="' + k + '" aria-label="ظلّل بالـ' + c[1] + '" style="--c:' + c[0] + '"><i></i></button>'; }).join('') + (o.pencil ? '<i class="xa-sep"></i>' : '');
+  if (o.pencil) h += XA_HLC.map(function (c, k) { return '<button type="button" class="xa-t xa-hl' + (o.tool === 'hl' && o.hlc === k ? ' on' : '') + '" data-xa="hl" data-v="' + k + '" aria-label="قلم تحديد ' + c[1] + '" style="--c:' + c[0] + '"><i></i></button>'; }).join('') + '<i class="xa-sep"></i>' +
+    XA_PEN.map(function (c, k) { return '<button type="button" class="xa-t xa-pen' + (o.tool === 'pen' && o.ink === k ? ' on' : '') + '" data-xa="pen" data-v="' + k + '" aria-label="قلم ' + ['داكن', 'أحمر', 'أزرق'][k] + '" style="--c:' + (c === 'ink' ? 'var(--ink)' : c) + '"><i></i></button>'; }).join('') +
+    '<button type="button" class="xa-t' + (o.tool === 'er' ? ' on' : '') + '" data-xa="tool" data-v="er" aria-label="ممحاة"><svg viewBox="0 0 24 24" aria-hidden="true">' + NB_SVG.er + '</svg></button>' +
+    '<button type="button" class="xa-undo" data-xa="undo" aria-label="تراجع عن آخر تحديد أو كتابة"' + (XA_UNDO.length || xaNewest() ? '' : ' disabled') + '><svg viewBox="0 0 24 24" aria-hidden="true">' + NB_SVG.undo + '</svg>تراجع</button>' +
+    '<button type="button" class="xa-t" data-xa="hide" aria-label="أخفِ الأدوات"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>';
+  bar.innerHTML = h;
+}
+function xaNewest() {
+  var best = null;
+  Array.prototype.forEach.call(document.querySelectorAll('#main .xa'), function (card) {
+    var id = card.id.slice(2), d = XC['x:' + id]; if (!d) return;
+    d.hl.forEach(function (h, k) { var at = h[3] || 0; if (!best || at > best.at) best = { id: id, kind: 'hl', k: k, at: at }; });
+    d.ink.forEach(function (st, k) { var at = st.at || 0; if (!best || at >= best.at) best = { id: id, kind: 'ink', k: k, at: at }; });
+  });
+  return best;
+}
+function xaUndo() {
+  var u = XA_UNDO.pop(), id, msg;
+  if (u) { id = u.id; xaSave(id, u.d); msg = 'تراجعت عن آخر خطوة'; }
+  else {
+    var nw = xaNewest(); if (!nw) return;
+    id = nw.id; var d = xaData(id); d[nw.kind].splice(nw.k, 1); xaSave(id, d);
+    msg = nw.kind === 'hl' ? 'أُزيل آخر تظليل' : 'أُزيلت آخر كتابة';
+  }
+  var c = xaCard(id); if (c) { xaMarks(c, XC['x:' + id]); xaDraw(c); var r = c.getBoundingClientRect(); if (r.bottom < 0 || r.top > window.innerHeight) c.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+  toast(msg);
+}
+function xaBarClick(e) {
+  var b = e.target.closest('[data-xa]'); if (!b) return;
+  var a = b.getAttribute('data-xa'), v = b.getAttribute('data-v');
+  if (a === 'tool') nbSetPref('xtool', v);
+  else if (a === 'hl') { nbSetPref('xtool', 'hl'); nbSetPref('xhlc', +v); }
+  else if (a === 'pen') { nbSetPref('xtool', 'pen'); nbSetPref('xink', +v); }
+  else if (a === 'undo') xaUndo();
+  else if (a === 'hide') { nbSetPref('pencil', false); toast('تعود الأدوات حين تكتب بالقلم على الشرح'); }
+  else if (a === 'sel') { nbSetPref('xhlc', +v || 0); var S0 = XA_SEL && Date.now() - XA_SEL.at < 4000 ? XA_SEL : null, c2 = S0 && xaCard(S0.id); if (c2) xaAddHl(c2, S0.id, S0.a, S0.b, +v || 0); XA_SEL = null; try { window.getSelection().removeAllRanges(); } catch (x) {} }
+  xaBar();
+}
+var XA_SEL = null;
+document.addEventListener('selectionchange', function () {
+  var sc = xaSelCard(); if (sc) { var a = xaOff(sc.card, sc.r.startContainer, sc.r.startOffset), b = xaOff(sc.card, sc.r.endContainer, sc.r.endOffset); if (a >= 0 && b >= 0) XA_SEL = { id: sc.card.id.slice(2), a: a, b: b, at: Date.now() }; }
+  clearTimeout(xaBar.t); xaBar.t = setTimeout(xaBar, sc ? 150 : 900);
+});
+AFTER.push(function () {
+  if (!xaOn()) { xaBar(); return; }
+  xcReady().then(function () {
+    Array.prototype.forEach.call(document.querySelectorAll('#main .xa'), function (card) { phFill(card); xaHook(card); var d = XC['x:' + card.id.slice(2)]; if (d) xaMarks(card, d); xaDraw(card); });
+    xaBar();
+  });
+});
+ACT['xa-pen'] = function () { nbSetPref('pencil', !xaPref().pencil); xaBar(); if (xaPref().pencil) toast('اكتب بقلم الآيباد على الشرح؛ قلم التحديد يظلّل الكلمات'); };
+
+/* under each explanation card: my photos and a board (from إتقان) */
+function cardTools(id) {
+  return '<div class="ph-sec" data-ph="' + esc(id) + '" hidden></div><div class="actions xa-acts">' +
+    '<button class="btn ghost sm tint hue-green ph-add" data-act="ph-add" data-id="' + esc(id) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 3.5 3 3-2.5L20 17"/></svg>أضف صورة</button>' +
+    '<button class="btn ghost sm tint hue-amber nb-tg" data-act="nb-toggle" data-id="' + esc('b:' + id) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19z"/><path d="M14.5 6.5l3 3"/></svg>سبورتي</button></div>' +
+    '<div class="nb-slot" data-nb="' + esc('b:' + id) + '" data-lazy hidden></div>';
+}
+function phFill(card) {
+  var id = card.id.slice(2), sec = card.querySelector('.ph-sec'); if (!sec) return;
+  var d = XC['p:' + id], imgs = d && d.imgs || [];
+  sec.hidden = !imgs.length;
+  sec.innerHTML = imgs.length ? '<p class="ph-h">صوري (' + imgs.length + ')</p><div class="ph-grid">' + imgs.map(function (m, k) {
+    return '<figure class="ph"><img data-act="zoom" src="' + m.src + '" alt="' + esc(m.cap || 'صورة أضفتها') + '"' + (m.w ? ' width="' + m.w + '" height="' + m.h + '"' : '') + ' loading="lazy" decoding="async">' +
+      '<input class="ph-cap" type="text" maxlength="200" data-ph-cap="' + esc(id) + '" data-k="' + k + '" placeholder="اكتب وصفًا للصورة" value="' + esc(m.cap || '') + '">' +
+      '<button type="button" class="ph-del" data-act="ph-del" data-id="' + esc(id) + '" data-k="' + k + '" aria-label="احذف الصورة">×</button></figure>';
+  }).join('') + '</div>' : '';
+}
+function phShrink(file) {
+  return new Promise(function (res, rej) {
+    var url = URL.createObjectURL(file), im = new Image();
+    im.onload = function () {
+      var w = im.naturalWidth, h = im.naturalHeight, k = Math.min(1, 1400 / Math.max(w, h || 1)), c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+      var x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); res({ src: c.toDataURL('image/jpeg', 0.82), w: c.width, h: c.height });
+    };
+    im.onerror = function () { URL.revokeObjectURL(url); rej(new Error('image')); };
+    im.src = url;
+  });
+}
+ACT['ph-add'] = function (el) {
+  var id = el.getAttribute('data-id');
+  pick('image/*', true).then(function (files) {
+    toast('جارٍ حفظ ' + cnt(files.length, ['صورة واحدة', 'صورتين', 'صور', 'صورة']) + '…');
+    var d = XC['p:' + id] ? JSON.parse(JSON.stringify(XC['p:' + id])) : { imgs: [] }, bad = 0;
+    files.reduce(function (pr, f) { return pr.then(function () { return phShrink(f).then(function (r) { d.imgs.push({ id: uid(), src: r.src, w: r.w, h: r.h, cap: '', at: Date.now() }); }, function () { bad++; }); }); }, Promise.resolve()).then(function () {
+      d.t = Date.now(); xcPut('p:' + id, d.imgs.length ? d : null);
+      var card = xaCard(id); if (card) { phFill(card); xaDraw(card); }
+      toast(bad ? 'تعذّر فتح ' + cnt(bad, ['صورة واحدة', 'صورتين', 'صور', 'صورة']) : 'أُضيفت الصور تحت الفقرة');
+    });
+  });
+};
+ACT['ph-del'] = function (el) {
+  if (!el.classList.contains('arm')) { el.classList.add('arm'); el.textContent = 'احذف؟'; setTimeout(function () { el.classList.remove('arm'); el.textContent = '×'; }, 3000); return; }
+  var id = el.getAttribute('data-id'), k = +el.getAttribute('data-k'), d = XC['p:' + id]; if (!d) return;
+  d = JSON.parse(JSON.stringify(d)); d.imgs.splice(k, 1); d.t = Date.now(); xcPut('p:' + id, d.imgs.length ? d : null);
+  var card = xaCard(id); if (card) { phFill(card); xaDraw(card); }
+};
+document.addEventListener('change', function (e) {
+  var t = e.target; if (!t.getAttribute || !t.getAttribute('data-ph-cap')) return;
+  var id = t.getAttribute('data-ph-cap'), k = +t.getAttribute('data-k'), d = XC['p:' + id]; if (!d || !d.imgs[k]) return;
+  d = JSON.parse(JSON.stringify(d)); d.imgs[k].cap = t.value.trim().slice(0, 200); d.t = Date.now(); xcPut('p:' + id, d);
 });
 
 /* ---------- the AI: Claude API called from the device with the user's own key ---------- */
@@ -1205,7 +1493,8 @@ var LESSON_SYS = [
   '"quiz":{"mcq":[{"q":"السؤال","o":["","","",""],"a":0,"e":"تفسير الإجابة الصحيحة","lv":"تذكر|فهم|تطبيق|تحليل"}],"tf":[{"q":"عبارة","a":true,"e":"التفسير"}],"short":[{"q":"سؤال مقالي قصير","a":"الإجابة النموذجية"}]}}',
   'القواعد:',
   '- exp يغطي الدرس كله بترتيب الكتاب، من 3 إلى 7 فقرات. page رقم الصفحة المطبوع في الكتاب الذي تتناوله الفقرة. fig رقم الرسم من figs (يبدأ من 0) أو -1.',
-  '- body قائمة عناصر، كل عنصر واحد من: نص فقرة، أو {"h":"عنوان فرعي"}، أو {"ul":["…"]}، أو {"ol":["خطوات"]}، أو {"box":{"k":"ex|pit|note","h":"مثال|انتبه|ملاحظة","b":["…"]}}، أو {"tb":{"t":"عنوان الجدول","hd":["…"],"r":[["…"]]}}.',
+  '- body قائمة عناصر، كل عنصر واحد من: نص فقرة، أو {"h":"عنوان فرعي"}، أو {"ul":["…"]}، أو {"ol":["خطوات"]}، أو {"box":{"k":"ex|pit|note|key|q|life","h":"عنوان الصندوق","b":["…"]}} (ex مثال، pit انتبه، note ملاحظة، key تذكّر، q سؤال يطرحه المعلم على الطلاب، life ربط بالحياة)، أو {"tb":{"t":"عنوان الجدول","hd":["…"],"r":[["…"]]}}.',
+  '- كل عنصر في body كائن JSON حقيقي أو نص؛ لا تكتب الكائن داخل نص بين علامتي تنصيص. نوّع العناصر في كل فقرة: عنوان فرعي وقائمة وصندوق واحد على الأقل، ليكون الشرح مقسمًا وسهل المتابعة.',
   '- ضع المصطلح المهم بين ** ** ليظهر غامقًا، والرموز والصيغ والوحدات اللاتينية بين ` ` مثل `H2O` و`m/s`.',
   '- figs من 2 إلى 4 رسوم SVG توضيحية أصلية بسيطة واضحة (لا تحاول نسخ صور الكتاب): viewBox="0 0 600 400" أو نحوه، نص عربي font-size بين 18 و24 مع text-anchor="middle" و fill="#1B2621"، ألوان هادئة، أسهم بـ marker عند الحاجة. لا تستعمل style ولا script ولا image ولا foreignObject ولا روابط، فقط: svg g rect circle ellipse path polygon polyline line text tspan defs marker linearGradient stop title.',
   '- maps خريطة مفاهيم واحدة أو اثنتان، بعمق لا يتجاوز ثلاثة مستويات.',
@@ -1453,7 +1742,8 @@ ACT['be-save'] = function (el) {
 ACT['bk-del'] = function (el) { confirmBox('حذف الكتاب؟', 'يُحذف ملف الكتاب ودروسه ومساعدها وكتابتك عليه من هذا الجهاز. لا يمكن التراجع؛ احفظ نسخة احتياطية أولًا إن أردت.', 'bk-del-yes', 'احذف الكتاب', ' data-id="' + el.getAttribute('data-id') + '"', true); };
 ACT['bk-del-yes'] = function (el) {
   var id = el.getAttribute('data-id');
-  Promise.all([dbDel('books', id), dbDel('files', id), dbDelRange('aids', id + ':'), dbDelRange('ink', id + ':'), dbDelRange('notes', 'b:' + id + ':')]).then(function () {
+  Promise.all([dbDel('books', id), dbDel('files', id), dbDelRange('aids', id + ':'), dbDelRange('ink', id + ':'), dbDelRange('notes', 'b:' + id + ':'), dbDelRange('notes', 'x:' + id + ':'), dbDelRange('notes', 'p:' + id + ':')]).then(function () {
+    Object.keys(XC).forEach(function (k) { if (k.indexOf(':' + id + ':') === 1) delete XC[k]; });
     BOOKS = BOOKS.filter(function (b) { return b.id !== id; }); Object.keys(AIDS).forEach(function (k) { if (k.indexOf(id + ':') === 0) delete AIDS[k]; });
     delete DOCS[id]; delete S.plan[id]; delete S.last[id]; if (S.cur === id) S.cur = BOOKS[0] ? BOOKS[0].id : ''; saveState(); closeModal(); go(BOOKS.length ? 'books' : 'home');
   });
@@ -1790,7 +2080,16 @@ function restore(o) {
   }).then(function (r) {
     [['ink', r[0], o.ink], ['notes', r[1], o.notes]].forEach(function (x) {
       var have = {}; (x[1] || []).forEach(function (d) { have[d.k] = d.t || 0; });
-      arr(x[2]).forEach(function (d) { if (!d || typeof d.k !== 'string' || !Array.isArray(d.s) || (have[d.k] || 0) >= (d.t || 0)) return; var c = { k: d.k, s: d.s.filter(function (s) { return s && Array.isArray(s.p); }), t: +d.t || Date.now() }; if (x[0] === 'notes') c.h = +d.h || NB_H0; jobs.push(dbPut(x[0], c)); n++; });
+      arr(x[2]).forEach(function (d) {
+        if (!d || typeof d.k !== 'string' || d.k.length > 200 || (have[d.k] || 0) >= (d.t || 0)) return;
+        var c = { k: d.k, t: +d.t || Date.now() };
+        if (Array.isArray(d.s)) { c.s = d.s.filter(function (s) { return s && Array.isArray(s.p); }); if (x[0] === 'notes') c.h = +d.h || NB_H0; }
+        else if (x[0] === 'notes' && Array.isArray(d.hl) && Array.isArray(d.ink)) { c.hl = d.hl.filter(function (h) { return Array.isArray(h) && h.length >= 2 && h.length <= 4; }); c.ink = d.ink.filter(function (s) { return s && Array.isArray(s.p); }); }
+        else if (x[0] === 'notes' && Array.isArray(d.imgs)) { c.imgs = d.imgs.filter(function (m) { return m && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(m.src || ''); }).map(function (m) { return { id: str(m.id).slice(0, 20), src: m.src, w: +m.w || 0, h: +m.h || 0, cap: str(m.cap).slice(0, 200), at: +m.at || 0 }; }); }
+        else return;
+        if (x[0] === 'notes') XC[c.k] = c;
+        jobs.push(dbPut(x[0], c)); n++;
+      });
     });
     var st = o.state || {};
     Object.keys(st.taught || {}).forEach(function (k) { var t = S.taught[k] = S.taught[k] || {}; Object.keys(st.taught[k] || {}).forEach(function (c) { if (!t[c]) { t[c] = String(st.taught[k][c]).slice(0, 10); n++; } }); });
@@ -1844,7 +2143,7 @@ var STANDALONE = navigator.standalone === true || !!(window.matchMedia && window
 var INSTALL = IOS ? '<b>ثبّته على الشاشة الرئيسية:</b> في Safari اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية»، وافتحه من أيقونته وأضف الكتاب من داخله؛ فبيانات التطبيق المثبّت تُحفظ منفصلة عن Safari.' : '<b>لتثبيته كتطبيق:</b> اختر من قائمة المتصفح «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».';
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) navigator.serviceWorker.register('sw.js').catch(function () {});
 document.getElementById('app').appendChild(document.getElementById('tabs'));
-Promise.all([idb().then(function () { return Promise.all([dbAll('books'), dbAll('aids'), tx('files', 'readonly', function (s) { return s.getAllKeys(); })]); })]).then(function (r) {
+Promise.all([idb().then(function () { return Promise.all([dbAll('books'), dbAll('aids'), tx('files', 'readonly', function (s) { return s.getAllKeys(); }), xcReady()]); })]).then(function (r) {
   r = r[0];
   var files = {}; (r[2] || []).forEach(function (k) { files[k] = 1; });
   BOOKS = (r[0] || []).sort(function (a, b) { return (a.added || 0) - (b.added || 0); });

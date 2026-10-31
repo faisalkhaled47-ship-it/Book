@@ -167,3 +167,45 @@ body.pv-on{overflow:hidden}
 .zoom-cap{text-align:center;color:#465961;margin-top:10px}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .fig svg{background:#fff;border-radius:10px}}
 :root[data-theme="dark"] .fig svg{background:#fff;border-radius:10px}
+
+/* ===== writing on the explanation (from إتقان) ===== */
+.xa{position:relative}
+.xa > canvas.xa-ink{position:absolute;left:0;top:0;pointer-events:none;z-index:2}
+.xa-acts{margin-top:14px}
+.xa-acts .btn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.xa-tip{margin-bottom:12px}
+
+/* ===== colour: each card its own hue, each kind of block its own look ===== */
+html[data-skin=pro] .xcard.xa[class*="hue-"]{overflow:hidden;padding-top:20px}
+.xcard.xa[class*="hue-"]::before{content:"";position:absolute;inset:0 0 auto;height:5px;background:var(--hg)}
+html[data-skin=pro] .upage .xcard.xa .x-head .i-num{background:var(--hg);color:#fff}
+.xcard.xa .i-num svg{width:17px;height:17px}
+.xcard.xa .x-head{align-items:center}
+.xcard.xa .x-ind{font-weight:800;font-size:17.5px;line-height:1.5;color:var(--hi)}
+html[data-skin=pro] .xcard.xa :is(.x-body,.goal-list,.vocab,.sum-list,.act-i,.x-ul) b{color:var(--hi);background:var(--hs);border-radius:5px;padding:0 4px;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+html[data-skin=pro] .xcard.xa .x-h{color:var(--hi);font-size:16.5px;padding-inline-start:10px;border-inline-start:4px solid var(--hi);margin:8px 0 0;line-height:1.5}
+.xcard.xa .x-ul li::marker{color:var(--hi)}
+.x-steps{list-style:none;counter-reset:st;padding:0!important;gap:8px!important}
+.x-steps>li{counter-increment:st;position:relative;padding-inline-start:38px;min-height:28px}
+.x-steps>li::before{content:counter(st);position:absolute;inset-inline-start:0;top:.25em;width:27px;height:27px;border-radius:50%;background:var(--hg,var(--accent));color:#fff;display:grid;place-items:center;font-weight:800;font-size:13.5px;line-height:1}
+html[data-skin=pro] .xcard.xa th{background:var(--hs);color:var(--hi)}
+html[data-skin=pro] .x-box.kb{background:var(--hs);border:0;border-inline-start:5px solid var(--hi);border-radius:14px;padding:12px 14px}
+html[data-skin=pro] .x-box.kb b.kb-h{display:flex;align-items:center;gap:7px;color:var(--hi);font-weight:800;margin-bottom:6px;background:none;padding:0}
+.kb-h svg{width:18px;height:18px;flex:none}
+html[data-skin=pro] .xcard.xa .x-box.kb b:not(.kb-h){color:var(--hi);background:rgba(255,255,255,.55)}
+html[data-skin=pro] .x-idea.idea-big{background:linear-gradient(135deg,var(--accent-soft),var(--panel) 85%);border-inline-start:5px solid var(--accent);border-radius:16px;font-size:17.5px;padding:14px 16px;margin-bottom:14px}
+.idea-big b{color:var(--accent)}
+.goal-list{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:8px}
+.goal-list li{display:flex;align-items:flex-start;gap:10px;background:var(--hs);border-radius:14px;padding:10px 12px;font-size:16px;line-height:1.8}
+.g-n{flex:none;width:28px;height:28px;border-radius:50%;background:var(--hg);color:#fff;display:grid;place-items:center;font-weight:800;font-size:14px;margin-top:2px}
+.vocab{grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+.vocab>div{background:var(--hs,var(--panel-2));border-inline-start:4px solid var(--hi,var(--accent))}
+.vocab dt{color:var(--hi,var(--accent));font-size:16.5px}
+.sum-list{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:8px}
+.sum-list li{position:relative;padding:8px 44px 8px 12px;background:var(--hs);border-radius:12px;font-size:16px;line-height:1.85}
+html[dir=rtl] .sum-list li{padding:8px 44px 8px 12px}
+.sum-list li::before{content:"✓";position:absolute;inset-inline-start:10px;top:10px;width:24px;height:24px;border-radius:50%;background:var(--hg);color:#fff;display:grid;place-items:center;font-weight:800;font-size:13px}
+html[dir=rtl] .sum-list li{padding-right:44px;padding-left:12px}
+.act-i{background:var(--hs,var(--panel-2));border-inline-start:4px solid var(--hi,var(--accent))}
+.act-i>b{display:flex;align-items:center;gap:8px;color:var(--hi,var(--ink))}
+.mins{font-size:12px;font-weight:700;background:var(--panel);color:var(--ink-2);border-radius:999px;padding:1px 8px}
