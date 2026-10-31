@@ -2116,6 +2116,27 @@ ACT['backup-restore'] = function () {
     restore(o);
   });
 };
+/* the same lesson twice (same title and first page, different ids): keep the one with the aid, the newest if both have one */
+function dedupeBook(b) {
+  var groups = {}, order = [], removed = 0;
+  b.lessons.forEach(function (l) { var key = norm(l.title).replace(/\s+/g, ' ').trim() + '|' + l.from; if (!groups[key]) { groups[key] = []; order.push(key); } groups[key].push(l); });
+  if (order.length === b.lessons.length) return 0;
+  var keep = [];
+  order.forEach(function (key) {
+    var g = groups[key]; if (g.length === 1) { keep.push(g[0]); return; }
+    var best = g.slice().sort(function (x, y) { var ax = AIDS[lk(b, x)], ay = AIDS[lk(b, y)]; return (ay ? ay.at || 1 : 0) - (ax ? ax.at || 1 : 0); })[0], kk = lk(b, best);
+    g.forEach(function (l) {
+      if (l === best) return; var k = lk(b, l); removed++;
+      if (S.taught[k]) { var t = S.taught[kk] = S.taught[kk] || {}; Object.keys(S.taught[k]).forEach(function (c) { if (!t[c]) t[c] = S.taught[k][c]; }); delete S.taught[k]; }
+      if (S.notes[k]) { S.notes[kk] = S.notes[kk] ? S.notes[kk] + '\n' + S.notes[k] : S.notes[k]; delete S.notes[k]; }
+      if (AIDS[k]) { delete AIDS[k]; dbDel('aids', k); }
+      if (!best.unit && l.unit) best.unit = l.unit; if (!best.chap && l.chap) best.chap = l.chap;
+    });
+    keep.push(best);
+  });
+  b.lessons = keep.sort(function (x, y) { return x.from - y.from; });
+  saveBook(b); saveState(); return removed;
+}
 function restore(o) {
   var n = 0, jobs = [], MAP = {};
   /* a key of the backup, moved to the book it now belongs to on this device */
@@ -2132,8 +2153,10 @@ function restore(o) {
         if (same.length === 1) { cur = same[0]; MAP[b.id] = cur.id; }
       }
       if (!cur) { var nb = { id: b.id, title: str(b.title), lessons: b.lessons, offset: +b.offset || 0, pages: +b.pages || 0, added: +b.added || Date.now(), file: str(b.file), size: +b.size || 0, missing: true }; BOOKS.push(nb); jobs.push(saveBook(nb)); n++; return; }
-      if (!cur.lessons.length || (b.t || 0) > (cur.t || 0)) { cur.lessons = b.lessons; cur.title = str(b.title) || cur.title; cur.offset = +b.offset || 0; jobs.push(saveBook(cur)); n++; }
-      else { var have = {}; cur.lessons.forEach(function (l) { have[l.id] = 1; }); var add = b.lessons.filter(function (l) { return !have[l.id]; }); if (add.length) { cur.lessons = cur.lessons.concat(add).sort(function (x, y) { return x.from - y.from; }); jobs.push(saveBook(cur)); n += add.length; } }
+      // both lists are kept, then the same lesson twice is merged into one (dedupeBook, after the aids are in)
+      if (!cur.lessons.length) { cur.offset = +b.offset || 0; if (str(b.title)) cur.title = str(b.title); }
+      var have = {}; cur.lessons.forEach(function (l) { have[l.id] = 1; }); var add = b.lessons.filter(function (l) { return !have[l.id]; });
+      if (add.length) { cur.lessons = cur.lessons.concat(add).sort(function (x, y) { return x.from - y.from; }); jobs.push(saveBook(cur)); n += add.length; }
     });
     if (Object.keys(MAP).length) {
       arr(o.aids).forEach(function (a) { if (a && typeof a.k === 'string') a.k = rk(a.k); });
@@ -2145,6 +2168,7 @@ function restore(o) {
       if (!a || typeof a.k !== 'string' || (haveA[a.k] || 0) >= (a.at || 0)) return;
       try { var d = cleanAid(a.d); var rec = { k: a.k, src: a.src === 'ai' ? 'ai' : 'pack', at: +a.at || Date.now(), model: str(a.model), d: d }; AIDS[a.k] = rec; jobs.push(dbPut('aids', rec)); n++; } catch (e) {}
     });
+    BOOKS.forEach(function (bk) { dedupeBook(bk); });
     return Promise.all([dbAll('ink'), dbAll('notes')]);
   }).then(function (r) {
     [['ink', r[0], o.ink], ['notes', r[1], o.notes]].forEach(function (x) {
@@ -2223,6 +2247,7 @@ Promise.all([idb().then(function () { return Promise.all([dbAll('books'), dbAll(
   BOOKS.forEach(function (b) { if (!Array.isArray(b.lessons)) b.lessons = []; if (files[b.id]) delete b.missing; else b.missing = true; });
   (r[1] || []).forEach(function (a) { AIDS[a.k] = a; });
   if (!curBook() && BOOKS[0]) S.cur = BOOKS[0].id; else if (curBook()) S.cur = curBook().id;
+  var dd = 0; BOOKS.forEach(function (bk) { dd += dedupeBook(bk); }); if (dd) setTimeout(function () { toast('أُزيلت الدروس المكررة (' + dd + ')', 4000); }, 600);
   document.getElementById('tabs').hidden = !BOOKS.length;
   var h = (location.hash || '').slice(1), rs = null;
   try { rs = JSON.parse(sessionStorage.getItem('kitabi-resume') || 'null'); sessionStorage.removeItem('kitabi-resume'); } catch (e) {}
