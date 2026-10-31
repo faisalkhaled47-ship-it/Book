@@ -219,3 +219,7 @@ html[data-skin=pro] .x-idea.idea-big{background:var(--accent-soft);border-inline
 /* writing on the explanation with a finger */
 body.xa-finger .xa{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .xa-fg.on{box-shadow:0 0 0 2px var(--panel),0 0 0 4px var(--accent);color:var(--accent)}
+/* the lesson's cards fill the column, like its header and tabs */
+.upage .xcard{max-width:none}
+.upage .x-body,.upage .pts,.upage .goal-list,.upage .sum-list{max-width:none}
+.upage .xa-tip{max-width:none}
