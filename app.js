@@ -961,9 +961,9 @@ var L_TAB = {
   goals: function (a, b, l) {
     var k = lk(b, l), h = '';
     if (a.idea) h += '<p class="x-idea idea-big xa" id="x-' + esc(k) + ':i"><b>الفكرة الرئيسة:</b> ' + fx(a.idea) + '</p>';
-    if (a.goals.length) h += '<article class="xcard xa hue-teal" id="x-' + esc(k) + ':g"><header class="x-head"><span class="i-num">' + svgI('target') + '</span><p class="x-ind">أهداف الدرس</p></header><ol class="goal-list">' + a.goals.map(function (g, i) { return '<li class="hue-' + unitHue(i) + '"><span class="g-n">' + (i + 1) + '</span><span>' + fx(g) + '</span></li>'; }).join('') + '</ol></article>';
-    if (a.vocab.length) h += '<article class="xcard xa hue-violet" id="x-' + esc(k) + ':v"><header class="x-head"><span class="i-num">' + svgI('book') + '</span><p class="x-ind">المفردات</p></header><dl class="vocab">' + a.vocab.map(function (v, i) { return '<div class="hue-' + unitHue(i + 1) + '"><dt>' + fx(v.t) + '</dt><dd>' + fx(v.d) + '</dd></div>'; }).join('') + '</dl></article>';
-    if (a.prior.length || a.intro) h += '<article class="xcard xa hue-amber" id="x-' + esc(k) + ':p"><header class="x-head"><span class="i-num">' + svgI('bulb') + '</span><p class="x-ind">قبل الشرح</p></header>' +
+    if (a.goals.length) h += '<article class="xcard xa hue-teal" id="x-' + esc(k) + ':g"><header class="x-head"><span class="i-num">' + svgI('target') + '</span><p class="x-ind">أهداف الدرس</p></header><ol class="goal-list">' + a.goals.map(function (g, i) { return '<li><span class="g-n">' + (i + 1) + '</span><span>' + fx(g) + '</span></li>'; }).join('') + '</ol></article>';
+    if (a.vocab.length) h += '<article class="xcard xa hue-teal" id="x-' + esc(k) + ':v"><header class="x-head"><span class="i-num">' + svgI('book') + '</span><p class="x-ind">المفردات</p></header><dl class="vocab">' + a.vocab.map(function (v, i) { return '<div><dt>' + fx(v.t) + '</dt><dd>' + fx(v.d) + '</dd></div>'; }).join('') + '</dl></article>';
+    if (a.prior.length || a.intro) h += '<article class="xcard xa hue-teal" id="x-' + esc(k) + ':p"><header class="x-head"><span class="i-num">' + svgI('bulb') + '</span><p class="x-ind">قبل الشرح</p></header>' +
       (a.prior.length ? boxHtml('note', 'التعلم القبلي', '<ul class="x-ul">' + a.prior.map(function (x) { return '<li>' + fx(x) + '</li>'; }).join('') + '</ul>') : '') +
       (a.intro ? boxHtml('q', 'تمهيد للدرس', '<p>' + fx(a.intro) + '</p>') : '') + '</article>';
     return h || '<p class="muted">لا أهداف في هذا المساعد.</p>';
@@ -973,10 +973,10 @@ var L_TAB = {
     var k = lk(b, l);
     return '<p class="muted small xa-tip">اكتب على الشرح بقلم الآيباد مباشرة: قلم التحديد يظلّل الكلمات، وأقلام الكتابة تكتب بجانب الفقرة. أو حدّد نصًا بإصبعك ثم «ظلّل التحديد». <button class="link" data-act="xa-pen">أدوات التحديد</button></p>' + a.exp.map(function (x, i) {
       var id = k + ':e' + i;
-      return '<article class="xcard xa hue-' + unitHue(i) + '" id="x-' + esc(id) + '"><header class="x-head"><span class="i-num">' + (i + 1) + '</span><p class="x-ind">' + fx(x.h) + '</p>' + (x.page ? '<button class="pchip" data-act="go-page" data-p="' + x.page + '">ص ' + x.page + '</button>' : '') + '</header>' +
+      return '<article class="xcard xa hue-teal" id="x-' + esc(id) + '"><header class="x-head"><span class="i-num">' + (i + 1) + '</span><p class="x-ind">' + fx(x.h) + '</p>' + (x.page ? '<button class="pchip" data-act="go-page" data-p="' + x.page + '">ص ' + x.page + '</button>' : '') + '</header>' +
         (x.fig >= 0 ? figure(a.figs[x.fig], true) : '') + '<div class="x-body">' + blocks(x.body) + '</div>' + cardTools(id) + '</article>';
     }).join('') +
-      (a.mis.length || a.life.length ? '<article class="xcard xa hue-rose" id="x-' + esc(k) + ':m"><header class="x-head"><span class="i-num">' + svgI('warn') + '</span><p class="x-ind">أخطاء شائعة وربط بالحياة</p></header>' +
+      (a.mis.length || a.life.length ? '<article class="xcard xa hue-teal" id="x-' + esc(k) + ':m"><header class="x-head"><span class="i-num">' + svgI('warn') + '</span><p class="x-ind">أخطاء شائعة وربط بالحياة</p></header>' +
         (a.mis.length ? boxHtml('pit', 'أخطاء شائعة عند الطلاب', '<ul class="x-ul">' + a.mis.map(function (x) { return '<li>' + fx(x) + '</li>'; }).join('') + '</ul>') : '') +
         (a.life.length ? boxHtml('life', 'ربط بالحياة', '<ul class="x-ul">' + a.life.map(function (x) { return '<li>' + fx(x) + '</li>'; }).join('') + '</ul>') : '') + cardTools(k + ':m') + '</article>' : '');
   },
@@ -1000,8 +1000,8 @@ var L_TAB = {
   sum: function (a, b, l) {
     var k = lk(b, l), h = '';
     if (a.sum.length) h += '<article class="xcard xa hue-teal" id="x-' + esc(k) + ':s"><header class="x-head"><span class="i-num">' + svgI('star') + '</span><p class="x-ind">ملخص الدرس</p></header><ul class="sum-list">' + a.sum.map(function (x) { return '<li>' + fx(x) + '</li>'; }).join('') + '</ul></article>';
-    if (a.acts.length) h += '<article class="xcard xa hue-amber" id="x-' + esc(k) + ':a"><header class="x-head"><span class="i-num">' + svgI('people') + '</span><p class="x-ind">أنشطة صفية</p></header>' + a.acts.map(function (x, i) { return '<div class="act-i hue-' + unitHue(i + 2) + '"><b>' + fx(x.t) + (x.mins ? '<span class="mins">' + x.mins + ' د</span>' : '') + '</b><p>' + fx(x.d) + '</p></div>'; }).join('') + '</article>';
-    if (a.hw.length) h += '<article class="xcard xa hue-blue" id="x-' + esc(k) + ':h"><header class="x-head"><span class="i-num">' + svgI('pen') + '</span><p class="x-ind">واجب منزلي</p></header><ul class="x-ul">' + a.hw.map(function (x) { return '<li>' + fx(x) + '</li>'; }).join('') + '</ul></article>';
+    if (a.acts.length) h += '<article class="xcard xa hue-teal" id="x-' + esc(k) + ':a"><header class="x-head"><span class="i-num">' + svgI('people') + '</span><p class="x-ind">أنشطة صفية</p></header>' + a.acts.map(function (x, i) { return '<div class="act-i"><b>' + fx(x.t) + (x.mins ? '<span class="mins">' + x.mins + ' د</span>' : '') + '</b><p>' + fx(x.d) + '</p></div>'; }).join('') + '</article>';
+    if (a.hw.length) h += '<article class="xcard xa hue-teal" id="x-' + esc(k) + ':h"><header class="x-head"><span class="i-num">' + svgI('pen') + '</span><p class="x-ind">واجب منزلي</p></header><ul class="x-ul">' + a.hw.map(function (x) { return '<li>' + fx(x) + '</li>'; }).join('') + '</ul></article>';
     return h || '<p class="muted">لا ملخص في هذا المساعد.</p>';
   },
   notes: function (a, b, l) {
