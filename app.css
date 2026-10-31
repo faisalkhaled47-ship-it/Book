@@ -209,3 +209,9 @@ html[dir=rtl] .sum-list li{padding-right:44px;padding-left:12px}
 .act-i{background:var(--hs,var(--panel-2));border-inline-start:4px solid var(--hi,var(--accent))}
 .act-i>b{display:flex;align-items:center;gap:8px;color:var(--hi,var(--ink))}
 .mins{font-size:12px;font-weight:700;background:var(--panel);color:var(--ink-2);border-radius:999px;padding:1px 8px}
+
+/* my videos under a paragraph */
+.ph.vid,.ph.yt{grid-column:1/-1}
+.ph.vid video{display:block;width:100%;max-height:62vh;background:#000}
+.ph.yt iframe{display:block;width:100%;aspect-ratio:16/9;border:0;background:#000}
+.vid-miss{padding:14px;color:var(--ink-2)}

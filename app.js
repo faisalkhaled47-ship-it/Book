@@ -127,13 +127,13 @@ var DBN = 'kitabi', DB = null;
 function idb() {
   if (DB) return Promise.resolve(DB);
   return new Promise(function (res, rej) {
-    var r; try { r = indexedDB.open(DBN, 1); } catch (e) { rej(e); return; }
+    var r; try { r = indexedDB.open(DBN, 2); } catch (e) { rej(e); return; }
     r.onupgradeneeded = function () {
       var d = r.result;
       ['books', 'files'].forEach(function (n) { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'id' }); });
-      ['aids', 'ink', 'notes'].forEach(function (n) { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'k' }); });
+      ['aids', 'ink', 'notes', 'media'].forEach(function (n) { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'k' }); });
     };
-    r.onsuccess = function () { DB = r.result; res(DB); };
+    r.onsuccess = function () { DB = r.result; DB.onversionchange = function () { try { DB.close(); } catch (e) {} DB = null; }; res(DB); };
     r.onerror = function () { rej(r.error || new Error('idb')); };
     r.onblocked = function () { rej(new Error('blocked')); };
   });
@@ -243,7 +243,7 @@ function render(keep) {
 function go(v, extra) {
   route = Object.assign({ v: v }, extra || {});
   render(); if (route.v !== 'read') window.scrollTo(0, 0);
-  try { history.replaceState(null, '', '#' + v); } catch (e) {}
+  try { history.replaceState(null, '', '#' + v + (v === 'lesson' && route.k ? '=' + encodeURIComponent(route.k) : '')); } catch (e) {}
 }
 function toast(msg, ms) {
   var el = document.getElementById('toast'); el.textContent = msg; el.hidden = false;
@@ -1415,22 +1415,39 @@ AFTER.push(function () {
 });
 ACT['xa-pen'] = function () { nbSetPref('pencil', !xaPref().pencil); xaBar(); if (xaPref().pencil) toast('اكتب بقلم الآيباد على الشرح؛ قلم التحديد يظلّل الكلمات'); };
 
-/* under each explanation card: my photos and a board (from إتقان) */
+/* under each explanation card: my photos and videos, and a board (from إتقان) */
 function cardTools(id) {
   return '<div class="ph-sec" data-ph="' + esc(id) + '" hidden></div><div class="actions xa-acts">' +
-    '<button class="btn ghost sm tint hue-green ph-add" data-act="ph-add" data-id="' + esc(id) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 3.5 3 3-2.5L20 17"/></svg>أضف صورة</button>' +
+    '<button class="btn ghost sm tint hue-green ph-add" data-act="ph-add" data-id="' + esc(id) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 3.5 3 3-2.5L20 17"/></svg>صورة أو فيديو</button>' +
+    '<button class="btn ghost sm tint hue-rose ph-add" data-act="yt-add" data-id="' + esc(id) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13" rx="3.5"/><path d="m10.5 9.5 4 2.5-4 2.5z"/></svg>رابط يوتيوب</button>' +
     '<button class="btn ghost sm tint hue-amber nb-tg" data-act="nb-toggle" data-id="' + esc('b:' + id) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19z"/><path d="M14.5 6.5l3 3"/></svg>سبورتي</button></div>' +
     '<div class="nb-slot" data-nb="' + esc('b:' + id) + '" data-lazy hidden></div>';
+}
+var MEDIA_URL = {}; // media key -> object URL, made once per session
+function mediaUrl(mk) {
+  if (MEDIA_URL[mk]) return Promise.resolve(MEDIA_URL[mk]);
+  return dbGet('media', mk).then(function (r) { if (!r || !r.blob) return null; MEDIA_URL[mk] = URL.createObjectURL(r.blob); return MEDIA_URL[mk]; }, function () { return null; });
+}
+function ytId(u) {
+  var m = /(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/|v\/))([A-Za-z0-9_-]{11})/.exec(String(u || ''));
+  return m ? m[1] : null;
+}
+function phItem(id, m, k) {
+  var cap = '<input class="ph-cap" type="text" maxlength="200" data-ph-cap="' + esc(id) + '" data-k="' + k + '" placeholder="اكتب وصفًا" value="' + esc(m.cap || '') + '">' +
+    '<button type="button" class="ph-del" data-act="ph-del" data-id="' + esc(id) + '" data-k="' + k + '" aria-label="احذف">×</button>';
+  if (m.kind === 'video') return '<figure class="ph vid"><video controls playsinline preload="metadata" data-mk="' + esc(m.mk) + '"' + (m.src ? ' poster="' + m.src + '"' : '') + '></video><p class="vid-miss small" hidden>المقطع غير موجود على هذا الجهاز (لا يدخل في النسخة الاحتياطية). احذفه وأضفه من جديد.</p>' + cap + '</figure>';
+  if (m.kind === 'yt') return '<figure class="ph yt"><iframe src="https://www.youtube-nocookie.com/embed/' + esc(m.yt) + '?rel=0&playsinline=1" title="' + esc(m.cap || 'مقطع يوتيوب') + '" loading="lazy" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>' + cap + '</figure>';
+  return '<figure class="ph"><img data-act="zoom" src="' + m.src + '" alt="' + esc(m.cap || 'صورة أضفتها') + '"' + (m.w ? ' width="' + m.w + '" height="' + m.h + '"' : '') + ' loading="lazy" decoding="async">' + cap + '</figure>';
 }
 function phFill(card) {
   var id = card.id.slice(2), sec = card.querySelector('.ph-sec'); if (!sec) return;
   var d = XC['p:' + id], imgs = d && d.imgs || [];
   sec.hidden = !imgs.length;
-  sec.innerHTML = imgs.length ? '<p class="ph-h">صوري (' + imgs.length + ')</p><div class="ph-grid">' + imgs.map(function (m, k) {
-    return '<figure class="ph"><img data-act="zoom" src="' + m.src + '" alt="' + esc(m.cap || 'صورة أضفتها') + '"' + (m.w ? ' width="' + m.w + '" height="' + m.h + '"' : '') + ' loading="lazy" decoding="async">' +
-      '<input class="ph-cap" type="text" maxlength="200" data-ph-cap="' + esc(id) + '" data-k="' + k + '" placeholder="اكتب وصفًا للصورة" value="' + esc(m.cap || '') + '">' +
-      '<button type="button" class="ph-del" data-act="ph-del" data-id="' + esc(id) + '" data-k="' + k + '" aria-label="احذف الصورة">×</button></figure>';
-  }).join('') + '</div>' : '';
+  var nv = imgs.filter(function (m) { return m.kind === 'video' || m.kind === 'yt'; }).length, ni = imgs.length - nv;
+  sec.innerHTML = imgs.length ? '<p class="ph-h">' + [ni ? 'صوري (' + ni + ')' : '', nv ? 'مقاطعي (' + nv + ')' : ''].filter(Boolean).join(' · ') + '</p><div class="ph-grid">' + imgs.map(function (m, k) { return phItem(id, m, k); }).join('') + '</div>' : '';
+  Array.prototype.forEach.call(sec.querySelectorAll('video[data-mk]'), function (v) {
+    mediaUrl(v.getAttribute('data-mk')).then(function (u) { if (u) { v.src = u; v.addEventListener('loadedmetadata', function () { xaDraw(card); }, { once: true }); } else { v.hidden = true; v.parentNode.querySelector('.vid-miss').hidden = false; } });
+  });
 }
 function phShrink(file) {
   return new Promise(function (res, rej) {
@@ -1445,22 +1462,60 @@ function phShrink(file) {
     im.src = url;
   });
 }
+function videoPoster(file) { // a small still from the start of the clip; empty when the browser cannot make one
+  return new Promise(function (res) {
+    var url = URL.createObjectURL(file), v = document.createElement('video'), done = false;
+    function fin(x) { if (done) return; done = true; try { v.removeAttribute('src'); v.load(); } catch (e) {} URL.revokeObjectURL(url); res(x); }
+    v.muted = true; v.playsInline = true; v.preload = 'auto';
+    v.onloadeddata = function () { try { v.currentTime = Math.min(0.5, (v.duration || 1) / 3); } catch (e) { fin({}); } };
+    v.onseeked = function () {
+      try { var w = v.videoWidth, h = v.videoHeight, k = Math.min(1, 640 / Math.max(w, h || 1)), c = document.createElement('canvas'); c.width = Math.round(w * k) || 1; c.height = Math.round(h * k) || 1; c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); fin({ src: c.toDataURL('image/jpeg', 0.7), w: w, h: h, dur: Math.round(v.duration || 0) }); }
+      catch (e) { fin({}); }
+    };
+    v.onerror = function () { fin({}); };
+    setTimeout(function () { fin({}); }, 6000);
+    v.src = url;
+  });
+}
 ACT['ph-add'] = function (el) {
   var id = el.getAttribute('data-id');
-  pick('image/*', true).then(function (files) {
-    toast('جارٍ حفظ ' + cnt(files.length, ['صورة واحدة', 'صورتين', 'صور', 'صورة']) + '…');
-    var d = XC['p:' + id] ? JSON.parse(JSON.stringify(XC['p:' + id])) : { imgs: [] }, bad = 0;
-    files.reduce(function (pr, f) { return pr.then(function () { return phShrink(f).then(function (r) { d.imgs.push({ id: uid(), src: r.src, w: r.w, h: r.h, cap: '', at: Date.now() }); }, function () { bad++; }); }); }, Promise.resolve()).then(function () {
+  pick('image/*,video/*', true).then(function (files) {
+    toast('جارٍ الحفظ…', 8000);
+    var d = XC['p:' + id] ? JSON.parse(JSON.stringify(XC['p:' + id])) : { imgs: [] }, bad = 0, full = 0, nv = 0;
+    files.reduce(function (pr, f) {
+      return pr.then(function () {
+        if (/^video\//.test(f.type) || /\.(mov|mp4|m4v|webm)$/i.test(f.name || '')) {
+          var iid = uid(), mk = 'm:' + id + ':' + iid;
+          return dbPut('media', { k: mk, blob: f, type: f.type || 'video/mp4', name: f.name || '', size: f.size }).then(function () {
+            return videoPoster(f).then(function (p) { d.imgs.push({ id: iid, kind: 'video', mk: mk, src: p.src || '', w: p.w || 0, h: p.h || 0, dur: p.dur || 0, size: f.size, cap: '', at: Date.now() }); nv++; });
+          }, function (e) { if (e && e.name === 'QuotaExceededError') full++; else bad++; });
+        }
+        return phShrink(f).then(function (r) { d.imgs.push({ id: uid(), src: r.src, w: r.w, h: r.h, cap: '', at: Date.now() }); }, function () { bad++; });
+      });
+    }, Promise.resolve()).then(function () {
       d.t = Date.now(); xcPut('p:' + id, d.imgs.length ? d : null);
       var card = xaCard(id); if (card) { phFill(card); xaDraw(card); }
-      toast(bad ? 'تعذّر فتح ' + cnt(bad, ['صورة واحدة', 'صورتين', 'صور', 'صورة']) : 'أُضيفت الصور تحت الفقرة');
+      toast(full ? 'لا توجد مساحة كافية على الجهاز لهذا المقطع' : bad ? 'تعذّر فتح ' + cnt(bad, ['ملف واحد', 'ملفين', 'ملفات', 'ملفًا']) : nv ? 'أُضيف المقطع تحت الفقرة؛ يُحفظ على هذا الجهاز فقط' : 'أُضيفت الصور تحت الفقرة', 3500);
     });
   });
+};
+ACT['yt-add'] = function (el) {
+  openModal(card('<h2>رابط مقطع يوتيوب</h2><p class="muted small">انسخ رابط المقطع من تطبيق يوتيوب (مشاركة ← نسخ الرابط) والصقه هنا. يُعرض تحت الفقرة ويحتاج إنترنت عند تشغيله.</p>' +
+    '<label class="field"><span>الرابط</span><input type="url" id="yt-url" dir="ltr" placeholder="https://youtu.be/…" data-focus></label><label class="field"><span>وصف (اختياري)</span><input type="text" id="yt-cap" maxlength="200"></label>' +
+    '<div class="actions"><button class="btn" data-act="yt-yes" data-id="' + esc(el.getAttribute('data-id')) + '">أضف</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
+};
+ACT['yt-yes'] = function (el) {
+  var id = el.getAttribute('data-id'), v = ytId(document.getElementById('yt-url').value);
+  if (!v) { toast('الرابط ليس رابط مقطع يوتيوب'); return; }
+  var d = XC['p:' + id] ? JSON.parse(JSON.stringify(XC['p:' + id])) : { imgs: [] };
+  d.imgs.push({ id: uid(), kind: 'yt', yt: v, cap: document.getElementById('yt-cap').value.trim().slice(0, 200), at: Date.now() }); d.t = Date.now(); xcPut('p:' + id, d);
+  closeModal(); var c = xaCard(id); if (c) { phFill(c); xaDraw(c); } toast('أُضيف المقطع تحت الفقرة');
 };
 ACT['ph-del'] = function (el) {
   if (!el.classList.contains('arm')) { el.classList.add('arm'); el.textContent = 'احذف؟'; setTimeout(function () { el.classList.remove('arm'); el.textContent = '×'; }, 3000); return; }
   var id = el.getAttribute('data-id'), k = +el.getAttribute('data-k'), d = XC['p:' + id]; if (!d) return;
-  d = JSON.parse(JSON.stringify(d)); d.imgs.splice(k, 1); d.t = Date.now(); xcPut('p:' + id, d.imgs.length ? d : null);
+  d = JSON.parse(JSON.stringify(d)); var gone = d.imgs.splice(k, 1)[0]; d.t = Date.now(); xcPut('p:' + id, d.imgs.length ? d : null);
+  if (gone && gone.mk) { dbDel('media', gone.mk); if (MEDIA_URL[gone.mk]) { URL.revokeObjectURL(MEDIA_URL[gone.mk]); delete MEDIA_URL[gone.mk]; } }
   var card = xaCard(id); if (card) { phFill(card); xaDraw(card); }
 };
 document.addEventListener('change', function (e) {
@@ -1742,7 +1797,7 @@ ACT['be-save'] = function (el) {
 ACT['bk-del'] = function (el) { confirmBox('حذف الكتاب؟', 'يُحذف ملف الكتاب ودروسه ومساعدها وكتابتك عليه من هذا الجهاز. لا يمكن التراجع؛ احفظ نسخة احتياطية أولًا إن أردت.', 'bk-del-yes', 'احذف الكتاب', ' data-id="' + el.getAttribute('data-id') + '"', true); };
 ACT['bk-del-yes'] = function (el) {
   var id = el.getAttribute('data-id');
-  Promise.all([dbDel('books', id), dbDel('files', id), dbDelRange('aids', id + ':'), dbDelRange('ink', id + ':'), dbDelRange('notes', 'b:' + id + ':'), dbDelRange('notes', 'x:' + id + ':'), dbDelRange('notes', 'p:' + id + ':')]).then(function () {
+  Promise.all([dbDel('books', id), dbDel('files', id), dbDelRange('aids', id + ':'), dbDelRange('ink', id + ':'), dbDelRange('notes', 'b:' + id + ':'), dbDelRange('notes', 'x:' + id + ':'), dbDelRange('notes', 'p:' + id + ':'), dbDelRange('media', 'm:' + id + ':')]).then(function () {
     Object.keys(XC).forEach(function (k) { if (k.indexOf(':' + id + ':') === 1) delete XC[k]; });
     BOOKS = BOOKS.filter(function (b) { return b.id !== id; }); Object.keys(AIDS).forEach(function (k) { if (k.indexOf(id + ':') === 0) delete AIDS[k]; });
     delete DOCS[id]; delete S.plan[id]; delete S.last[id]; if (S.cur === id) S.cur = BOOKS[0] ? BOOKS[0].id : ''; saveState(); closeModal(); go(BOOKS.length ? 'books' : 'home');
@@ -2019,7 +2074,7 @@ function settingsHtml() {
     '<div class="actions" style="margin-top:0"><button class="btn ghost sm" data-act="ai-test">جرّب المفتاح</button><span class="small muted" id="ai-test-out"></span></div></section>' +
     '<section class="set-sec"><h3>فصولي</h3><label class="field"><span>أسماء الفصول التي تدرّسها، تفصل بينها بفاصلة</span><input type="text" id="classes" placeholder="1/1، 1/2، 2/1" value="' + esc(P.classes.join('، ')) + '"></label><p class="small muted">تعلّم في كل درس الفصول التي شرحته لها، وترى تقدم كل فصل في الرئيسية.</p></section>' +
     '<section class="set-sec"><h3>التقويم الدراسي</h3>' + segBtns('pref-region', P.region === 'west' ? 'west' : 'std', [['std', 'باقي مناطق المملكة'], ['west', 'مكة والمدينة وجدة والطائف']]) + '</section>' +
-    '<section class="set-sec"><h3>النسخ الاحتياطي</h3><p class="small muted">' + (S.backupAt ? 'آخر نسخة: ' + relDay(S.backupAt) + '. ' : '') + 'يحفظ الدروس ومساعدها وكتابتك على الصفحات وسبوراتك وملاحظاتك وتقدم فصولك في ملف واحد، دون ملفات الكتب نفسها (تضيفها مرة أخرى فتعود إليها كتابتها).</p>' +
+    '<section class="set-sec"><h3>النسخ الاحتياطي</h3><p class="small muted">' + (S.backupAt ? 'آخر نسخة: ' + relDay(S.backupAt) + '. ' : '') + 'يحفظ الدروس ومساعدها وكتابتك على الصفحات وسبوراتك وملاحظاتك وتقدم فصولك في ملف واحد، دون ملفات الكتب نفسها (تضيفها مرة أخرى فتعود إليها كتابتها)، ودون مقاطع الفيديو التي أضفتها من جهازك لكبر حجمها؛ روابط يوتيوب تدخل فيها.</p>' +
     '<div class="actions" style="margin-top:0"><button class="btn" data-act="backup-save">احفظ نسخة احتياطية</button><button class="btn ghost" data-act="backup-restore">استعد من ملف</button></div></section>' +
     '<section class="set-sec"><h3>التخزين على الجهاز</h3><p class="small muted" id="storage-info">…</p>' + (STANDALONE ? '' : '<p class="hint">' + INSTALL + '</p>') + '<div class="actions" style="margin-top:0"><button class="btn ghost sm danger" data-act="reset">احذف كل بيانات التطبيق</button></div></section>' +
     '<section class="set-sec"><h3>عن التطبيق</h3><p class="small muted">كتابي، الإصدار ' + esc(VERSION) + '. لا خادم ولا حساب: الكتب وكل ما تكتبه على هذا الجهاز وحده.</p><div class="actions"><button class="btn ghost" data-act="app-update">تحديث التطبيق الآن</button></div></section>');
@@ -2085,7 +2140,11 @@ function restore(o) {
         var c = { k: d.k, t: +d.t || Date.now() };
         if (Array.isArray(d.s)) { c.s = d.s.filter(function (s) { return s && Array.isArray(s.p); }); if (x[0] === 'notes') c.h = +d.h || NB_H0; }
         else if (x[0] === 'notes' && Array.isArray(d.hl) && Array.isArray(d.ink)) { c.hl = d.hl.filter(function (h) { return Array.isArray(h) && h.length >= 2 && h.length <= 4; }); c.ink = d.ink.filter(function (s) { return s && Array.isArray(s.p); }); }
-        else if (x[0] === 'notes' && Array.isArray(d.imgs)) { c.imgs = d.imgs.filter(function (m) { return m && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(m.src || ''); }).map(function (m) { return { id: str(m.id).slice(0, 20), src: m.src, w: +m.w || 0, h: +m.h || 0, cap: str(m.cap).slice(0, 200), at: +m.at || 0 }; }); }
+        else if (x[0] === 'notes' && Array.isArray(d.imgs)) {
+          var okImg = function (s) { return /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(s || ''); };
+          c.imgs = d.imgs.filter(function (m) { return m && (m.kind === 'yt' ? /^[A-Za-z0-9_-]{11}$/.test(m.yt || '') : m.kind === 'video' ? typeof m.mk === 'string' && (!m.src || okImg(m.src)) : okImg(m.src)); })
+            .map(function (m) { var o = { id: str(m.id).slice(0, 20), src: m.src || '', w: +m.w || 0, h: +m.h || 0, cap: str(m.cap).slice(0, 200), at: +m.at || 0 }; if (m.kind === 'yt') { o.kind = 'yt'; o.yt = m.yt; } if (m.kind === 'video') { o.kind = 'video'; o.mk = str(m.mk).slice(0, 200); o.size = +m.size || 0; } return o; });
+        }
         else return;
         if (x[0] === 'notes') XC[c.k] = c;
         jobs.push(dbPut(x[0], c)); n++;
@@ -2154,7 +2213,7 @@ Promise.all([idb().then(function () { return Promise.all([dbAll('books'), dbAll(
   var h = (location.hash || '').slice(1), rs = null;
   try { rs = JSON.parse(sessionStorage.getItem('kitabi-resume') || 'null'); sessionStorage.removeItem('kitabi-resume'); } catch (e) {}
   if (rs && Date.now() - rs.t < 120000 && rs.r && VIEWS[rs.r.v]) { route = rs.r; route.present = false; render(); window.scrollTo(0, rs.y || 0); toast('حُدّث التطبيق'); }
-  else { if (VIEWS[h] && h !== 'lesson') route = { v: h }; render(); }
+  else { var hm = /^lesson=(.+)$/.exec(h), hk = hm ? decodeURIComponent(hm[1]) : ''; if (hk && lessonByKey(hk)) { route = { v: 'lesson', k: hk, tab: 'goals' }; S.cur = lessonByKey(hk).b.id; } else if (VIEWS[h] && h !== 'lesson') route = { v: h }; render(); }
   var obs = new MutationObserver(function () { document.getElementById('tabs').hidden = !BOOKS.length; }); obs.observe(document.getElementById('main'), { childList: true });
 })['catch'](function (e) {
   document.getElementById('main').innerHTML = '<section class="panel welcome"><h1>تعذّر فتح التخزين</h1><p class="muted">' + esc((e && (e.message || e.name)) || String(e)) + '</p><p>إن كنت في وضع التصفح الخاص فافتح التطبيق في نافذة عادية أو من أيقونته على الشاشة الرئيسية.</p></section>';
