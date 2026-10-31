@@ -971,7 +971,7 @@ var L_TAB = {
   exp: function (a, b, l) {
     if (!a.exp.length) return '<p class="muted">لا شرح في هذا المساعد.</p>';
     var k = lk(b, l);
-    return '<p class="muted small xa-tip">اكتب على الشرح بقلم الآيباد مباشرة: قلم التحديد يظلّل الكلمات، وأقلام الكتابة تكتب بجانب الفقرة. أو حدّد نصًا بإصبعك ثم «ظلّل التحديد». <button class="link" data-act="xa-pen">أدوات التحديد</button></p>' + a.exp.map(function (x, i) {
+    return '<p class="muted small xa-tip">اكتب على الشرح بقلم الآيباد مباشرة: قلم التحديد يظلّل الكلمات، وأقلام الكتابة تكتب بجانب الفقرة. ' + (xaPref().finger ? 'الكتابة بالإصبع مفعّلة؛ مرّر الصفحة بإصبعين. <button class="link" data-act="xa-finger">أوقفها</button>' : '<button class="link" data-act="xa-finger">اكتب بإصبعك</button>') + '</p>' + a.exp.map(function (x, i) {
       var id = k + ':e' + i;
       return '<article class="xcard xa hue-teal" id="x-' + esc(id) + '"><header class="x-head"><span class="i-num">' + (i + 1) + '</span><p class="x-ind">' + fx(x.h) + '</p>' + (x.page ? '<button class="pchip" data-act="go-page" data-p="' + x.page + '">ص ' + x.page + '</button>' : '') + '</header>' +
         (x.fig >= 0 ? figure(a.figs[x.fig], true) : '') + '<div class="x-body">' + blocks(x.body) + '</div>' + cardTools(id) + '</article>';
@@ -1221,7 +1221,7 @@ function xcPut(k, d) {
 var XA_PEN = ['ink', '#C62828', '#1F5FB8'], XA_UNDO = [], XA_LIVE = null;
 var XA_HLC = [['#FFD23F', 'أصفر'], ['#6FDB98', 'أخضر'], ['#86BEFF', 'أزرق'], ['#FF92BF', 'وردي'], ['#FFAA5C', 'برتقالي']];
 function hlColor(k) { return (XA_HLC[+k || 0] || XA_HLC[0])[0]; }
-function xaPref() { var o = nbPref(); return { tool: o.xtool || 'hl', ink: +o.xink || 0, hlc: Math.min(XA_HLC.length - 1, +o.xhlc || 0), pencil: !!o.pencil }; }
+function xaPref() { var o = nbPref(); return { tool: o.xtool || 'hl', ink: +o.xink || 0, hlc: Math.min(XA_HLC.length - 1, +o.xhlc || 0), pencil: !!o.pencil, finger: !!o.xfinger }; }
 function xaData(id) { var d = XC['x:' + id]; return d ? JSON.parse(JSON.stringify(d)) : { hl: [], ink: [] }; }
 function xaSave(id, d) { d.t = Date.now(); xcPut('x:' + id, d.hl.length || d.ink.length ? d : null); }
 function xaStore(id, d, before) { XA_UNDO.push({ id: id, d: before }); if (XA_UNDO.length > 60) XA_UNDO.shift(); xaSave(id, d); setTimeout(xaBar, 0); }
@@ -1337,18 +1337,30 @@ function xaEnd() {
 }
 function xaHook(card) {
   if (card.__xa) return; card.__xa = true;
+  var pan = null; // with finger writing on, two fingers scroll the page
   card.addEventListener('touchstart', function (e) {
-    var t = e.changedTouches[0]; if (!t || t.touchType !== 'stylus') return;
+    var t = e.changedTouches[0]; if (!t) return;
+    var stylus = t.touchType === 'stylus', finger = !stylus && xaPref().finger;
+    if (finger && e.touches.length >= 2) { // a second finger: cancel the stroke just begun, and scroll instead
+      if (XA_LIVE && !XA_LIVE.stylus) { var L0 = XA_LIVE; XA_LIVE = null; xaDraw(L0.card); }
+      pan = { y: (e.touches[0].clientY + e.touches[1].clientY) / 2 }; e.preventDefault(); return;
+    }
+    if (!stylus && !finger) return;
     if (XA_LIVE && Date.now() - XA_LIVE.at > 1500) XA_LIVE = null;
     if (XA_LIVE) return;
-    if (e.target.closest && e.target.closest('button, a, input, select, textarea, summary, label, .nb-slot, .ph-sec')) return;
-    e.preventDefault(); if (!xaPref().pencil) { nbSetPref('pencil', true); xaBar(); }
+    if (e.target.closest && e.target.closest('button, a, input, select, textarea, summary, label, .nb-slot, .ph-sec' + (finger ? ', figure, [data-act]' : ''))) return;
+    e.preventDefault(); if (stylus && !xaPref().pencil) { nbSetPref('pencil', true); xaBar(); }
     var tg = e.target, id = t.identifier;
     function mv(ev) { if (!XA_LIVE) return; for (var k = 0; k < ev.changedTouches.length; k++) if (ev.changedTouches[k].identifier === id) { ev.preventDefault(); XA_LIVE.at = Date.now(); xaMove(ev.changedTouches[k]); } }
     function en(ev) { for (var k = 0; k < ev.changedTouches.length; k++) if (ev.changedTouches[k].identifier === id) { tg.removeEventListener('touchmove', mv); tg.removeEventListener('touchend', en); tg.removeEventListener('touchcancel', en); xaEnd(); } }
     tg.addEventListener('touchmove', mv, { passive: false }); tg.addEventListener('touchend', en); tg.addEventListener('touchcancel', en);
-    xaBegin(card, t); XA_LIVE.at = Date.now();
+    xaBegin(card, t); XA_LIVE.at = Date.now(); XA_LIVE.stylus = stylus;
   }, { passive: false });
+  card.addEventListener('touchmove', function (e) {
+    if (!pan || e.touches.length < 2) return; e.preventDefault();
+    var y = (e.touches[0].clientY + e.touches[1].clientY) / 2; window.scrollBy(0, pan.y - y); pan.y = y;
+  }, { passive: false });
+  card.addEventListener('touchend', function (e) { if (e.touches.length < 2) pan = null; });
   if (window.ResizeObserver) { var ro = new ResizeObserver(function () { xaDraw(card); }); ro.observe(card); }
 }
 function xaSelCard() {
@@ -1367,6 +1379,7 @@ function xaBar() {
     XA_PEN.map(function (c, k) { return '<button type="button" class="xa-t xa-pen' + (o.tool === 'pen' && o.ink === k ? ' on' : '') + '" data-xa="pen" data-v="' + k + '" aria-label="قلم ' + ['داكن', 'أحمر', 'أزرق'][k] + '" style="--c:' + (c === 'ink' ? 'var(--ink)' : c) + '"><i></i></button>'; }).join('') +
     '<button type="button" class="xa-t' + (o.tool === 'er' ? ' on' : '') + '" data-xa="tool" data-v="er" aria-label="ممحاة"><svg viewBox="0 0 24 24" aria-hidden="true">' + NB_SVG.er + '</svg></button>' +
     '<button type="button" class="xa-undo" data-xa="undo" aria-label="تراجع عن آخر تحديد أو كتابة"' + (XA_UNDO.length || xaNewest() ? '' : ' disabled') + '><svg viewBox="0 0 24 24" aria-hidden="true">' + NB_SVG.undo + '</svg>تراجع</button>' +
+    '<button type="button" class="xa-t xa-fg' + (o.finger ? ' on' : '') + '" data-xa="finger" aria-label="' + (o.finger ? 'الكتابة بالإصبع مفعّلة' : 'الكتابة بالإصبع') + '" title="الكتابة بالإصبع"><svg viewBox="0 0 24 24" aria-hidden="true">' + RSVG.finger + '</svg></button>' +
     '<button type="button" class="xa-t" data-xa="hide" aria-label="أخفِ الأدوات"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>';
   bar.innerHTML = h;
 }
@@ -1397,7 +1410,8 @@ function xaBarClick(e) {
   else if (a === 'hl') { nbSetPref('xtool', 'hl'); nbSetPref('xhlc', +v); }
   else if (a === 'pen') { nbSetPref('xtool', 'pen'); nbSetPref('xink', +v); }
   else if (a === 'undo') xaUndo();
-  else if (a === 'hide') { nbSetPref('pencil', false); toast('تعود الأدوات حين تكتب بالقلم على الشرح'); }
+  else if (a === 'hide') { nbSetPref('pencil', false); nbSetPref('xfinger', false); document.body.classList.remove('xa-finger'); toast('تعود الأدوات حين تكتب بالقلم على الشرح'); }
+  else if (a === 'finger') xaFinger(!xaPref().finger);
   else if (a === 'sel') { nbSetPref('xhlc', +v || 0); var S0 = XA_SEL && Date.now() - XA_SEL.at < 4000 ? XA_SEL : null, c2 = S0 && xaCard(S0.id); if (c2) xaAddHl(c2, S0.id, S0.a, S0.b, +v || 0); XA_SEL = null; try { window.getSelection().removeAllRanges(); } catch (x) {} }
   xaBar();
 }
@@ -1407,13 +1421,20 @@ document.addEventListener('selectionchange', function () {
   clearTimeout(xaBar.t); xaBar.t = setTimeout(xaBar, sc ? 150 : 900);
 });
 AFTER.push(function () {
+  document.body.classList.toggle('xa-finger', xaOn() && xaPref().finger);
   if (!xaOn()) { xaBar(); return; }
   xcReady().then(function () {
     Array.prototype.forEach.call(document.querySelectorAll('#main .xa'), function (card) { phFill(card); xaHook(card); var d = XC['x:' + card.id.slice(2)]; if (d) xaMarks(card, d); xaDraw(card); });
     xaBar();
   });
 });
+function xaFinger(on) {
+  nbSetPref('xfinger', on); if (on) nbSetPref('pencil', true);
+  document.body.classList.toggle('xa-finger', on); xaBar();
+  toast(on ? 'تكتب وتظلّل الآن بإصبعك على الشرح؛ مرّر الصفحة بإصبعين' : 'الإصبع يمرّر الصفحة، والكتابة بقلم الآيباد', 3500);
+}
 ACT['xa-pen'] = function () { nbSetPref('pencil', !xaPref().pencil); xaBar(); if (xaPref().pencil) toast('اكتب بقلم الآيباد على الشرح؛ قلم التحديد يظلّل الكلمات'); };
+ACT['xa-finger'] = function () { xaFinger(!xaPref().finger); render(true); };
 
 /* under each explanation card: my photos and videos, and a board (from إتقان) */
 function cardTools(id) {
