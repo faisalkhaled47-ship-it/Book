@@ -1949,7 +1949,7 @@ function quizResult() {
 function planOf(b) {
   var p = S.plan[b.id] = S.plan[b.id] || {}, T = termsList(), t = T.filter(function (x) { return x[0] === p.term; })[0];
   if (!t) { var td = today(); t = T.filter(function (x) { return td <= parseISO(x[3]); })[0] || T[0]; p.term = t[0]; }
-  if (!p.start) p.start = t[2]; if (!p.end) p.end = t[3]; if (p.review == null) p.review = 1; if (!p.manual) p.manual = {};
+  if (!p.start) p.start = t[2]; if (!p.end) p.end = t[3]; if (p.review == null) p.review = 1; if (!p.dur) p.dur = {};
   return p;
 }
 function weeksOf(p) {
@@ -1963,20 +1963,36 @@ function weeksOf(p) {
   }
   return out;
 }
+/* lessons run one after another; each takes a length in half weeks (½ week = two lessons share a week).
+   Lengths the teacher sets are kept; the rest share the remaining weeks by their number of pages. */
+var DUR = [[1, 'نصف أسبوع'], [2, 'أسبوع'], [3, 'أسبوع ونصف'], [4, 'أسبوعان'], [5, 'أسبوعان ونصف'], [6, '3 أسابيع'], [8, '4 أسابيع']];
+function durLbl(h) { var d = DUR.filter(function (x) { return x[0] === h; })[0]; return d ? d[1] : cnt(Math.floor(h / 2), WORDS.week) + (h % 2 ? ' ونصف' : ''); }
 function buildSchedule(b) {
   var p = planOf(b), W = weeksOf(p), teach = W.map(function (w, i) { return i; }).filter(function (i) { return W[i].days > 0; });
-  var use = teach.slice(0, Math.max(1, teach.length - (+p.review || 0))), cap = use.map(function (i) { return W[i].days; }), C = cap.reduce(function (s, x) { return s + x; }, 0);
-  var wts = b.lessons.map(function (l) { return Math.max(1, (l.to || l.from) - l.from + 1); }), Wt = wts.reduce(function (s, x) { return s + x; }, 0), acc = 0, at = {};
-  b.lessons.forEach(function (l, j) {
-    var f = Wt ? (acc + wts[j] * 0.25) / Wt : 0, run = 0, wk = use[use.length - 1];
-    for (var k = 0; k < use.length; k++) { run += cap[k]; if (run / C > f) { wk = use[k]; break; } }
-    acc += wts[j];
-    var m = p.manual[l.id]; at[l.id] = m != null && W[m] ? m : wk;
+  var useN = Math.max(1, teach.length - (+p.review || 0)), H = useN * 2, set = p.dur || {};
+  var fixed = 0, wsum = 0, wts = {};
+  b.lessons.forEach(function (l) { if (set[l.id]) fixed += set[l.id]; else { wts[l.id] = Math.max(1, (l.to || l.from) - l.from + 1); wsum += wts[l.id]; } });
+  var left = Math.max(0, H - fixed), acc = 0, prev = 0, dur = {};
+  b.lessons.forEach(function (l) {
+    if (set[l.id]) { dur[l.id] = set[l.id]; return; }
+    acc += wsum ? wts[l.id] / wsum * left : 0; var r = Math.round(acc); dur[l.id] = Math.max(1, r - prev); prev = Math.max(r, prev + 1);
   });
-  return { p: p, W: W, at: at, review: teach.slice(use.length) };
+  var c = 0, weeks = {}, start = {}, over = [];
+  b.lessons.forEach(function (l) {
+    var ws = [];
+    for (var h = c; h < c + dur[l.id]; h++) { var k = Math.floor(h / 2); if (k < teach.length) { if (ws.indexOf(teach[k]) < 0) ws.push(teach[k]); } }
+    if (Math.floor((c + dur[l.id] - 1) / 2) >= useN) over.push(l.id);
+    weeks[l.id] = ws; start[l.id] = ws.length ? ws[0] : -1; c += dur[l.id];
+  });
+  return { p: p, W: W, weeks: weeks, start: start, dur: dur, auto: !Object.keys(set).length, over: over, review: teach.slice(useN), inWeek: function (i) { return b.lessons.filter(function (l) { return weeks[l.id].indexOf(i) >= 0; }); } };
 }
 function weekNo(W, i) { var n = 0; for (var k = 0; k <= i; k++) if (W[k].days > 0) n++; return n; }
 function curWeek(W) { var t = today(); for (var i = 0; i < W.length; i++) if (t >= W[i].a && t <= W[i].a + 6) return i; return -1; }
+function durSelect(X, l) {
+  var set = (X.p.dur || {})[l.id], d = X.dur[l.id];
+  return '<select class="wk-dur" data-l="' + esc(l.id) + '" aria-label="مدة الدرس">' + '<option value=""' + (set ? '' : ' selected') + '>' + (set ? 'تلقائي' : durLbl(d) + ' (تلقائي)') + '</option>' +
+    DUR.map(function (x) { return '<option value="' + x[0] + '"' + (set === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select>';
+}
 VIEWS.plan = function () {
   var b = curBook(); if (!b) return noBook();
   var h = '<div class="page-head"><h1>التقويم</h1></div>' + calPanel(b);
@@ -1986,24 +2002,31 @@ VIEWS.plan = function () {
   h += '<section class="panel plan-set"><div class="seg" role="group">' + termsList().map(function (t) { return '<button type="button" data-act="plan-term" data-v="' + t[0] + '" aria-pressed="' + (p.term === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>' +
     '<div class="row2"><label class="field"><span>من</span><input type="date" id="plan-a" value="' + esc(p.start) + '"></label><label class="field"><span>إلى</span><input type="date" id="plan-b" value="' + esc(p.end) + '"></label></div>' +
     '<div class="plan-rv"><span class="small muted">أسابيع للمراجعة والاختبارات في آخر الفصل</span>' + '<div class="seg" role="group">' + [0, 1, 2, 3].map(function (n) { return '<button type="button" data-act="plan-rv" data-v="' + n + '" aria-pressed="' + (+p.review === n) + '">' + n + '</button>'; }).join('') + '</div></div>' +
-    '<p class="small muted">' + cnt(nTeach, WORDS.week) + ' دراسية و' + cnt(b.lessons.length, WORDS.lesson) + '؛ يُوزَّع كل درس بحسب عدد صفحاته وأيام الدراسة في كل أسبوع. تستطيع نقل أي درس إلى أسبوع آخر.' + (Object.keys(p.manual).length ? ' <button class="link" data-act="plan-auto">ارجع إلى التوزيع التلقائي</button>' : '') + '</p></section>';
+    '<p class="small muted">' + cnt(nTeach, WORDS.week) + ' دراسية و' + cnt(b.lessons.length, WORDS.lesson) + '. الدروس متتالية، ولكل درس مدة تختارها من القائمة بجانبه (نصف أسبوع إلى 4 أسابيع)، وما تتركه «تلقائي» يأخذ من الأسابيع الباقية بحسب عدد صفحاته.' + (X.auto ? '' : ' <button class="link" data-act="plan-auto">اجعل الكل تلقائيًا</button>') + '</p>' +
+    (X.over.length ? '<p class="hint">' + cnt(X.over.length, WORDS.lesson) + ' تتجاوز نهاية الفصل بهذه المدد؛ قصّر مدة بعض الدروس أو قلّل أسابيع المراجعة.</p>' : '') + '</section>';
   h += '<ol class="weeks">' + W.map(function (w, i) {
-    var ls = b.lessons.filter(function (l) { return X.at[l.id] === i; }), isRv = X.review.indexOf(i) >= 0;
+    var ls = X.inWeek(i), isRv = X.review.indexOf(i) >= 0;
     if (!w.days) return '<li class="wk off"><div class="wk-h"><b>' + esc(w.off.join('، ') || 'إجازة') + '</b><span>' + esc(rangeLbl(w.a, w.b)) + '</span></div></li>';
-    return '<li class="wk' + (i === cw ? ' now' : '') + (i < cw ? ' past' : '') + '" id="wk-' + i + '"><div class="wk-h"><b>الأسبوع ' + weekNo(W, i) + (i === cw ? ' · هذا الأسبوع' : '') + '</b><span>' + esc(rangeLbl(w.a, w.b)) + (w.days < 5 ? ' · ' + cnt(w.days, WORDS.day) + ' دراسة' : '') + '</span></div>' +
+    return '<li class="wk' + (i === cw ? ' now' : '') + (i < cw ? ' past' : '') + (isRv ? ' rv' : '') + '" id="wk-' + i + '"><div class="wk-h"><b>الأسبوع ' + weekNo(W, i) + (i === cw ? ' · هذا الأسبوع' : '') + '</b><span>' + esc(rangeLbl(w.a, w.b)) + (w.days < 5 ? ' · ' + cnt(w.days, WORDS.day) + ' دراسة' : '') + '</span></div>' +
       (w.off.length ? '<p class="small wk-off">' + esc(w.off.join('، ')) + '</p>' : '') +
-      (ls.length ? '<ul class="wk-ls">' + ls.map(function (l) { var tn = taughtN(b, l), cl = P.classes.length; return '<li><button class="link" data-act="lesson" data-k="' + esc(lk(b, l)) + '">' + esc(l.title) + '</button>' + (cl ? '<span class="small ' + (tn === cl ? 'good' : 'muted') + '">' + (tn ? (tn === cl ? '✓ شُرح' : 'شُرح ' + tn + '/' + cl) : '') + '</span>' : '') + '<select class="wk-mv" data-l="' + esc(l.id) + '" aria-label="انقل الدرس إلى أسبوع آخر">' + W.map(function (w2, j) { return w2.days ? '<option value="' + j + '"' + (j === i ? ' selected' : '') + '>أ' + weekNo(W, j) + '</option>' : ''; }).join('') + '</select></li>'; }).join('') + '</ul>' : '<p class="small muted">' + (isRv ? 'مراجعة واختبارات' : 'لا دروس') + '</p>') + '</li>';
+      (ls.length ? '<ul class="wk-ls">' + ls.map(function (l) {
+        var tn = taughtN(b, l), cl = P.classes.length, first = X.start[l.id] === i, ws = X.weeks[l.id], part = ws.indexOf(i) + 1;
+        return '<li class="' + (first ? 'first' : 'cont') + '">' + (first ? '' : '<span class="wk-cont">تابع</span>') + '<button class="link" data-act="lesson" data-k="' + esc(lk(b, l)) + '">' + esc(l.title) + '</button>' +
+          (ws.length > 1 ? '<span class="small muted">' + part + '/' + ws.length + '</span>' : '') +
+          (cl && first ? '<span class="small ' + (tn === cl ? 'good' : 'muted') + '">' + (tn ? (tn === cl ? '✓ شُرح' : 'شُرح ' + tn + '/' + cl) : '') + '</span>' : '') +
+          (first ? durSelect(X, l) : '') + '</li>';
+      }).join('') + '</ul>' : '<p class="small muted">' + (isRv ? 'مراجعة واختبارات' : 'لا دروس') + '</p>') + '</li>';
   }).join('') + '</ol>';
   return h;
 };
 AFTER.push(function () { if (route.v === 'plan') { var n = document.querySelector('.wk.now'); if (n && route.jump) { route.jump = false; n.scrollIntoView({ block: 'center' }); } } });
-ACT['plan-term'] = function (el) { var b = curBook(), p = planOf(b), t = termsList().filter(function (x) { return x[0] === el.getAttribute('data-v'); })[0]; p.term = t[0]; p.start = t[2]; p.end = t[3]; p.manual = {}; saveState(); render(true); };
+ACT['plan-term'] = function (el) { var b = curBook(), p = planOf(b), t = termsList().filter(function (x) { return x[0] === el.getAttribute('data-v'); })[0]; p.term = t[0]; p.start = t[2]; p.end = t[3]; p.dur = {}; saveState(); render(true); };
 ACT['plan-rv'] = function (el) { var p = planOf(curBook()); p.review = +el.getAttribute('data-v'); saveState(); render(true); };
-ACT['plan-auto'] = function () { var p = planOf(curBook()); p.manual = {}; saveState(); render(true); };
+ACT['plan-auto'] = function () { var p = planOf(curBook()); p.dur = {}; saveState(); render(true); };
 document.addEventListener('change', function (e) {
   var t = e.target, b = curBook(); if (!b) return;
   if (t.id === 'plan-a' || t.id === 'plan-b') { var p = planOf(b); if (parseISO(t.value) != null) { p[t.id === 'plan-a' ? 'start' : 'end'] = t.value; saveState(); render(true); } }
-  else if (t.classList.contains('wk-mv')) { var p2 = planOf(b); p2.manual[t.getAttribute('data-l')] = +t.value; saveState(); render(true); }
+  else if (t.classList.contains('wk-dur')) { var p2 = planOf(b); p2.dur = p2.dur || {}; if (t.value) p2.dur[t.getAttribute('data-l')] = +t.value; else delete p2.dur[t.getAttribute('data-l')]; saveState(); render(true); }
 });
 /* month calendar: school calendar, and the lessons of each week */
 function calPanel(b) {
@@ -2022,7 +2045,7 @@ function calPanel(b) {
   for (var k = 0, f = wday(first); k < f; k++) h += '<span class="cal-pad" aria-hidden="true"></span>';
   var seen = {};
   for (var i = first; i <= last; i++) {
-    var di = dayInfo(i, E), hj = di.hj, cls = i < t ? 'past' : i === t ? 'today' : 'next', wi = wkOf[i], has = X && wi != null && di.school && wday(i) === 0 && b.lessons.some(function (l) { return X.at[l.id] === wi; });
+    var di = dayInfo(i, E), hj = di.hj, cls = i < t ? 'past' : i === t ? 'today' : 'next', wi = wkOf[i], has = X && wi != null && di.school && wday(i) === 0 && X.inWeek(wi).length;
     if (di.fill) { cls += ' k-' + di.fill; seen[di.fill] = 1; } if (di.ram) { cls += ' ram'; seen.ram = 1; } if (di.marks.length) { cls += ' k-mark'; seen.mark = 1; } if (i === sel) cls += ' sel';
     if (has) seen.plan = 1;
     h += '<button type="button" class="cal-d ' + cls + '" data-act="cal-day" data-d="' + i + '" aria-pressed="' + (i === sel) + '" aria-label="' + esc(dayFull(i)) + '"><b>' + ymd(i).d + '</b>' + (hj ? (hj.d === 1 ? '<small class="mo">' + esc(hjShort(hj.m)) + '</small>' : '<small>' + hj.d + '</small>') : '') + '<span class="dots">' + (has ? '<i class="d-plan"></i>' : '') + '</span></button>';
@@ -2034,7 +2057,7 @@ function calPanel(b) {
   if (dI.we && !dI.off && !dI.extra && !dI.eid) chips.push(['we', 'عطلة نهاية الأسبوع']);
   var body = chips.length ? '<div class="cal-chips">' + chips.map(function (x) { return '<span class="cc cc-' + x[0] + '">' + esc(x[1]) + '</span>'; }).join('') + '</div>' : '';
   var wi2 = wkOf[sel];
-  if (X && wi2 != null && X.W[wi2].days) { var ls = b.lessons.filter(function (l) { return X.at[l.id] === wi2; }); body += '<div class="cal-plan"><p class="small muted">دروس الأسبوع ' + weekNo(X.W, wi2) + '</p>' + (ls.length ? '<ul class="wk-ls">' + ls.map(function (l) { return '<li><button class="link" data-act="lesson" data-k="' + esc(lk(b, l)) + '">' + esc(l.title) + '</button></li>'; }).join('') + '</ul>' : '<p class="small muted">' + (X.review.indexOf(wi2) >= 0 ? 'مراجعة واختبارات' : 'لا دروس') + '</p>') + '</div>'; }
+  if (X && wi2 != null && X.W[wi2].days) { var ls = X.inWeek(wi2); body += '<div class="cal-plan"><p class="small muted">دروس الأسبوع ' + weekNo(X.W, wi2) + '</p>' + (ls.length ? '<ul class="wk-ls">' + ls.map(function (l) { return '<li><button class="link" data-act="lesson" data-k="' + esc(lk(b, l)) + '">' + esc(l.title) + '</button></li>'; }).join('') + '</ul>' : '<p class="small muted">' + (X.review.indexOf(wi2) >= 0 ? 'مراجعة واختبارات' : 'لا دروس') + '</p>') + '</div>'; }
   if (!body) body = '<p class="cal-ln muted">لا مواعيد في هذا اليوم.</p>';
   h += '<div class="cal-det"><div class="cal-det-h"><b>' + esc(dayFull(sel)) + '</b><span>' + (dI.hj ? dI.hj.d + ' ' + esc(dI.hj.m) + ' · ' : '') + rel + '</span></div>' + body + '</div>';
   var LG = [['we', 'نهاية الأسبوع'], ['off', 'إجازة دراسية'], ['extra', 'إجازة إضافية'], ['eid', 'عيد'], ['ram', 'رمضان'], ['mark', 'بدايات ونهايات']].filter(function (x) { return seen[x[0]]; });
@@ -2058,7 +2081,7 @@ VIEWS.home = function () {
   if (!b.lessons.length) return h + '<div class="span">' + setupPanel(b) + '</div></div>';
   if (X) {
     var wi = cw >= 0 ? cw : 0, ls = [];
-    for (var i = Math.max(0, cw); i < X.W.length && !ls.length; i++) { ls = b.lessons.filter(function (l) { return X.at[l.id] === i; }); wi = i; }
+    for (var i = Math.max(0, cw); i < X.W.length && !ls.length; i++) { ls = X.inWeek(i); wi = i; }
     h += '<section class="panel span"><h2 class="hh">' + ico('target', 'teal') + (wi === cw ? 'دروس هذا الأسبوع' : 'الدروس القادمة') + '</h2>' + (ls.length ? '<p class="small muted">' + (wi !== cw ? 'الأسبوع ' + weekNo(X.W, wi) + ' · ' : '') + esc(rangeLbl(X.W[wi].a, X.W[wi].b)) + '</p><div class="ulist">' + ls.map(function (l) { return lessonRow(b, l, b.lessons.indexOf(l), 'teal'); }).join('') + '</div>' : '<p class="muted">لا دروس مجدولة.</p>') +
       '<div class="actions"><button class="btn ghost" data-act="go-plan">التقويم كاملًا</button>' + (S.last[b.id] ? '<button class="btn ghost tint hue-blue" data-act="go" data-to="read">تابع القراءة من ص ' + printedOf(b, S.last[b.id]) + '</button>' : '') + '</div></section>';
   }
