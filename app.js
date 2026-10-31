@@ -240,11 +240,20 @@ function render(keep) {
   if (keep) window.scrollTo(0, y);
   AFTER.forEach(function (f) { try { f(); } catch (e) { console.error(e); } });
 }
+var LAST_LESSON = null; // the lesson last open, its tab and scroll position: «الدروس» and «عُد إلى الدرس» return there
 function go(v, extra) {
+  if (route.v === 'lesson' && route.k) LAST_LESSON = { k: route.k, tab: route.tab || 'goals', y: window.scrollY };
   route = Object.assign({ v: v }, extra || {});
   render(); if (route.v !== 'read') window.scrollTo(0, 0);
   try { history.replaceState(null, '', '#' + v + (v === 'lesson' && route.k ? '=' + encodeURIComponent(route.k) : '')); } catch (e) {}
 }
+function backToLesson() {
+  var L = LAST_LESSON; if (!L) { go('lessons'); return; }
+  var x = lessonByKey(L.k); if (x) S.cur = x.b.id;
+  if (document.body.classList.contains('present')) { document.body.classList.remove('present'); wake(false); }
+  go('lesson', { k: L.k, tab: L.tab }); var y = L.y || 0; requestAnimationFrame(function () { window.scrollTo(0, y); });
+}
+ACT['back-lesson'] = backToLesson;
 function toast(msg, ms) {
   var el = document.getElementById('toast'); el.textContent = msg; el.hidden = false;
   clearTimeout(toast.t); toast.t = setTimeout(function () { el.hidden = true; }, ms || 2600);
@@ -332,7 +341,8 @@ var RSVG = {
   present: '<rect x="3.5" y="4.5" width="17" height="11" rx="2"/><path d="M12 15.5V20M8 20h8"/>',
   exit: '<path d="M6 6l12 12M18 6 6 18"/>',
   up: '<path d="m6 15 6-6 6 6"/>', down: '<path d="m6 9 6 6 6-6"/>',
-  aid: ICONS.spark
+  aid: ICONS.spark,
+  back: '<path d="M9 6l6 6-6 6"/>'
 };
 function rIcon(n) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + RSVG[n] + '</svg>'; }
 
@@ -344,7 +354,7 @@ VIEWS.read = function () {
   route.page = null; route.at = p;
   return '<div class="rd' + (route.present ? ' present' : '') + '" id="rd">' +
     '<div class="rd-head"><button class="rd-title" data-act="rd-goto"><b id="rd-lesson">' + esc(b.title) + '</b><span id="rd-pno">…</span></button>' +
-    '<div class="rd-hb"><button class="rd-hbtn" data-act="rd-aid">' + rIcon('aid') + '<span>مساعد الدرس</span></button>' +
+    '<div class="rd-hb">' + (route.back && lessonByKey(route.back) ? '<button class="rd-hbtn rd-back" data-act="back-lesson">' + rIcon('back') + '<span>عُد إلى الدرس</span></button>' : '<button class="rd-hbtn" data-act="rd-aid">' + rIcon('aid') + '<span>مساعد الدرس</span></button>') +
     '<button class="rd-hbtn" data-act="rd-present" aria-label="وضع العرض">' + rIcon(route.present ? 'exit' : 'present') + '<span>' + (route.present ? 'إنهاء العرض' : 'عرض') + '</span></button></div></div>' +
     '<div class="rd-x" id="rd-x"><div class="rd-pages" id="rd-pages" style="--z:' + o.zoom + '"><p class="muted rd-wait">جارٍ فتح الكتاب…</p></div></div>' +
     (route.present ? '<div class="rd-nav"><button data-act="rd-step" data-d="-1" aria-label="الصفحة السابقة">' + rIcon('up') + '</button><button data-act="rd-step" data-d="1" aria-label="الصفحة التالية">' + rIcon('down') + '</button></div>' : '') +
@@ -623,7 +633,7 @@ ACT['rd-zoom'] = function (el) { if (!RD) return; var d = +el.getAttribute('data
 ACT['rd-step'] = function (el) { if (!RD) return; var n = clamp(RD.cur + +el.getAttribute('data-d'), 1, RD.pages.length); RD.cur = n; scrollToPage(n, true); trackPage(RD); };
 ACT['rd-present'] = function () {
   var on = !route.present, at = RD ? RD.cur : null;
-  route = { v: 'read', present: on, at: at }; if (at && RD) S.last[RD.b.id] = at;
+  route = { v: 'read', present: on, at: at, back: route.back }; if (at && RD) S.last[RD.b.id] = at;
   document.body.classList.toggle('present', on); wake(on);
   try { if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(function () {}); else if (!on && document.fullscreenElement) document.exitFullscreen().catch(function () {}); } catch (e) {}
   render();
@@ -953,7 +963,7 @@ function genPanel(b, l) {
       : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي، أو أضف ملف دروس جاهزًا.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button><button class="btn ghost" data-act="pack-add">أضف ملف دروس</button></div>') + '</section>';
 }
 ACT.ltab = function (el) { route.tab = el.getAttribute('data-tab'); var y = window.scrollY; render(); var st = document.querySelector('.subtabs'); if (st) { var top = st.getBoundingClientRect().top + window.scrollY - 8; window.scrollTo(0, Math.min(y, top)); } };
-ACT['open-pages'] = function (el) { var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; S.cur = x.b.id; go('read', { page: x.l.from }); };
+ACT['open-pages'] = function (el) { var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; S.cur = x.b.id; go('read', { page: x.l.from, back: route.k }); };
 ACT['aid-del'] = function (el) { confirmBox('حذف مساعد الدرس؟', 'يُحذف الشرح والرسوم والأسئلة لهذا الدرس من الجهاز. يمكنك تجهيزه مرة أخرى.', 'aid-del-yes', 'احذف', ' data-k="' + esc(el.getAttribute('data-k')) + '"', true); };
 ACT['aid-del-yes'] = function (el) { var k = el.getAttribute('data-k'); delete AIDS[k]; dbDel('aids', k); closeModal(); render(); };
 
@@ -1946,10 +1956,13 @@ function quizResult() {
 }
 
 /* ---------- plan: lessons over the weeks of the term ---------- */
-function planOf(b) {
-  var p = S.plan[b.id] = S.plan[b.id] || {}, T = termsList(), t = T.filter(function (x) { return x[0] === p.term; })[0];
-  if (!t) { var td = today(); t = T.filter(function (x) { return td <= parseISO(x[3]); })[0] || T[0]; p.term = t[0]; }
+function planOf(b) { // each term keeps its own dates, review weeks and lesson lengths
+  var P0 = S.plan[b.id] = S.plan[b.id] || {}, T = termsList(), t = T.filter(function (x) { return x[0] === P0.term; })[0];
+  if (!t) { var td = today(); t = T.filter(function (x) { return td <= parseISO(x[3]); })[0] || T[0]; P0.term = t[0]; }
+  if (!P0.terms) { P0.terms = {}; if (P0.start || P0.dur) P0.terms[P0.term] = { start: P0.start, end: P0.end, review: P0.review, dur: P0.dur || {} }; ['start', 'end', 'review', 'dur', 'manual'].forEach(function (k) { delete P0[k]; }); }
+  var p = P0.terms[t[0]] = P0.terms[t[0]] || {};
   if (!p.start) p.start = t[2]; if (!p.end) p.end = t[3]; if (p.review == null) p.review = 1; if (!p.dur) p.dur = {};
+  p.term = t[0];
   return p;
 }
 function weeksOf(p) {
@@ -2020,7 +2033,7 @@ VIEWS.plan = function () {
   return h;
 };
 AFTER.push(function () { if (route.v === 'plan') { var n = document.querySelector('.wk.now'); if (n && route.jump) { route.jump = false; n.scrollIntoView({ block: 'center' }); } } });
-ACT['plan-term'] = function (el) { var b = curBook(), p = planOf(b), t = termsList().filter(function (x) { return x[0] === el.getAttribute('data-v'); })[0]; p.term = t[0]; p.start = t[2]; p.end = t[3]; p.dur = {}; saveState(); render(true); };
+ACT['plan-term'] = function (el) { var b = curBook(); planOf(b); S.plan[b.id].term = el.getAttribute('data-v'); saveState(); render(true); };
 ACT['plan-rv'] = function (el) { var p = planOf(curBook()); p.review = +el.getAttribute('data-v'); saveState(); render(true); };
 ACT['plan-auto'] = function () { var p = planOf(curBook()); p.dur = {}; saveState(); render(true); };
 document.addEventListener('change', function (e) {
@@ -2133,7 +2146,7 @@ ACT.settings = function () {
 };
 function refreshSettings() { var m = document.getElementById('modal'); if (!m.hidden && m.querySelector('#ai-key')) { var y = m.querySelector('.sheet').scrollTop; ACT.settings(); m.querySelector('.sheet').scrollTop = y; } }
 ACT['pref-theme'] = function (el) { var v = el.getAttribute('data-v'); P.theme = v; savePref(); if (v === 'light' || v === 'dark') docEl.setAttribute('data-theme', v); else docEl.removeAttribute('data-theme'); refreshSettings(); };
-ACT['pref-region'] = function (el) { P.region = el.getAttribute('data-v'); savePref(); Object.keys(S.plan).forEach(function (k) { delete S.plan[k].start; delete S.plan[k].end; }); saveState(); refreshSettings(); render(true); };
+ACT['pref-region'] = function (el) { P.region = el.getAttribute('data-v'); savePref(); Object.keys(S.plan).forEach(function (k) { var T0 = S.plan[k].terms || {}; Object.keys(T0).forEach(function (x) { delete T0[x].start; delete T0[x].end; }); delete S.plan[k].start; delete S.plan[k].end; }); saveState(); refreshSettings(); render(true); };
 ACT.persist = function () { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().then(function (ok) { toast(ok ? 'صار التخزين محميًا' : 'لم يوافق المتصفح الآن؛ ثبّت التطبيق على الشاشة الرئيسية ثم أعد المحاولة'); refreshSettings(); }); };
 document.addEventListener('change', function (e) {
   var t = e.target;
@@ -2263,10 +2276,10 @@ ACT['app-update'] = function () {
 };
 
 /* ---------- events ---------- */
-ACT.go = function (el) { var to = el.getAttribute('data-to'); if (to === 'quiz' && route.v === 'quiz' && QS) QS = null; if (to === 'read' && route.v === 'read') { if (RD) scrollToPage(RD.cur); return; } if (to === 'plan') { go('plan', { jump: true }); return; } go(to); };
+ACT.go = function (el) { var to = el.getAttribute('data-to'); if (to === 'lessons' && route.v !== 'lesson' && route.v !== 'lessons' && LAST_LESSON && lessonByKey(LAST_LESSON.k)) { backToLesson(); return; } if (to === 'quiz' && route.v === 'quiz' && QS) QS = null; if (to === 'read' && route.v === 'read') { if (RD) scrollToPage(RD.cur); return; } if (to === 'plan') { go('plan', { jump: true }); return; } go(to); };
 ACT.lesson = function (el) { closeModal(); var k = el.getAttribute('data-k'), x = lessonByKey(k); if (x) S.cur = x.b.id; go('lesson', { k: k, tab: el.getAttribute('data-tab') || 'goals' }); };
 ACT['modal-close'] = closeModal;
-ACT['go-page'] = function (el) { var x = lessonByKey(route.k || ''); if (x) S.cur = x.b.id; go('read', { page: +el.getAttribute('data-p') }); };
+ACT['go-page'] = function (el) { var x = lessonByKey(route.k || ''); if (x) S.cur = x.b.id; go('read', { page: +el.getAttribute('data-p'), back: route.k }); };
 document.addEventListener('click', function (e) {
   var el = e.target.closest('[data-act]');
   if (!el) { var m = document.getElementById('modal'); if (e.target === m) closeModal(); else if (e.target.id === 'pv' || (e.target.closest && e.target.closest('.zoom-in') && !e.target.closest('svg,img'))) { if (document.getElementById('pv').classList.contains('zoom')) ACT['pv-close'](); } return; }
