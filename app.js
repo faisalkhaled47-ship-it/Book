@@ -124,16 +124,16 @@ function nextBreak(t, E) {
 }
 
 /* ---------- storage ---------- */
-/* IndexedDB «kitabi»: books (metadata and lessons), files (the PDF itself), aids (lesson helpers), ink (writing on pages), notes (boards and notes).
+/* IndexedDB «kitabi»: books (metadata and lessons), files (the PDF itself), fonts (font files the user added), aids (lesson helpers), ink (writing on pages), notes (boards and notes).
    localStorage: kitabi-pref (preferences, the API key) and kitabi-state (current book, last pages, taught classes, plan, answers). */
 var DBN = 'kitabi', DB = null;
 function idb() {
   if (DB) return Promise.resolve(DB);
   return new Promise(function (res, rej) {
-    var r; try { r = indexedDB.open(DBN, 2); } catch (e) { rej(e); return; }
+    var r; try { r = indexedDB.open(DBN, 3); } catch (e) { rej(e); return; }
     r.onupgradeneeded = function () {
       var d = r.result;
-      ['books', 'files'].forEach(function (n) { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'id' }); });
+      ['books', 'files', 'fonts'].forEach(function (n) { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'id' }); });
       ['aids', 'ink', 'notes', 'media'].forEach(function (n) { if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'k' }); });
     };
     r.onsuccess = function () { DB = r.result; DB.onversionchange = function () { try { DB.close(); } catch (e) {} DB = null; }; res(DB); };
@@ -2447,6 +2447,52 @@ ACT['sb-how'] = function () {
 ACT['sb-sql'] = function () { copyText(SB_SQL); };
 ACT['sb-copy'] = function () { var sb = P.sb || {}; Promise.resolve(copyText(sb.url + ' ' + sb.key)).then(function () { toast('نُسخ الرابط والمفتاح (بلا كلمة المرور). الصقهما في خانة الرابط في إتقان أو مصروفي.', 4000); }); };
 
+/* ---------- the user's own font (from إتقان): files kept in IndexedDB «fonts», used as "thmanyah sans" ---------- */
+var FONTS = 0;
+var WEIGHT_NAMES = { 200: 'خفيف جدًا', 300: 'خفيف', 400: 'عادي', 500: 'متوسط', 600: 'شبه عريض', 700: 'عريض', 800: 'عريض جدًا', 900: 'أسود' };
+function fontWeight(name) {
+  var n = String(name).toLowerCase();
+  return /black|heavy/.test(n) ? 900 : /extra-?bold|ultra-?bold/.test(n) ? 800 : /semi-?bold|demi/.test(n) ? 600 : /bold/.test(n) ? 700 : /medium/.test(n) ? 500 : /extra-?light|ultra-?light|thin|hairline/.test(n) ? 200 : /light/.test(n) ? 300 : 400;
+}
+function applyFont(f) {
+  try { var ff = new FontFace('thmanyah sans', f.data, { weight: String(f.weight), style: 'normal' }); return ff.load().then(function () { document.fonts.add(ff); }); }
+  catch (e) { return Promise.reject(e); }
+}
+function fontsBoot() {
+  return dbAll('fonts').then(function (all) {
+    all = all || []; FONTS = all.length;
+    all.forEach(function (f) { applyFont(f)['catch'](function () {}); });
+  }, function () {});
+}
+function fontSec() {
+  return '<section class="set-sec"><h3>الخط</h3><p class="small muted">' + (FONTS ? 'يُستخدم الآن الخط الذي أضفته (' + (FONTS === 1 ? 'وزن واحد' : FONTS === 2 ? 'وزنان' : FONTS + ' أوزان') + ').' : 'يستخدم التطبيق خط جهازك.') +
+    ' إن كانت لديك ملفات خط عربي (مثل خط ثمانية) بصيغة OTF أو TTF أو WOFF فأضفها ليُستخدم داخل التطبيق على هذا الجهاز فقط. اختر كل أوزان الخط معًا (عادي وعريض…)، ويُعرف الوزن من اسم الملف.</p>' +
+    '<div class="actions" style="margin-top:0"><button class="btn ghost" data-act="font-add">أضف ملفات الخط</button>' + (FONTS ? '<button class="btn ghost" data-act="font-remove">ارجع إلى خط الجهاز</button>' : '') + '</div></section>';
+}
+ACT['font-add'] = function () {
+  pick('', true).then(function (files) {
+    var ok = [], bad = 0;
+    toast('جارٍ إضافة الخط…');
+    return files.reduce(function (pr, f) {
+      return pr.then(function () {
+        return (f.arrayBuffer ? f.arrayBuffer() : new Response(f).arrayBuffer()).then(function (buf) {
+          var w = fontWeight(f.name), rec = { id: 'w' + w, weight: w, name: f.name, data: buf };
+          return applyFont(rec).then(function () { return dbPut('fonts', rec); }).then(function () { ok.push(w); });
+        })['catch'](function () { bad++; });
+      });
+    }, Promise.resolve()).then(function () {
+      return dbAll('fonts').then(function (all) { FONTS = (all || []).length; });
+    }).then(function () {
+      refreshSettings();
+      if (ok.length) toast('أُضيف الخط: ' + ok.sort().map(function (w) { return WEIGHT_NAMES[w] || w; }).join('، ') + (bad ? '. ولم يُقبل ' + bad + ' ملف لأنه ليس ملف خط صالحًا' : ''), 4500);
+      else toast('تعذّرت إضافة الخط: اختر ملفات OTF أو TTF أو WOFF', 4000);
+    });
+  });
+};
+ACT['font-remove'] = function () {
+  tx('fonts', 'readwrite', function (s) { s.clear(); }).then(function () { location.reload(); });
+};
+
 /* ---------- settings ---------- */
 function segBtns(act, cur, items) { return '<div class="seg" role="group">' + items.map(function (x) { return '<button type="button" data-act="' + act + '" data-v="' + x[0] + '" aria-pressed="' + (String(cur) === String(x[0])) + '">' + x[1] + '</button>'; }).join('') + '</div>'; }
 function settingsHtml() {
@@ -2461,6 +2507,7 @@ function settingsHtml() {
     syncSec() +
     '<section class="set-sec"><h3>فصولي</h3><label class="field"><span>أسماء الفصول التي تدرّسها، تفصل بينها بفاصلة</span><input type="text" id="classes" placeholder="1/1، 1/2، 2/1" value="' + esc(P.classes.join('، ')) + '"></label><p class="small muted">تعلّم في كل درس الفصول التي شرحته لها، وترى تقدم كل فصل في الرئيسية.</p></section>' +
     '<section class="set-sec"><h3>التقويم الدراسي</h3>' + segBtns('pref-region', P.region === 'west' ? 'west' : 'std', [['std', 'باقي مناطق المملكة'], ['west', 'مكة والمدينة وجدة والطائف']]) + '</section>' +
+    fontSec() +
     '<section class="set-sec"><h3>النسخ الاحتياطي</h3><p class="small muted">' + (S.backupAt ? 'آخر نسخة: ' + relDay(S.backupAt) + '. ' : '') + 'يحفظ الدروس ومساعدها وكتابتك على الصفحات وسبوراتك وملاحظاتك وتقدم فصولك في ملف واحد، دون ملفات الكتب نفسها (تضيفها مرة أخرى فتعود إليها كتابتها)، ودون مقاطع الفيديو التي أضفتها من جهازك لكبر حجمها؛ روابط يوتيوب تدخل فيها.</p>' +
     '<div class="actions" style="margin-top:0"><button class="btn" data-act="backup-save">احفظ نسخة احتياطية</button><button class="btn ghost" data-act="backup-restore">استعد من ملف</button></div></section>' +
     '<section class="set-sec"><h3>التخزين على الجهاز</h3><p class="small muted" id="storage-info">…</p>' + (STANDALONE ? '' : '<p class="hint">' + INSTALL + '</p>') + '<div class="actions" style="margin-top:0"><button class="btn ghost sm danger" data-act="reset">احذف كل بيانات التطبيق</button></div></section>' +
@@ -2627,7 +2674,7 @@ var STANDALONE = navigator.standalone === true || !!(window.matchMedia && window
 var INSTALL = IOS ? '<b>ثبّته على الشاشة الرئيسية:</b> في Safari اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية»، وافتحه من أيقونته وأضف الكتاب من داخله؛ فبيانات التطبيق المثبّت تُحفظ منفصلة عن Safari.' : '<b>لتثبيته كتطبيق:</b> اختر من قائمة المتصفح «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».';
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) navigator.serviceWorker.register('sw.js').catch(function () {});
 document.getElementById('app').appendChild(document.getElementById('tabs'));
-Promise.all([idb().then(function () { return Promise.all([dbAll('books'), dbAll('aids'), tx('files', 'readonly', function (s) { return s.getAllKeys(); }), xcReady()]); })]).then(function (r) {
+Promise.all([idb().then(function () { return Promise.all([dbAll('books'), dbAll('aids'), tx('files', 'readonly', function (s) { return s.getAllKeys(); }), xcReady(), fontsBoot()]); })]).then(function (r) {
   r = r[0];
   var files = {}; (r[2] || []).forEach(function (k) { files[k] = 1; });
   BOOKS = (r[0] || []).sort(function (a, b) { return (a.added || 0) - (b.added || 0); });
