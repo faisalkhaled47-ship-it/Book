@@ -932,7 +932,7 @@ VIEWS.lesson = function () {
   var prev = b.lessons[idx - 1], next = b.lessons[idx + 1];
   var h = '<div class="upage hue-' + unitHue(Math.max(0, units(b).map(function (u) { return u.name; }).indexOf(l.unit || 'الدروس'))) + '"><nav class="crumbs" aria-label="المسار"><button class="link" data-act="go" data-to="lessons">الدروس</button><span aria-hidden="true">›</span><span>' + esc(l.unit || b.title) + '</span></nav>' +
     '<header class="u-head"><div><h1>' + esc(l.title) + '</h1>' + (l.chap ? '<p class="std">' + esc(l.chap) + '</p>' : '') +
-    '<p class="muted small">ص ' + rng(l.from, l.to) + ' · ' + cnt(l.to - l.from + 1, WORDS.page) + (a ? ' · ' + (a.src === 'ai' ? 'جهّزه الذكاء الاصطناعي ' + relDay(a.at) : 'من ملف الدروس') : '') + '</p>' +
+    '<p class="muted small">ص ' + rng(l.from, l.to) + ' · ' + cnt(l.to - l.from + 1, WORDS.page) + '</p>' +
     '<div class="actions l-acts"><button class="btn" data-act="open-pages" data-k="' + esc(k) + '">' + svgI('book') + 'افتح صفحات الدرس</button>' +
     (a ? '<button class="btn ghost tint hue-violet" data-act="pv-open" data-k="' + esc(k) + '">' + rIcon('present') + 'اعرضه على الطلاب</button>' : '') + '</div></div></header>';
   if (P.classes.length) h += taughtBar(b, l);
