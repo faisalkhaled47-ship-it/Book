@@ -346,7 +346,8 @@ var HL_C = ['#FFD23F', '#6FDB98', '#86B6FF', '#FF9EC4'], HL_N = ['أصفر', 'أ
 function pLabel(b, n) { var p = printedOf(b, n); return p >= 1 ? String(p) : ''; }
 var INK_W = 1000;               // a page is 1000 units wide; strokes are kept in those units
 var RD = null;                  // the open reader
-function rt() { var o = P.rt || {}; return { tool: o.tool || 'pen', ink: +o.ink || 0, hlc: +o.hlc || 0, finger: !!o.finger, zoom: +o.zoom || 1, spread: !!o.spread, solo: o.solo !== false }; }
+var PEN_W = [1.9, 3.2, 5.6, 10], PEN_WN = ['رفيع', 'متوسط', 'سميك', 'سميك جدًا'];
+function rt() { var o = P.rt || {}; return { tool: o.tool || 'pen', ink: +o.ink || 0, pw: o.pw == null ? 1 : +o.pw, hlc: +o.hlc || 0, finger: !!o.finger, zoom: +o.zoom || 1, spread: !!o.spread, solo: o.solo !== false }; }
 function setRt(k, v) { P.rt = P.rt || {}; P.rt[k] = v; savePref(); }
 var RSVG = {
   spread: '<rect x="2.5" y="5" width="8.5" height="14" rx="1.5"/><rect x="13" y="5" width="8.5" height="14" rx="1.5"/>',
@@ -387,6 +388,7 @@ function rdBar() {
   function b(act, v, icon, label, on) { return '<button type="button" class="rb' + (on ? ' on' : '') + '" data-act="' + act + '"' + (v != null ? ' data-v="' + v + '"' : '') + ' aria-label="' + label + '" title="' + label + '">' + rIcon(icon) + '</button>'; }
   return b('rd-tool', 'off', 'off', 'تصفّح دون كتابة', o.tool === 'off') +
     PEN_C.map(function (c, k) { return '<button type="button" class="rb-ink' + (o.tool === 'pen' && o.ink === k ? ' on' : '') + '" data-act="rd-ink" data-v="' + k + '" aria-label="قلم ' + PEN_N[k] + '" style="--c:' + c + '"></button>'; }).join('') +
+    '<button type="button" class="rb rb-w" data-act="rd-pw" style="--c:' + PEN_C[o.ink] + ';--d:' + (4 + o.pw * 4) + 'px" aria-label="سُمك القلم: ' + PEN_WN[o.pw] + ' (اضغط للتغيير)" title="سُمك القلم"><i></i></button>' +
     '<button type="button" class="rb rb-hl' + (o.tool === 'hl' ? ' on' : '') + '" data-act="rd-hl" style="--hc:' + HL_C[o.hlc] + '" aria-label="قلم تحديد ' + HL_N[o.hlc] + ' (اضغط مرة ثانية لتغيير اللون)" title="قلم التحديد">' + rIcon('hl') + '</button>' +
     b('rd-tool', 'er', 'er', 'ممحاة', o.tool === 'er') + '<i class="rb-sep"></i>' +
     b('rd-undo', null, 'undo', 'تراجع') + b('rd-clear', null, 'clear', 'امسح كتابة هذه الصفحة') +
@@ -400,7 +402,7 @@ AFTER.push(function () { if (route.v === 'read' && document.getElementById('rd')
 
 function readerUnmount() {
   if (!RD) return;
-  RD.dead = true; flushInk();
+  RD.dead = true; flushInk(); liveOff();
   if (RD.io) RD.io.disconnect();
   window.removeEventListener('scroll', RD.onScroll); window.removeEventListener('resize', RD.onResize);
   RD.pages.forEach(function (pg) { if (pg.task) try { pg.task.cancel(); } catch (e) {} if (pg.c) { pg.c.width = pg.c.height = 0; } if (pg.ic) { pg.ic.width = pg.ic.height = 0; } });
@@ -567,8 +569,8 @@ function hookInk(R, pg) {
   function begin(q) {
     var o = rt(); if (o.tool === 'off') return false;
     inkOf(R, pg.n); rc = pg.el.getBoundingClientRect(); R.inking = true; // the page does not move while writing, so where it sits is read once
-    cur = o.tool === 'er' ? { er: true, gone: [] } : o.tool === 'hl' ? { k: 'hl', hc: o.hlc, w: 18, p: [] } : { c: PEN_C[o.ink], w: 3.2, p: [], dn: 0 };
-    if (!cur.er) pg.live = cur;
+    cur = o.tool === 'er' ? { er: true, gone: [] } : o.tool === 'hl' ? { k: 'hl', hc: o.hlc, w: 18, p: [] } : { c: PEN_C[o.ink], w: PEN_W[o.pw] || 3.2, p: [] };
+    if (!cur.er) liveOn(rc);
     move(q); return true;
   }
   function move(q) {
@@ -582,34 +584,25 @@ function hookInk(R, pg) {
     if (n && Math.abs(a[n - 3] - q[0]) + Math.abs(a[n - 2] - q[1]) < 0.8) return;
     if (cur.k === 'hl' && n >= 3) q[1] = a[1] + (q[1] - a[1]) * 0.25; // a highlighter keeps to its line
     a.push(q[0], q[1], q[2]);
-    if (cur.k === 'hl') rafInk(pg); else if (!cur.raf) { var st = cur; st.raf = requestAnimationFrame(function () { st.raf = 0; flush(st); }); }
+    liveDraw(cur); // at once, right in the touch event, and right up to the pen's tip
   }
-  function flush(st) { // draws only what the pen added since the last frame
-    if (st !== pg.live) return; var p = st.p, n = p.length / 3;
-    if (n === 1 && !st.dn) { [pg.ic, edge(p, 0, 0) ? pg.mc : null].forEach(function (cv) { if (!cv || !cv.width) return; var x = cv.getContext('2d'); x.fillStyle = st.c; x.beginPath(); x.arc(p[0], p[1], inkW(st, p, 0) / 2, 0, 7); x.fill(); }); st.dn = 0; return; }
-    var from = Math.max(1, st.dn + 1);
-    [pg.ic, edge(p, Math.max(0, from - 2), n - 1) ? pg.mc : null].forEach(function (cv) {
-      if (!cv || !cv.width) return; var x = cv.getContext('2d'); x.lineCap = 'round'; x.lineJoin = 'round'; x.strokeStyle = st.c;
-      for (var i = from; i < n; i++) inkPiece(x, st, i);
-    });
-    st.dn = n - 1;
-  }
-  function edge(p, i0, i1) { if (!pg.mc || !pg.mc.width) return false; for (var i = i0; i <= i1; i++) if (p[i * 3] < 10 || p[i * 3] > INK_W - 10) return true; return false; }
   function end() {
-    var s = cur; cur = null; pg.live = null; rc = null; R.inking = false; R.penT = Date.now(); if (!s) return;
-    if (s.raf) { cancelAnimationFrame(s.raf); s.raf = 0; }
-    var d = R.ink[pg.n]; if (!d) return;
+    var s = cur; cur = null; rc = null; R.inking = false; R.penT = Date.now(); if (!s) return;
+    var d = R.ink[pg.n]; if (!d) { liveOff(); return; }
     if (s.er) { if (s.gone.length) { R.undo.push({ n: pg.n, a: 'del', items: s.gone.reverse() }); saveInk(R, pg.n); } return; }
-    delete s.raf; delete s.dn;
-    if (!s.p.length) { drawInk(pg); return; }
-    d.s.push(s); R.undo.push({ n: pg.n, a: 'add' }); drawInk(pg); saveInk(R, pg.n);
+    if (!s.p.length) { liveOff(); return; }
+    d.s.push(s); R.undo.push({ n: pg.n, a: 'add' }); saveInk(R, pg.n);
+    // the finished stroke goes onto the page (and the board beside it only if it reached there), then the live layer clears in the same frame
+    var out = false; for (var i = 0; i < s.p.length; i += 3) if (s.p[i] < 12 || s.p[i] > INK_W - 12) { out = true; break; }
+    [pg.ic, out && pg.mc && pg.mc.width ? pg.mc : null].forEach(function (cv) { if (cv && cv.width) stroke(cv.getContext('2d'), s); });
+    liveOff();
   }
   function wants(t) { return t.touchType === 'stylus' || rt().finger; }
   [pg.ic, pg.mc].forEach(function (c) {
     if (!c) return;
     c.addEventListener('touchstart', function (e) {
       if (touch != null) { e.preventDefault(); return; }
-      if (e.touches.length > 1 && cur) { cur = null; pg.live = null; touch = null; rc = null; R.inking = false; drawInk(pg); return; }
+      if (e.touches.length > 1 && cur) { cur = null; touch = null; rc = null; R.inking = false; liveOff(); return; }
       for (var k = 0; k < e.changedTouches.length; k++) {
         var t = e.changedTouches[k]; if (!wants(t) || e.touches.length > 1) continue;
         if (begin(pt(t.clientX, t.clientY, t.touchType === 'stylus' ? t.force : null))) { e.preventDefault(); touch = t.identifier; }
@@ -631,6 +624,21 @@ function hookInk(R, pg) {
     c.addEventListener('pointerup', function (e) { if (e.pointerType === 'mouse' && touch == null) end(); });
   });
 }
+/* the stroke being written lives on one screen-sized layer above the pages: redrawn whole on every move (a few hundred points at most),
+   so the line reaches the pen's tip at once and the big page and board canvases are touched only once, when the pen lifts */
+var LIVE = null;
+function liveOn(r) {
+  if (!LIVE) { LIVE = document.createElement('canvas'); LIVE.className = 'ink-live'; LIVE.setAttribute('aria-hidden', 'true'); document.body.appendChild(LIVE); }
+  var dpr = Math.min(window.devicePixelRatio || 1, 2), w = Math.round(window.innerWidth * dpr), h = Math.round(window.innerHeight * dpr);
+  if (LIVE.width !== w || LIVE.height !== h) { LIVE.width = w; LIVE.height = h; LIVE.style.width = window.innerWidth + 'px'; LIVE.style.height = window.innerHeight + 'px'; }
+  var k = r.width / INK_W; LIVE.k = [dpr * k, dpr * r.left, dpr * r.top]; LIVE.style.display = 'block';
+}
+function liveDraw(st) {
+  if (!LIVE) return; var x = LIVE.getContext('2d'), t = LIVE.k;
+  x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, LIVE.width, LIVE.height);
+  x.setTransform(t[0], 0, 0, t[0], t[1], t[2]); stroke(x, st);
+}
+function liveOff() { if (!LIVE) return; var x = LIVE.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, LIVE.width, LIVE.height); LIVE.style.display = 'none'; }
 function rafInk(pg) { if (!pg.raf) pg.raf = requestAnimationFrame(function () { pg.raf = 0; drawInk(pg); }); }
 /* sliding the page sideways over its board (one finger across, when not writing with the finger) */
 function shiftMax(R) { var pg = R.pages[0]; if (!pg || rt().spread) return 0; return Math.max(0, (R.wrap.clientWidth - pg.el.offsetWidth) / 2); }
@@ -709,6 +717,7 @@ function presentFit(noScroll) {
   if (!noScroll) { rerenderAll(); scrollToPage(R.cur, true); }
 }
 ACT['rd-tool'] = function (el) { var v = el.getAttribute('data-v'); setRt('tool', rt().tool === v && v !== 'off' ? 'pen' : v); rdBarRefresh(); if (v === 'off') toast('القلم متوقف: تتصفح الكتاب دون كتابة'); };
+ACT['rd-pw'] = function () { var w = (rt().pw + 1) % PEN_W.length; setRt('pw', w); if (rt().tool !== 'pen') setRt('tool', 'pen'); rdBarRefresh(); toast('سُمك القلم: ' + PEN_WN[w]); };
 ACT['rd-ink'] = function (el) { setRt('tool', 'pen'); setRt('ink', +el.getAttribute('data-v')); rdBarRefresh(); };
 ACT['rd-hl'] = function () { var o = rt(); if (o.tool === 'hl') setRt('hlc', (o.hlc + 1) % HL_C.length); else setRt('tool', 'hl'); rdBarRefresh(); };
 ACT['rd-finger'] = function () { setRt('finger', !rt().finger); rdBarRefresh(); toast(rt().finger ? 'تكتب الآن بالإصبع أيضًا؛ مرّر بإصبعين' : 'الكتابة بقلم الآيباد فقط، والإصبع يقلّب الصفحات'); };
