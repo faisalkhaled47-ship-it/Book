@@ -314,3 +314,4 @@ body.present .rd-head .clk{background:rgba(255,255,255,.9);box-shadow:0 2px 10px
 .clk-alarm{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:99;background:#C62828;color:#fff;border-radius:18px;padding:12px 16px;display:flex;align-items:center;gap:14px;box-shadow:0 10px 30px rgba(0,0,0,.3);animation:clkPop .3s}
 .clk-alarm[hidden]{display:none}.clk-alarm b{font-size:18px}.clk-alarm div{display:flex;gap:8px}.clk-alarm .btn{background:#fff;color:#C62828}.clk-alarm .btn.ghost{background:rgba(255,255,255,.2);color:#fff}
 @keyframes clkPop{from{transform:translateX(-50%) scale(.8);opacity:0}}
+.xa{container-type:inline-size}.xa .stk{width:clamp(150px,36cqw,280px);font-size:14.5px}.xa .stk.m{font-size:13px}

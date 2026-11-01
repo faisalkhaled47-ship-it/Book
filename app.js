@@ -1452,7 +1452,7 @@ function xaData(id) { var d = XC['x:' + id]; return d ? JSON.parse(JSON.stringif
 function xaSave(id, d) { d.t = Date.now(); xcPut('x:' + id, d.hl.length || d.ink.length ? d : null); }
 function xaStore(id, d, before) { XA_UNDO.push({ id: id, d: before }); if (XA_UNDO.length > 60) XA_UNDO.shift(); xaSave(id, d); setTimeout(xaBar, 0); }
 function xaCard(id) { return document.getElementById('x-' + id); }
-function xaSkip(n) { var p = n.nodeType === 1 ? n : n.parentNode; return !p || !!p.closest('.nb-slot, .actions, .xa-acts, button, svg, canvas, .mchip, .i-num, .ph-sec, .kb-h svg, .g-n'); }
+function xaSkip(n) { var p = n.nodeType === 1 ? n : n.parentNode; return !p || !!p.closest('.nb-slot, .actions, .xa-acts, button, svg, canvas, .mchip, .i-num, .ph-sec, .kb-h svg, .g-n, .stk-l'); }
 function xaTexts(card) { var out = [], w = document.createTreeWalker(card, NodeFilter.SHOW_TEXT, { acceptNode: function (n) { return xaSkip(n) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT; } }); while (w.nextNode()) out.push(w.currentNode); return out; }
 function xaOff(card, node, off) { var ns = xaTexts(card), sum = 0; for (var i = 0; i < ns.length; i++) { if (ns[i] === node) return sum + off; sum += ns[i].length; } return -1; }
 function xaCaret(x, y) {
@@ -1574,7 +1574,7 @@ function xaHook(card) {
     if (!stylus && !finger) return;
     if (XA_LIVE && Date.now() - XA_LIVE.at > 1500) XA_LIVE = null;
     if (XA_LIVE) return;
-    if (e.target.closest && e.target.closest('button, a, input, select, textarea, summary, label, .nb-slot, .ph-sec' + (finger ? ', figure, [data-act]' : ''))) return;
+    if (e.target.closest && e.target.closest('button, a, input, select, textarea, summary, label, .nb-slot, .ph-sec, .stk' + (finger ? ', figure, [data-act]' : ''))) return;
     e.preventDefault(); if (stylus && !xaPref().pencil) { nbSetPref('pencil', true); xaBar(); }
     var tg = e.target, id = t.identifier;
     function mv(ev) { if (!XA_LIVE) return; for (var k = 0; k < ev.changedTouches.length; k++) if (ev.changedTouches[k].identifier === id) { ev.preventDefault(); XA_LIVE.at = Date.now(); xaMove(ev.changedTouches[k]); } }
@@ -1650,7 +1650,7 @@ AFTER.push(function () {
   document.body.classList.toggle('xa-finger', xaOn() && xaPref().finger);
   if (!xaOn()) { xaBar(); return; }
   xcReady().then(function () {
-    Array.prototype.forEach.call(document.querySelectorAll('#main .xa'), function (card) { phFill(card); xaHook(card); var d = XC['x:' + card.id.slice(2)]; if (d) xaMarks(card, d); xaDraw(card); });
+    Array.prototype.forEach.call(document.querySelectorAll('#main .xa'), function (card) { phFill(card); xaHook(card); var d = XC['x:' + card.id.slice(2)]; if (d) xaMarks(card, d); xaDraw(card); if (/^x-/.test(card.id)) stkDrawCard(card); });
     xaBar();
   });
 });
@@ -1667,6 +1667,7 @@ function cardTools(id) {
   return '<div class="ph-sec" data-ph="' + esc(id) + '" hidden></div><div class="actions xa-acts">' +
     '<button class="btn ghost sm tint hue-green ph-add" data-act="ph-add" data-id="' + esc(id) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 3.5 3 3-2.5L20 17"/></svg>صورة أو فيديو</button>' +
     '<button class="btn ghost sm tint hue-rose ph-add" data-act="yt-add" data-id="' + esc(id) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13" rx="3.5"/><path d="m10.5 9.5 4 2.5-4 2.5z"/></svg>رابط يوتيوب</button>' +
+    '<button class="btn ghost sm tint hue-amber" data-act="stk-add" data-id="' + esc(id) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v10l-5 6H5z"/><path d="M14 20v-6h5"/></svg>لاصقة</button>' +
     '<button class="btn ghost sm tint hue-amber nb-tg" data-act="nb-toggle" data-id="' + esc('b:' + id) + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19z"/><path d="M14.5 6.5l3 3"/></svg>سبورتي</button></div>' +
     '<div class="nb-slot" data-nb="' + esc('b:' + id) + '" data-lazy hidden></div>';
 }
@@ -2168,6 +2169,22 @@ function stkCtx(R, pg) {
 function drawStk(pg) { var R = RD; if (!R || !pg.s) return; var r = XC[stkKey(R.b, pg.n)]; pg.s.innerHTML = stkHtml(r && r.items); }
 function drawStkAll() { if (RD) RD.pages.forEach(function (pg) { if (pg.s) drawStk(pg); }); }
 ACT['rd-stk'] = function () { var R = RD; if (!R) return; var pg = R.pages[R.cur - 1]; if (pg && pg.stk) stkAdd(pg.stk, 260); };
+
+/* and on the explanation cards of a lesson: n:<cardId>, laid over the card */
+function stkCtxCard(card) {
+  var id = card.id.slice(2), k = 'n:' + id;
+  return {
+    host: function () { return card; },
+    get: function () { var r = XC[k]; return r && Array.isArray(r.items) ? JSON.parse(JSON.stringify(r.items)) : []; },
+    set: function (items) { if (!items.length) { delete XC[k]; dbDel('notes', k); } else { var rec = { k: k, items: items, t: Date.now() }; XC[k] = rec; dbPut('notes', rec); } stkDrawCard(card); }
+  };
+}
+function stkDrawCard(card) {
+  var l = card.querySelector(':scope > .stk-l');
+  if (!l) { l = document.createElement('div'); l.className = 'stk-l'; card.appendChild(l); card.__stk = stkCtxCard(card); stkBind(l, card.__stk); }
+  var r = XC['n:' + card.id.slice(2)]; l.innerHTML = stkHtml(r && r.items);
+}
+ACT['stk-add'] = function (el) { var card = document.getElementById('x-' + el.getAttribute('data-id')); if (!card) return; if (!card.__stk) stkDrawCard(card); stkAdd(card.__stk, 320); };
 
 /* ---------- books: adding a PDF, the library ---------- */
 function fingerprint(file, buf) { // same file → same id, so a restored backup finds its writing again
