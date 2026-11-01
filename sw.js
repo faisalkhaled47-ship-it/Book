@@ -1,5 +1,5 @@
 /* كتابي: يحفظ واجهة التطبيق ومكتبة قراءة PDF للعمل دون إنترنت. الكتب والشروح والكتابة لا تمر من هنا؛ هي في تخزين الجهاز. */
-const CACHE = 'kitabi-2026.11.01.39';
+const CACHE = 'kitabi-2026.11.01.40';
 const SHELL = ['./', './index.html', './style.css', './app.css', './app.js', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png',
   './vendor/pdfjs/pdf.min.mjs', './vendor/pdfjs/pdf.worker.min.mjs'];
 

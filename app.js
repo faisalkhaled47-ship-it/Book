@@ -346,9 +346,10 @@ var HL_C = ['#FFD23F', '#6FDB98', '#86B6FF', '#FF9EC4'], HL_N = ['أصفر', 'أ
 function pLabel(b, n) { var p = printedOf(b, n); return p >= 1 ? String(p) : ''; }
 var INK_W = 1000;               // a page is 1000 units wide; strokes are kept in those units
 var RD = null;                  // the open reader
-function rt() { var o = P.rt || {}; return { tool: o.tool || 'pen', ink: +o.ink || 0, hlc: +o.hlc || 0, finger: !!o.finger, zoom: +o.zoom || 1 }; }
+function rt() { var o = P.rt || {}; return { tool: o.tool || 'pen', ink: +o.ink || 0, hlc: +o.hlc || 0, finger: !!o.finger, zoom: +o.zoom || 1, spread: !!o.spread, solo: o.solo !== false }; }
 function setRt(k, v) { P.rt = P.rt || {}; P.rt[k] = v; savePref(); }
 var RSVG = {
+  spread: '<rect x="2.5" y="5" width="8.5" height="14" rx="1.5"/><rect x="13" y="5" width="8.5" height="14" rx="1.5"/>',
   stk: '<path d="M5 4h14v10l-5 6H5z"/><path d="M14 20v-6h5"/><path d="M8.5 9h7M8.5 12.5h4"/>',
   spark: '<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
   off: '<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12"/><path d="M11 11.5V4.5a1.5 1.5 0 0 1 3 0V12"/><path d="M14 11.5V6.5a1.5 1.5 0 0 1 3 0V14c0 4-2.5 7-6.5 7S5 18.5 4 16l-1.2-3a1.5 1.5 0 0 1 2.7-1.3L8 15"/>',
@@ -391,6 +392,7 @@ function rdBar() {
     b('rd-undo', null, 'undo', 'تراجع') + b('rd-clear', null, 'clear', 'امسح كتابة هذه الصفحة') +
     b('rd-stk', null, 'stk', 'لاصقة على هذه الصفحة') +
     b('rd-finger', null, 'finger', o.finger ? 'الكتابة بالإصبع مفعّلة' : 'الكتابة بالإصبع', o.finger) + '<i class="rb-sep"></i>' +
+    b('rd-spread', null, 'spread', o.spread ? 'صفحة واحدة' : 'صفحتان متجاورتان', o.spread) + '<i class="rb-sep rb-sp"></i>' +
     b('rd-zoom', '-1', 'minus', 'تصغير') + '<span class="rb-z" id="rb-z">' + Math.round(o.zoom * 100) + '%</span>' + b('rd-zoom', '1', 'plus', 'تكبير');
 }
 function rdBarRefresh() { var el = document.getElementById('rd-bar'); if (el) el.innerHTML = rdBar(); if (RD) RD.host.classList.toggle('rd-finger', rt().finger); }
@@ -419,6 +421,8 @@ function readerMount() {
       if (R.dead) return;
       var v = pg.getViewport({ scale: 1 }), ratio = v.width / v.height, h = '';
       for (var n = 1; n <= doc.numPages; n++) h += '<div class="pg" data-n="' + n + '" style="aspect-ratio:' + v.width.toFixed(1) + ' / ' + v.height.toFixed(1) + '"><canvas class="pg-c"></canvas><canvas class="pg-i"></canvas><div class="pg-a"></div><div class="stk-l"></div><span class="pg-no">' + pLabel(b, n) + '</span></div>';
+      if (rt().spread) h = (rt().solo ? '<div class="pg-sp" aria-hidden="true"></div>' : '') + h; // two pages side by side; the first one alone, like a book's cover
+      wrap.classList.toggle('spread', rt().spread);
       wrap.innerHTML = h;
       R.ratio = ratio;
       Array.prototype.forEach.call(wrap.querySelectorAll('.pg'), function (el) {
@@ -614,23 +618,29 @@ function hookPinch(R) {
   el.addEventListener('touchend', function (e) { if (e.touches.length < 2) fin(); });
   el.addEventListener('touchcancel', fin);
 }
+function zoomAnchor(R, x, y) { // the page under the point, and where in it the point falls (in fractions of the page)
+  var el = document.elementFromPoint(x, y), pg = el && el.closest && el.closest('.pg');
+  if (!pg || !R.wrap.contains(pg)) pg = R.pages[R.cur - 1] && R.pages[R.cur - 1].el;
+  if (!pg) return null; var r = pg.getBoundingClientRect();
+  return { el: pg, fx: (x - r.left) / (r.width || 1), fy: (y - r.top) / (r.height || 1), x: x, y: y };
+}
 function setZoom(z, G) {
   var R = RD; if (!R) return;
   z = clamp(Math.round(z * 100) / 100, 0.4, 3); if (z === R.zoom) return;
-  var s = z / R.zoom, r0 = R.wrap.getBoundingClientRect();
-  if (!G) { G = { m: { x: window.innerWidth / 2, y: window.innerHeight / 2 } }; G.cx = G.m.x - r0.left; G.cy = G.m.y - r0.top; }
+  var m = G && G.m ? G.m : { x: window.innerWidth / 2, y: window.innerHeight / 2 }, A = zoomAnchor(R, m.x, m.y);
   R.zoom = z; if (!route.present) setRt('zoom', z);
   R.wrap.style.setProperty('--z', z);
-  var r1 = R.wrap.getBoundingClientRect();
-  var wantL = G.m.x - G.cx * s, wantT = G.m.y - G.cy * s;
-  R.x.scrollLeft += (r1.left - wantL);
-  window.scrollBy(0, r1.top - wantT);
+  if (A) { // the same spot of the same page stays under the fingers (the gaps between pages do not grow with the zoom, so the whole list cannot be scaled)
+    var r1 = A.el.getBoundingClientRect();
+    R.x.scrollLeft += (r1.left + A.fx * r1.width) - A.x;
+    window.scrollBy(0, (r1.top + A.fy * r1.height) - A.y);
+  }
   var zl = document.getElementById('rb-z'); if (zl) zl.textContent = Math.round(z * 100) + '%';
   rerenderAll(); trackPage(R);
 }
 function presentFit(noScroll) {
   var R = RD; if (!R) return;
-  var w = Math.min(R.x.clientWidth || window.innerWidth, 900), h = window.innerHeight - 12, z = clamp(h * R.ratio / w, 0.3, 1);
+  var sp = rt().spread, w = Math.min(R.x.clientWidth || window.innerWidth, sp ? 1800 : 900), h = window.innerHeight - 12, z = clamp((sp ? 2 * h * R.ratio + 10 : h * R.ratio) / w, 0.3, 1);
   R.zoom = Math.round(z * 100) / 100; R.wrap.style.setProperty('--z', R.zoom); var zl = document.getElementById('rb-z'); if (zl) zl.textContent = Math.round(R.zoom * 100) + '%';
   if (!noScroll) { rerenderAll(); scrollToPage(R.cur, true); }
 }
@@ -673,6 +683,7 @@ ACT['rd-goto'] = function () {
     '<label class="field"><span>رقم الصفحة في الكتاب</span><input type="number" inputmode="numeric" id="go-p" data-focus value="' + printedOf(b, R.cur) + '"></label>' +
     (opts ? '<label class="field"><span>أو اختر درسًا</span><select id="go-l"><option value="">—</option>' + opts + '</select></label>' : '') +
     '<div class="actions"><button class="btn" data-act="rd-goto-yes">انتقل</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>' +
+    (rt().spread ? '<label class="small" style="display:flex;gap:8px;align-items:center;margin:4px 0 10px"><input type="checkbox" id="go-solo"' + (rt().solo ? ' checked' : '') + '> في عرض الصفحتين: الصفحة الأولى وحدها (مثل الغلاف)، فتتقابل الصفحات كما في الكتاب المطبوع</label>' : '') +
     '<details class="small"><summary><b>ضبط ترقيم الصفحات</b></summary><p class="muted" style="margin:6px 0">إن لم يطابق رقمُ الصفحة المعروض رقمَها المطبوع في الكتاب، اكتب الرقم المطبوع على الصفحة المفتوحة الآن (صفحة ' + R.cur + ' في الملف).</p>' +
     '<div class="actions" style="margin-top:0"><input type="number" inputmode="numeric" id="go-fix" class="inp" placeholder="الرقم المطبوع" style="max-width:150px"><button class="btn ghost sm" data-act="rd-fix">اضبط</button></div></details>'));
 };
@@ -694,6 +705,14 @@ document.addEventListener('keydown', function (e) {
 });
 document.addEventListener('visibilitychange', function () { if (document.hidden) { flushInk(); saveState(true); } });
 window.addEventListener('pagehide', function () { flushInk(); saveState(true); });
+
+ACT['rd-spread'] = function () { // two pages side by side (or back to one); the open page stays the same
+  var R = RD, at = R ? R.cur : null; setRt('spread', !rt().spread);
+  if (R) { route.at = at; S.last[R.b.id] = at; }
+  if (route.present) { route = { v: 'read', present: true, at: at, back: route.back }; }
+  render(); toast(rt().spread ? 'صفحتان متجاورتان. لتغيير طريقة تقابلهما: اضغط عنوان الصفحة أعلاه' : 'صفحة واحدة');
+};
+document.addEventListener('change', function (e) { if (e.target && e.target.id === 'go-solo') { setRt('solo', e.target.checked); closeModal(); var at = RD ? RD.cur : null; route.at = at; render(); } });
 
 /* ---------- lesson helpers: checking what comes from a file or from the AI ---------- */
 var IDRE = /^[A-Za-z0-9_-]{1,48}$/;
