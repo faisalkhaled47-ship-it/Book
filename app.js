@@ -374,7 +374,7 @@ VIEWS.read = function () {
   route.page = null; route.at = p;
   return '<div class="rd' + (route.present ? ' present' : '') + '" id="rd">' +
     '<div class="rd-head"><button class="rd-title" data-act="rd-goto"><b id="rd-lesson">' + esc(b.title) + '</b><span id="rd-pno">…</span></button>' +
-    '<div class="rd-hb">' + (route.back && lessonByKey(route.back) ? '<button class="rd-hbtn rd-back" data-act="back-lesson">' + rIcon('back') + '<span>عُد إلى الدرس</span></button>' : '<button class="rd-hbtn" data-act="rd-aid">' + rIcon('aid') + '<span>مساعد الدرس</span></button>') +
+    '<div class="rd-hb">' + clkPill() + (route.back && lessonByKey(route.back) ? '<button class="rd-hbtn rd-back" data-act="back-lesson">' + rIcon('back') + '<span>عُد إلى الدرس</span></button>' : '<button class="rd-hbtn" data-act="rd-aid">' + rIcon('aid') + '<span>مساعد الدرس</span></button>') +
     '<button class="rd-hbtn rd-solve" data-act="rd-solve" aria-label="حلّ أسئلة الصفحة مع Claude">' + rIcon('spark') + '<span>حلّ الأسئلة</span></button>' +
     '<button class="rd-hbtn" data-act="rd-present" aria-label="وضع العرض">' + rIcon(route.present ? 'exit' : 'present') + '<span>' + (route.present ? 'إنهاء العرض' : 'عرض') + '</span></button></div></div>' +
     '<div class="rd-x" id="rd-x"><div class="rd-pages" id="rd-pages" style="--z:' + o.zoom + '"><p class="muted rd-wait">جارٍ فتح الكتاب…</p></div></div>' +
@@ -953,7 +953,7 @@ VIEWS.lesson = function () {
     '<header class="u-head"><div><h1>' + esc(l.title) + '</h1>' + (l.chap ? '<p class="std">' + esc(l.chap) + '</p>' : '') +
     '<p class="muted small">ص ' + rng(l.from, l.to) + ' · ' + cnt(l.to - l.from + 1, WORDS.page) + '</p>' +
     '<div class="actions l-acts"><button class="btn" data-act="open-pages" data-k="' + esc(k) + '">' + svgI('book') + 'افتح صفحات الدرس</button>' +
-    (a ? '<button class="btn ghost tint hue-violet" data-act="pv-open" data-k="' + esc(k) + '">' + rIcon('present') + 'اعرضه على الطلاب</button>' : '') + '</div></div></header>';
+    (a ? '<button class="btn ghost tint hue-violet" data-act="pv-open" data-k="' + esc(k) + '">' + rIcon('present') + 'اعرضه على الطلاب</button>' : '') + clkPill() + '</div></div></header>';
   if (P.classes.length) h += taughtBar(b, l);
   if (!a) h += genPanel(b, l);
   else {
@@ -1296,7 +1296,7 @@ function pvBody(s) {
 }
 function pvRender() {
   if (!PV) return; var pv = document.getElementById('pv'), s = PV.sl[PV.i];
-  pv.innerHTML = '<div class="pv-in" style="--fs:' + PV.fs + '"><div class="pv-top"><button class="pv-x" data-act="pv-close" aria-label="إغلاق">✕</button><span class="pv-n">' + (PV.i + 1) + ' / ' + PV.sl.length + '</span>' +
+  pv.innerHTML = '<div class="pv-in" style="--fs:' + PV.fs + '"><div class="pv-top"><button class="pv-x" data-act="pv-close" aria-label="إغلاق">✕</button><span class="pv-n">' + (PV.i + 1) + ' / ' + PV.sl.length + '</span>' + clkPill() +
     '<span class="pv-fs"><button data-act="pv-fs" data-d="-1" aria-label="تصغير الخط">ص-</button><button data-act="pv-fs" data-d="1" aria-label="تكبير الخط">ص+</button></span></div>' +
     '<div class="pv-slide pv-' + s.k + '">' + pvBody(s) + '</div>' +
     '<div class="pv-nav"><button class="btn ghost" data-act="pv-go" data-d="-1"' + (PV.i ? '' : ' disabled') + '>السابق</button><div class="pv-dots">' + PV.sl.map(function (x, k) { return '<i' + (k === PV.i ? ' class="on"' : '') + '></i>'; }).join('') + '</div><button class="btn" data-act="pv-go" data-d="1"' + (PV.i < PV.sl.length - 1 ? '' : ' disabled') + '>التالي</button></div></div>';
@@ -2909,6 +2909,102 @@ ACT['font-add'] = function () {
 ACT['font-remove'] = function () {
   tx('fonts', 'readwrite', function (s) { s.clear(); }).then(function () { location.reload(); });
 };
+
+/* ---------- the class clock: date and time in the lesson and the reader, and a countdown timer ----------
+   The timer lives in localStorage «kitabi-timer» {end, left, dur}, so it keeps running across screens and a reload. */
+var CLK = (function () { try { return JSON.parse(localStorage.getItem('kitabi-timer') || '{}') || {}; } catch (e) { return {}; } })(), CLK_AC = null, CLK_DONE = false;
+function clkSave() { try { localStorage.setItem('kitabi-timer', JSON.stringify(CLK)); } catch (e) {} }
+function clkLeft() { return CLK.end ? Math.max(0, CLK.end - Date.now()) : (CLK.left || 0); }
+function clkOn() { return !!(CLK.end || CLK.left); }
+function clkFmt(ms) { var s = Math.ceil(ms / 1000), m = Math.floor(s / 60); s %= 60; return m + ':' + (s < 10 ? '0' : '') + s; }
+function clkTime() { var d = new Date(), h = d.getHours(), m = d.getMinutes(); return ((h % 12) || 12) + ':' + (m < 10 ? '0' : '') + m + ' ' + (h < 12 ? 'ص' : 'م'); }
+function clkDates() {
+  var i = today(), p = ymd(i), hj = hijriOf(i);
+  return { day: AR_DAYS[wday(i)], hj: hj ? hj.d + ' ' + hj.m + ' ' + hj.y + 'هـ' : '', hs: hj ? hj.d + ' ' + hjShort(hj.m) : '', hm: hj ? hj.d + ' ' + hj.m : p.d + ' ' + AR_MONTHS[p.m], g: p.d + ' ' + AR_MONTHS[p.m] + ' ' + p.y + 'م' };
+}
+function clkPill() {
+  return '<button type="button" class="clk" data-act="clk-open" aria-label="التاريخ والوقت والمؤقت"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5"/></svg><span class="clk-d"></span><b class="clk-t"></b><span class="clk-r"></span></button>';
+}
+function clkTick() {
+  var left = clkLeft(), run = !!CLK.end, on = clkOn();
+  if (CLK.end && left <= 0) { var late = Date.now() - CLK.end > 90000; CLK.end = 0; CLK.left = 0; clkSave(); if (!late) clkAlarm(); else wake(false); on = false; run = false; } // ended long ago (app closed): no alarm now
+  var D = clkDates(), t = clkTime();
+  Array.prototype.forEach.call(document.querySelectorAll('.clk'), function (el) {
+    el.querySelector('.clk-d').textContent = D.day + ' ' + D.hm + ' ·';
+    el.querySelector('.clk-t').textContent = t;
+    var r = el.querySelector('.clk-r'); r.textContent = on ? clkFmt(left) : ''; r.hidden = !on;
+    el.classList.toggle('run', run); el.classList.toggle('pause', on && !run); el.classList.toggle('late', run && left <= 10000); el.classList.toggle('done', CLK_DONE);
+  });
+  var big = document.getElementById('clk-num'), dur = CLK.dur || left || 1;
+  if (big) { big.textContent = on ? clkFmt(left) : CLK_DONE ? '0:00' : clkFmt(CLK.dur || 300000); big.className = 'clk-num' + (run && left <= 10000 ? ' late' : '') + (CLK_DONE ? ' done' : ''); }
+  var bar = document.getElementById('clk-bar'); if (bar) bar.style.width = (on ? Math.max(0, Math.min(100, left / dur * 100)) : CLK_DONE ? 0 : 100) + '%';
+  var pt = document.getElementById('clk-ptime'); if (pt) pt.textContent = t;
+  Array.prototype.forEach.call(document.querySelectorAll('[data-act="clk-go"]'), function (b) { b.textContent = run ? 'إيقاف مؤقت' : on ? 'تابع' : 'ابدأ'; });
+}
+setInterval(clkTick, 500);
+AFTER.push(function () { setTimeout(clkTick, 0); });
+function clkSound() { // short beeps; the audio is unlocked by the tap that started the timer
+  try {
+    var C = window.AudioContext || window.webkitAudioContext; if (!C) return null;
+    if (!CLK_AC) CLK_AC = new C(); if (CLK_AC.state === 'suspended') CLK_AC.resume();
+    return CLK_AC;
+  } catch (e) { return null; }
+}
+function clkBeeps() {
+  var ac = clkSound(); if (!ac) return;
+  for (var k = 0; k < 6; k++) (function (k) {
+    var o = ac.createOscillator(), g = ac.createGain(), t0 = ac.currentTime + k * 0.42;
+    o.type = 'sine'; o.frequency.value = k % 2 ? 660 : 880; o.connect(g); g.connect(ac.destination);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.5, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.32);
+    o.start(t0); o.stop(t0 + 0.34);
+  })(k);
+}
+function clkAlarm() {
+  CLK_DONE = true; clkBeeps(); try { if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 300]); } catch (e) {}
+  wake(false);
+  var el = document.getElementById('clk-alarm');
+  if (!el) { el = document.createElement('div'); el.id = 'clk-alarm'; el.className = 'clk-alarm'; el.setAttribute('role', 'alert'); document.body.appendChild(el); }
+  el.innerHTML = '<b>⏰ انتهى الوقت</b><div><button type="button" class="btn sm" data-act="clk-more" data-m="1">دقيقة أخرى</button><button type="button" class="btn sm ghost" data-act="clk-ok">حسنًا</button></div>';
+  el.hidden = false;
+}
+ACT['clk-ok'] = function () { CLK_DONE = false; var el = document.getElementById('clk-alarm'); if (el) el.hidden = true; clkTick(); };
+function clkStart(ms) { clkSound(); CLK_DONE = false; var a = document.getElementById('clk-alarm'); if (a) a.hidden = true; CLK.dur = ms; CLK.end = Date.now() + ms; CLK.left = 0; clkSave(); wake(true); clkTick(); }
+ACT['clk-more'] = function (el) { ACT['clk-ok'](); clkStart((+el.getAttribute('data-m') || 1) * 60000); };
+ACT['clk-preset'] = function (el) { clkStart(+el.getAttribute('data-m') * 60000); };
+ACT['clk-go'] = function () {
+  if (CLK.end) { CLK.left = clkLeft(); CLK.end = 0; wake(false); } // pause
+  else if (CLK.left) { clkSound(); CLK.end = Date.now() + CLK.left; CLK.left = 0; wake(true); } // resume
+  else { var m = document.getElementById('clk-min'); clkStart(Math.max(0.25, +(m && m.value) || 5) * 60000); return; }
+  clkSave(); clkTick();
+};
+ACT['clk-add'] = function (el) {
+  var d = +el.getAttribute('data-d') * 60000;
+  if (CLK.end) CLK.end = Math.max(Date.now() + 1000, CLK.end + d); else if (CLK.left) CLK.left = Math.max(1000, CLK.left + d);
+  else { var m = document.getElementById('clk-min'); if (m) m.value = Math.max(1, Math.min(180, (+m.value || 5) + d / 60000)); return; }
+  CLK.dur = Math.max(CLK.dur || 0, clkLeft()); clkSave(); clkTick();
+};
+ACT['clk-reset'] = function () { CLK = { dur: CLK.dur }; CLK_DONE = false; clkSave(); wake(false); var a = document.getElementById('clk-alarm'); if (a) a.hidden = true; clkTick(); };
+function clkPanel() {
+  var D = clkDates(), last = Math.round((CLK.dur || 300000) / 60000);
+  return '<div class="clk-p"><p class="clk-day">' + D.day + '</p><p class="clk-hj">' + esc(D.hj) + '</p><p class="clk-g">' + esc(D.g) + '</p><p class="clk-time" id="clk-ptime">' + clkTime() + '</p></div>' +
+    '<section class="set-sec"><h3>المؤقت التنازلي</h3><div class="clk-num" id="clk-num"></div><div class="clk-track"><i id="clk-bar"></i></div>' +
+    '<div class="clk-pre">' + [1, 2, 3, 5, 10, 15, 20].map(function (m) { return '<button type="button" data-act="clk-preset" data-m="' + m + '">' + m + ' د</button>'; }).join('') + '</div>' +
+    '<div class="clk-row"><button type="button" class="btn ghost sm" data-act="clk-add" data-d="-1" aria-label="أنقص دقيقة">−1</button><label class="clk-m"><input type="number" id="clk-min" inputmode="numeric" min="1" max="180" value="' + last + '"><span>دقيقة</span></label><button type="button" class="btn ghost sm" data-act="clk-add" data-d="1" aria-label="زد دقيقة">+1</button></div>' +
+    '<div class="actions"><button class="btn" data-act="clk-go">ابدأ</button><button class="btn ghost" data-act="clk-reset">إعادة</button><button class="btn ghost tint hue-violet" data-act="clk-big">' + rIcon('present') + 'اعرضه كبيرًا</button></div>' +
+    '<p class="small muted">ينبّهك بصوت حين ينتهي (ارفع صوت الجهاز وألغِ الوضع الصامت). ويبقى يعمل وأنت تتنقل بين الدروس والكتاب.</p></section>';
+}
+ACT['clk-open'] = function () { openModal(sheet('الوقت والمؤقت', clkPanel()), true); clkTick(); };
+ACT['clk-big'] = function () { // the timer full screen, for the projector
+  closeModal();
+  var ov = document.createElement('div'); ov.className = 'clk-full'; ov.id = 'clk-full';
+  var D = clkDates();
+  ov.innerHTML = '<div class="clk-fh"><span>' + D.day + ' ' + esc(D.hs) + ' · <b id="clk-ptime">' + clkTime() + '</b></span><button type="button" class="btn sm" data-act="clk-big-x">إغلاق</button></div>' +
+    '<div class="clk-num" id="clk-num"></div><div class="clk-track"><i id="clk-bar"></i></div>' +
+    '<div class="actions"><button class="btn" data-act="clk-go">ابدأ</button><button class="btn ghost" data-act="clk-add" data-d="1">+1 دقيقة</button><button class="btn ghost" data-act="clk-reset">إعادة</button></div>';
+  document.body.appendChild(ov); document.documentElement.classList.add('lab-on'); clkTick();
+};
+ACT['clk-big-x'] = function () { var ov = document.getElementById('clk-full'); if (ov) ov.remove(); document.documentElement.classList.remove('lab-on'); };
+if (CLK.end) wake(true);
 
 /* ---------- settings ---------- */
 function segBtns(act, cur, items) { return '<div class="seg" role="group">' + items.map(function (x) { return '<button type="button" data-act="' + act + '" data-v="' + x[0] + '" aria-pressed="' + (String(cur) === String(x[0])) + '">' + x[1] + '</button>'; }).join('') + '</div>'; }
