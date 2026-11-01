@@ -332,3 +332,15 @@ body.present .rd-head .clk{background:rgba(255,255,255,.9);box-shadow:0 2px 10px
 .fig-pg input{width:84px;font:inherit;font-size:16px;border:1px solid var(--rule);border-radius:10px;padding:6px 8px;background:var(--panel-2);color:var(--ink)}
 .fig-n select{font:inherit;font-size:16px;border:1px solid var(--rule);border-radius:10px;padding:6px 8px;background:var(--panel-2);color:var(--ink)}
 #fig-idea{font:inherit;font-size:16px;line-height:1.6;width:100%;box-sizing:border-box;resize:vertical}
+/* folded AI panels in a lesson */
+details.ai-fold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0}
+details.ai-fold>summary::-webkit-details-marker{display:none}
+details.ai-fold>summary::after{content:"";width:9px;height:9px;border:solid var(--ink-2);border-width:0 2px 2px 0;transform:rotate(45deg);margin-inline-start:auto;transition:transform .2s}
+details.ai-fold[open]>summary::after{transform:rotate(-135deg)}
+details.ai-fold>summary .small{font-weight:400;flex-basis:100%;margin-inline-start:46px;margin-top:-6px}
+details.ai-fold[open]>summary{margin-bottom:12px}
+details.ai-fold:not([open]){padding-top:14px;padding-bottom:14px}
+.qg-opts{display:flex;gap:12px;flex-wrap:wrap;margin:4px 0}
+.qg-opts label{display:inline-flex;align-items:center;gap:6px}
+.qg-opts select{font:inherit;font-size:16px;border:1px solid var(--rule);border-radius:10px;padding:6px 8px;background:var(--panel-2);color:var(--ink)}
+#qg-ask{font:inherit;font-size:16px;line-height:1.6;width:100%;box-sizing:border-box;resize:vertical}

@@ -1077,6 +1077,11 @@ ACT['q-copy'] = function (el) {
 };
 ACT['q-copy-do'] = function (el) { var x = lessonByKey(el.getAttribute('data-k')), a = x && aidOf(x.b, x.l); closeModal(); if (a) copyText(quizText(x, a, el.getAttribute('data-a') === '1')); };
 
+/* AI panels in a lesson stay folded (they are not for the students' eyes); each one remembers being opened in this session */
+var FOLD = {};
+function foldOpen(key, dflt) { return key in FOLD ? FOLD[key] : !!dflt; }
+document.addEventListener('toggle', function (e) { var d = e.target; if (d && d.matches && d.matches('details[data-fold]')) FOLD[d.getAttribute('data-fold')] = d.open; }, true);
+
 /* ---------- «المختبر»: interactive virtual experiments for a lesson, designed by Claude ----------
    Each experiment is one self-contained HTML page, kept in the notes store as l:<bookId>:<lessonId> {labs:[{id, title, html, idea, at, model}], t}
    (so it goes into the backup and the sync). It runs inside a sandboxed frame with no access to the app, its storage or the network. */
@@ -1142,12 +1147,12 @@ L_TAB.lab = function (a, b, l) {
       '<p class="small bad lab-err" data-id="' + lab.id + '"' + ((LAB_ERR[lab.id] || []).length ? '' : ' hidden') + '>ظهرت أخطاء برمجية في هذه التجربة؛ اضغط «عدّلها أو أصلحها» ليصلحها Claude.</p>' +
       '<p class="small muted" style="margin:6px 0 0">صمّمها ' + esc(lab.model || 'Claude') + ' ' + relDay(lab.at) + '. جرّبها قبل الحصة وتأكد من دقتها.</p></article>';
   }).join('');
-  h += '<section class="panel gen"><h2 class="hh">' + ico('spark', 'violet') + (labs.length ? 'صمّم تجربة أخرى' : 'صمّم تجربة افتراضية لهذا الدرس') + '</h2>' +
+  h += '<details class="panel gen ai-fold" data-fold="lab"' + (foldOpen('lab', !labs.length) ? ' open' : '') + '><summary class="hh">' + ico('spark', 'violet') + (labs.length ? 'صمّم تجربة أخرى' : 'صمّم تجربة افتراضية لهذا الدرس') + '</summary>' +
     (ai ? '<label class="field"><span>فكرة التجربة (اختياري، أو اترك Claude يختار)</span><textarea id="lab-idea" rows="2" placeholder="مثال: كرة على مسار متعرج تتحول طاقتها بين الوضع والحركة، مع منزلق للارتفاع والكتلة"></textarea></label>' +
       '<div id="lab-ideas" class="lab-ideas"></div>' +
       '<div class="actions"><button class="btn" data-act="lab-gen" data-k="' + esc(k) + '">' + svgI('spark') + 'صمّم التجربة</button><button class="btn ghost" data-act="lab-ideas" data-k="' + esc(k) + '">اقترح عليّ أفكارًا</button></div>' +
       '<p class="small muted">' + labCost() + '</p>'
-      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</section>';
+      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
   return h;
 };
 function labCost() {
@@ -1296,14 +1301,14 @@ L_TAB.figs = function (a, b, l) {
   if (extra.length) h += '<h3 class="sec-h">رسومي الإضافية</h3><div class="figs">' + extra.map(function (f) {
     return '<div class="fig-x">' + figure({ svg: f.svg, cap: f.cap }, true) + '<div class="fig-xa"><span class="small muted">' + (f.from === 'image' ? 'محاكاة صورة' : f.from === 'page' ? 'من صفحة ' + esc(f.page || '') : 'من وصفك') + ' · ' + relDay(f.at) + '</span><button class="link small danger" data-act="fig-del" data-k="' + esc(k) + '" data-id="' + f.id + '">احذف</button></div></div>';
   }).join('') + '</div>';
-  h += '<section class="panel gen" style="margin-top:16px"><h2 class="hh">' + ico('spark', 'violet') + 'ارسم مع Claude</h2>' +
+  h += '<details class="panel gen ai-fold" data-fold="fig"' + (foldOpen('fig', !!ref) ? ' open' : '') + ' style="margin-top:16px"><summary class="hh">' + ico('spark', 'violet') + 'ارسم مع Claude<span class="small muted">رسوم إضافية أو محاكاة صورة</span></summary>' +
     (ai ? '<p class="small muted">صف الرسم الذي تريده، أو أعطه صورة أو صفحة من الكتاب ليحاكيها برسم توضيحي نظيف بتسميات عربية.</p>' +
       '<label class="field"><span>ماذا يرسم؟</span><textarea id="fig-idea" rows="2" placeholder="مثال: مخطط يوضح تحول الطاقة في المصباح الكهربائي من كهربائية إلى ضوئية وحرارية، بأسهم ونسب"></textarea></label>' +
       '<div class="fig-ref">' + (ref ? '<img src="' + ref.src + '" alt="الصورة المرفقة"><span class="small">' + (ref.page ? 'صفحة ' + esc(ref.page) + ' من الكتاب' : 'صورة مرفقة') + '</span><button class="link small" data-act="fig-ref-x">أزلها</button>'
         : '<button class="btn ghost sm" data-act="fig-ref-img" data-k="' + esc(k) + '">' + svgI('image') + 'أرفق صورة يحاكيها</button><span class="small muted">أو</span><label class="fig-pg"><span class="small">صفحة الكتاب</span><input type="number" inputmode="numeric" id="fig-pg" placeholder="' + l.from + '"></label><button class="btn ghost sm" data-act="fig-ref-page" data-k="' + esc(k) + '">أرفقها</button>') + '</div>' +
       '<div class="actions"><label class="fig-n"><span class="small">عدد الرسوم</span><select id="fig-n"><option>1</option><option selected>2</option><option>3</option></select></label><button class="btn" data-act="fig-gen" data-k="' + esc(k) + '">' + svgI('spark') + 'ارسم</button></div>' +
       '<p class="small muted">التكلفة نحو 3 إلى 8 سنتات للرسم مع Sonnet. الرسوم توضيحية مبسطة (SVG)، لا صور واقعية.</p>'
-      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</section>';
+      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
   return h;
 };
 ICONS.image = ICONS.image || '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 3.5 3 3-2.5L20 17"/>';
@@ -1347,6 +1352,57 @@ ACT['fig-gen'] = function (el) {
   })['catch'](function (e) { clearInterval(tick); wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم يكتمل الرسم') + '</h2><p class="muted">' + (e.code === 'stop' ? '' : esc(aiMsg(e))) + '</p>'); });
 };
 ACT['fig-stop'] = function () { if (FIGGEN) { FIGGEN.stopped = true; if (FIGGEN.abort) FIGGEN.abort(); } };
+
+/* ---------- «التقويم»: more questions from Claude, on request; added to the lesson's questions (present, copy, counts) ---------- */
+var QGEN_SYS = [
+  'أنت معلم علوم خبير في المرحلة المتوسطة في المملكة العربية السعودية ومُعدّ اختبارات.',
+  'اكتب أسئلة تقويم جديدة عن الدرس المعطى بحسب طلب المعلم، دقيقة علميًا، بعربية فصيحة واضحة، من محتوى الدرس، ولا تكرر الأسئلة الموجودة.',
+  'أعد JSON فقط دون أي نص أو علامات ``` قبله أو بعده: {"mcq":[{"q":"السؤال","o":["","","",""],"a":0,"e":"تفسير الإجابة الصحيحة","lv":"تذكر|فهم|تطبيق|تحليل"}],"tf":[{"q":"عبارة","a":true,"e":"التفسير"}],"short":[{"q":"سؤال مقالي قصير","a":"الإجابة النموذجية"}]}',
+  '- الاختيار من متعدد: أربعة خيارات، وa رقم الصحيح من 0 إلى 3 موزعًا بين الأسئلة، والخيارات الخاطئة معقولة ومن مفاهيم الدرس.',
+  '- اترك أي نوع لم يُطلب قائمة فارغة. التزم بالعدد المطلوب. ضع المصطلح المهم بين ** ** والرموز والوحدات بين ` `.'
+].join('\n');
+var QGEN = null;
+var QGEN_BASE = L_TAB.eval;
+L_TAB.eval = function (a, b, l) {
+  var k = lk(b, l), rec = aidOf(b, l), add = rec && rec.qadd, ai = !!P.ai.key, nAdd = add ? add.mcq + add.tf + add.short : 0;
+  return QGEN_BASE(a, b, l) + '<details class="panel gen ai-fold" data-fold="qgen"' + (foldOpen('qgen', false) ? ' open' : '') + ' style="margin-top:16px"><summary class="hh">' + ico('spark', 'violet') + 'أسئلة إضافية مع Claude<span class="small muted">اطلب أسئلة بالنوع والمستوى الذي تريده</span></summary>' +
+    (ai ? '<label class="field"><span>ماذا تريد؟ (اختياري)</span><textarea id="qg-ask" rows="2" placeholder="مثال: أسئلة على تحولات الطاقة في الأجهزة المنزلية، بمستوى تطبيق وتحليل، تناسب اختبارًا قصيرًا"></textarea></label>' +
+      '<div class="qg-opts"><label><span class="small">النوع</span><select id="qg-type"><option value="mix">متنوعة</option><option value="mcq">اختيار من متعدد</option><option value="tf">صح أو خطأ</option><option value="short">مقالية قصيرة</option></select></label>' +
+      '<label><span class="small">العدد</span><select id="qg-n"><option>3</option><option selected>5</option><option>8</option><option>10</option></select></label>' +
+      '<label><span class="small">المستوى</span><select id="qg-lv"><option value="">متدرج</option><option>تذكر</option><option>فهم</option><option>تطبيق</option><option>تحليل</option></select></label></div>' +
+      '<div class="actions"><button class="btn" data-act="qg-run" data-k="' + esc(k) + '">' + svgI('spark') + 'أنشئ الأسئلة</button>' +
+      (nAdd ? '<button class="btn ghost sm danger" data-act="qg-undo" data-k="' + esc(k) + '">احذف آخر ما أضافه (' + nAdd + ')</button>' : '') + '</div>' +
+      '<p class="small muted">تُضاف في آخر الأسئلة أعلاه، وتدخل في «اعرض الأسئلة على الطلاب» و«انسخ الأسئلة». التكلفة نحو سنتين إلى خمسة سنتات مع Sonnet.</p>'
+      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
+};
+ACT['qg-run'] = function (el) {
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var rec = aidOf(x.b, x.l); if (!rec) return;
+  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  var ask = (document.getElementById('qg-ask') || {}).value || '', type = (document.getElementById('qg-type') || {}).value || 'mix', n = +(document.getElementById('qg-n') || {}).value || 5, lv = (document.getElementById('qg-lv') || {}).value || '';
+  var TYPE = { mix: 'متنوعة بين اختيار من متعدد وصح أو خطأ ومقالية قصيرة', mcq: 'اختيار من متعدد فقط', tf: 'صح أو خطأ فقط', short: 'مقالية قصيرة فقط' }, qz = rec.d.quiz;
+  var have = qz.mcq.map(function (q) { return '- ' + q.q; }).concat(qz.tf.map(function (q) { return '- ' + q.q; }), qz.short.map(function (q) { return '- ' + q.q; })).join('\n').replace(/\*\*|`/g, '');
+  var text = 'الدرس: ' + x.l.title + '\n\nمحتوى الدرس:\n' + aidText(rec.d) + '\n\nالأسئلة الموجودة (لا تكررها):\n' + (have || '(لا يوجد)') +
+    '\n\nالمطلوب: ' + n + ' أسئلة ' + TYPE[type] + (lv ? '، بمستوى ' + lv : '، متدرجة الصعوبة') + '.' + (ask.trim() ? '\nطلب المعلم: ' + ask.trim() : '') + '\nأعد JSON المطلوب.';
+  QGEN = { stopped: false }; wake(true);
+  var t0 = Date.now(), prog = progModal('Claude يكتب الأسئلة', 'qg-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 500, 4, 95) + '%'; }, 300);
+  claude(QGEN_SYS, [{ type: 'text', text: text }], 8000, function (c) { prog('يكتب… ' + num(c) + ' حرفًا'); }, QGEN).then(function (res) {
+    clearInterval(tick); wake(false);
+    var o = parseJSON(res), got = cleanAid({ goals: ['-'], quiz: { mcq: o.mcq, tf: o.tf, short: o.short } }).quiz, total = got.mcq.length + got.tf.length + got.short.length;
+    if (!total) throw aiErr('json');
+    var r = aidOf(x.b, x.l); r.d.quiz.mcq = r.d.quiz.mcq.concat(got.mcq); r.d.quiz.tf = r.d.quiz.tf.concat(got.tf); r.d.quiz.short = r.d.quiz.short.concat(got.short);
+    r.qadd = { mcq: got.mcq.length, tf: got.tf.length, short: got.short.length, at: Date.now() }; r.at = Date.now(); AIDS[r.k] = r; dbPut('aids', r);
+    var m = document.getElementById('modal'); m.__busy = false; closeModal(); render(true);
+    toast('أُضيف ' + cnt(total, WORDS.q) + ' في آخر أسئلة التقويم', 3500);
+  })['catch'](function (e) { clearInterval(tick); wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم تكتمل الأسئلة') + '</h2><p class="muted">' + (e.code === 'stop' ? '' : esc(aiMsg(e))) + '</p>'); });
+};
+ACT['qg-stop'] = function () { if (QGEN) { QGEN.stopped = true; if (QGEN.abort) QGEN.abort(); } };
+ACT['qg-undo'] = function (el) {
+  if (!el.classList.contains('arm')) { el.classList.add('arm'); el.textContent = 'اضغط مرة ثانية للحذف'; setTimeout(function () { el.classList.remove('arm'); }, 3000); return; }
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var r = aidOf(x.b, x.l); if (!r || !r.qadd) return;
+  var qz = r.d.quiz, ad = r.qadd;
+  qz.mcq.splice(qz.mcq.length - ad.mcq, ad.mcq); qz.tf.splice(qz.tf.length - ad.tf, ad.tf); qz.short.splice(qz.short.length - ad.short, ad.short);
+  delete r.qadd; r.at = Date.now(); AIDS[r.k] = r; dbPut('aids', r); render(true); toast('حُذفت الأسئلة التي أضافها Claude آخر مرة');
+};
 
 /* ---------- presenting a lesson to the class: one idea per screen ---------- */
 var PV = null;
