@@ -402,7 +402,7 @@ AFTER.push(function () { if (route.v === 'read' && document.getElementById('rd')
 
 function readerUnmount() {
   if (!RD) return;
-  RD.dead = true; flushInk(); liveOff();
+  RD.dead = true; flushInk(); if (LIVE) { LIVE.remove(); LIVE = null; }
   if (RD.io) RD.io.disconnect();
   window.removeEventListener('scroll', RD.onScroll); window.removeEventListener('resize', RD.onResize);
   RD.pages.forEach(function (pg) { if (pg.task) try { pg.task.cancel(); } catch (e) {} if (pg.c) { pg.c.width = pg.c.height = 0; } if (pg.ic) { pg.ic.width = pg.ic.height = 0; } });
@@ -441,7 +441,7 @@ function readerMount() {
       R.onResize = function () { clearTimeout(R.rzT); R.rzT = setTimeout(function () { if (route.present) presentFit(); rerenderAll(); }, 200); };
       window.addEventListener('scroll', R.onScroll, { passive: true });
       window.addEventListener('resize', R.onResize);
-      hookPinch(R); hookShift(R);
+      hookPinch(R); hookShift(R); liveOn({ width: INK_W, left: 0, top: 0 }); // the writing layer is made before the first stroke, not during it
       requestAnimationFrame(function () { scrollToPage(start, true); trackPage(R); });
     });
   })['catch'](function (e) {
@@ -631,14 +631,20 @@ function liveOn(r) {
   if (!LIVE) { LIVE = document.createElement('canvas'); LIVE.className = 'ink-live'; LIVE.setAttribute('aria-hidden', 'true'); document.body.appendChild(LIVE); }
   var dpr = Math.min(window.devicePixelRatio || 1, 2), w = Math.round(window.innerWidth * dpr), h = Math.round(window.innerHeight * dpr);
   if (LIVE.width !== w || LIVE.height !== h) { LIVE.width = w; LIVE.height = h; LIVE.style.width = window.innerWidth + 'px'; LIVE.style.height = window.innerHeight + 'px'; }
-  var k = r.width / INK_W; LIVE.k = [dpr * k, dpr * r.left, dpr * r.top]; LIVE.style.display = 'block';
+  var k = r.width / INK_W; LIVE.t = [dpr * k, dpr * r.left, dpr * r.top]; LIVE.bb = null;
 }
-function liveDraw(st) {
-  if (!LIVE) return; var x = LIVE.getContext('2d'), t = LIVE.k;
-  x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, LIVE.width, LIVE.height);
-  x.setTransform(t[0], 0, 0, t[0], t[1], t[2]); stroke(x, st);
+function liveDraw(st) { // like the lesson cards' writing: only the newest piece, a straight step to the pen's tip; the smooth curve is drawn when the pen lifts
+  if (!LIVE) return; var x = LIVE.getContext('2d'), t = LIVE.t, p = st.p, n = p.length / 3; if (!n) return;
+  var X = t[1] + p[n * 3 - 3] * t[0], Y = t[2] + p[n * 3 - 2] * t[0], pad = (st.w || 3.2) * t[0] + 4, B = LIVE.bb;
+  if (!B) B = LIVE.bb = [X, Y, X, Y]; B[0] = Math.min(B[0], X - pad); B[1] = Math.min(B[1], Y - pad); B[2] = Math.max(B[2], X + pad); B[3] = Math.max(B[3], Y + pad);
+  x.setTransform(t[0], 0, 0, t[0], t[1], t[2]); x.lineCap = 'round'; x.lineJoin = 'round';
+  if (st.k === 'hl') { x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(B[0], B[1], B[2] - B[0], B[3] - B[1]); x.restore(); stroke(x, st); return; }
+  x.strokeStyle = x.fillStyle = st.c;
+  if (n === 1) { x.beginPath(); x.arc(p[0], p[1], inkW(st, p, 0) / 2, 0, 7); x.fill(); return; }
+  x.lineWidth = (st.w || 3.2) * (0.45 + (p[n * 3 - 1] + p[n * 3 - 4]) / 180);
+  x.beginPath(); x.moveTo(p[n * 3 - 6], p[n * 3 - 5]); x.lineTo(p[n * 3 - 3], p[n * 3 - 2]); x.stroke();
 }
-function liveOff() { if (!LIVE) return; var x = LIVE.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, LIVE.width, LIVE.height); LIVE.style.display = 'none'; }
+function liveOff() { if (!LIVE || !LIVE.bb) return; var x = LIVE.getContext('2d'), B = LIVE.bb; x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(B[0] - 2, B[1] - 2, B[2] - B[0] + 4, B[3] - B[1] + 4); LIVE.bb = null; }
 function rafInk(pg) { if (!pg.raf) pg.raf = requestAnimationFrame(function () { pg.raf = 0; drawInk(pg); }); }
 /* sliding the page sideways over its board (one finger across, when not writing with the finger) */
 function shiftMax(R) { var pg = R.pages[0]; if (!pg || rt().spread) return 0; return Math.max(0, (R.wrap.clientWidth - pg.el.offsetWidth) / 2); }
