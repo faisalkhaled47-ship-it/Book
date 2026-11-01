@@ -154,17 +154,17 @@ function tx(store, mode, fn) {
 }
 function dbAll(st) { return tx(st, 'readonly', function (s) { return s.getAll(); }); }
 function dbGet(st, k) { return tx(st, 'readonly', function (s) { return s.get(k); }); }
-function dbPut(st, v) { return tx(st, 'readwrite', function (s) { s.put(v); }); }
-function dbDel(st, k) { return tx(st, 'readwrite', function (s) { s['delete'](k); }); }
-function dbDelRange(st, prefix) { return tx(st, 'readwrite', function (s) { s['delete'](IDBKeyRange.bound(prefix, prefix + '￿')); }); }
+function dbPut(st, v) { var p = tx(st, 'readwrite', function (s) { s.put(v); }); syncMark(st, v && (v.id != null ? v.id : v.k)); return p; }
+function dbDel(st, k) { var p = tx(st, 'readwrite', function (s) { s['delete'](k); }); syncMark(st, k); return p; }
+function dbDelRange(st, prefix) { return tx(st, 'readwrite', function (s) { var r = s.getAllKeys(IDBKeyRange.bound(prefix, prefix + '\uffff')); r.onsuccess = function () { (r.result || []).forEach(function (k) { s['delete'](k); syncMark(st, k); }); }; }); }
 
 var PREF_KEY = 'kitabi-pref', STATE_KEY = 'kitabi-state';
 function loadJSON(k) { try { return JSON.parse(localStorage.getItem(k) || '{}') || {}; } catch (e) { return {}; } }
 var P = loadJSON(PREF_KEY);   // theme, region, classes, ai {key, model}
 var S = loadJSON(STATE_KEY);  // cur, last{bookId:page}, taught{lk:{cls:iso}}, ans{qid:[n,ok,last,t]}, plan{bookId:{...}}, notes{lk:text}, backupAt
-function savePref() { try { localStorage.setItem(PREF_KEY, JSON.stringify(P)); } catch (e) {} }
+function savePref() { try { localStorage.setItem(PREF_KEY, JSON.stringify(P)); } catch (e) {} if (typeof syncStateMark === 'function') syncStateMark(); }
 var saveT = null;
-function saveState(now) { clearTimeout(saveT); var f = function () { S.t = Date.now(); try { localStorage.setItem(STATE_KEY, JSON.stringify(S)); } catch (e) {} }; if (now) f(); else saveT = setTimeout(f, 250); }
+function saveState(now) { clearTimeout(saveT); var f = function () { S.t = Date.now(); try { localStorage.setItem(STATE_KEY, JSON.stringify(S)); } catch (e) {} syncStateMark(); }; if (now) f(); else saveT = setTimeout(f, 250); }
 ['last', 'taught', 'ans', 'plan', 'notes'].forEach(function (k) { if (!S[k] || typeof S[k] !== 'object') S[k] = {}; });
 if (!Array.isArray(P.classes)) P.classes = [];
 if (!P.ai || typeof P.ai !== 'object') P.ai = {};
@@ -2133,6 +2133,297 @@ function backupLine() {
 }
 AFTER.push(function () { var el = document.getElementById('sync'); if (el) { var stale = el.querySelector('.btn'); el.className = 'sync span ' + (stale ? 'off' : 'on'); } });
 
+/* ---------- sync between the teacher's devices through his own Supabase project ----------
+   One table, kitabi_kv (user_id, store, k, v jsonb, deleted, updated_at), locked to the signed-in user by row level security.
+   Synced: books (without the PDF), aids, ink, notes (boards, marks, photos), and pieces of the state (taught, notes, plans, classes).
+   Each record carries the time it was written on the device (t or at); the newer one wins. PDFs and videos stay on each device. */
+var SB_STORES = { books: 1, aids: 1, ink: 1, notes: 1 };
+var SBQ_KEY = 'kitabi-sync-q', SBS_KEY = 'kitabi-sync-st';
+var SBQ = loadJSON(SBQ_KEY), SBS = loadJSON(SBS_KEY); // pending keys "store\u0001key"; snapshot of state pieces {key: [hash, t]}
+var APPLYING = false, SB_TIMER = null, SB_BUSY = null, SB_ERR = '';
+function sbOn() { return !!(P.sb && P.sb.url && P.sb.key && P.sb.rt); }
+function sbSaveQ() { try { localStorage.setItem(SBQ_KEY, JSON.stringify(SBQ)); } catch (e) {} }
+function sbSaveS() { try { localStorage.setItem(SBS_KEY, JSON.stringify(SBS)); } catch (e) {} }
+function syncMark(st, k) {
+  if (APPLYING || k == null || !SB_STORES[st] || !sbOn()) return;
+  SBQ[st + '\u0001' + k] = 1; sbSaveQ(); sbSoon();
+}
+function sbSoon(ms) { if (!sbOn()) return; clearTimeout(SB_TIMER); SB_TIMER = setTimeout(function () { sbSync(); }, ms || 4000); }
+function hashOf(x) { var s = JSON.stringify(x) || '', a = 2166136261; for (var i = 0; i < s.length; i++) { a ^= s.charCodeAt(i); a = Math.imul(a, 16777619); } return (a >>> 0).toString(36) + s.length; }
+function statePieces() { // the state, cut into pieces that change separately
+  var o = {};
+  Object.keys(S.taught).forEach(function (k) { o['taught:' + k] = S.taught[k]; });
+  Object.keys(S.notes).forEach(function (k) { o['note:' + k] = S.notes[k]; });
+  Object.keys(S.plan).forEach(function (k) { o['plan:' + k] = S.plan[k]; });
+  o['pref:classes'] = P.classes; if (P.region) o['pref:region'] = P.region;
+  return o;
+}
+function syncStateMark() {
+  if (APPLYING || !sbOn()) return;
+  var o = statePieces(), now = Date.now(), any = false;
+  Object.keys(o).forEach(function (k) { var h = hashOf(o[k]); if (!SBS[k] || SBS[k][0] !== h) { SBS[k] = [h, now]; SBQ['st\u0001' + k] = 1; any = true; } });
+  Object.keys(SBS).forEach(function (k) { if (!(k in o) && SBS[k][0] !== 'x') { SBS[k] = ['x', now]; SBQ['st\u0001' + k] = 1; any = true; } });
+  if (any) { sbSaveS(); sbSaveQ(); sbSoon(); }
+}
+function setPiece(k, v) { // a piece that came from the other device
+  var i = k.indexOf(':'), kind = k.slice(0, i), key = k.slice(i + 1);
+  if (kind === 'taught') { if (v == null) delete S.taught[key]; else S.taught[key] = v; }
+  else if (kind === 'note') { if (v == null) delete S.notes[key]; else S.notes[key] = String(v); }
+  else if (kind === 'plan') { if (v == null) delete S.plan[key]; else S.plan[key] = v; }
+  else if (k === 'pref:classes') { P.classes = Array.isArray(v) ? v.map(String).slice(0, 20) : []; }
+  else if (k === 'pref:region') { P.region = v === 'west' ? 'west' : 'std'; }
+}
+
+/* the Supabase REST endpoints, called directly */
+function sbErr(code, msg) { var e = new Error(msg || String(code)); e.code = code; return e; }
+function sbAuth(path, body) {
+  var u = P.sb.url.replace(/\/+$/, '');
+  return fetch(u + '/auth/v1/' + path, { method: 'POST', headers: { 'content-type': 'application/json', apikey: P.sb.key, Authorization: 'Bearer ' + P.sb.key }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json()['catch'](function () { return {}; }).then(function (j) { if (!r.ok) throw sbErr(r.status, j.msg || j.error_description || j.message || j.error || ''); return j; }); }, function () { throw sbErr('net'); });
+}
+function sbKeep(j) { P.sb.at = j.access_token; P.sb.rt = j.refresh_token; P.sb.exp = Date.now() + (j.expires_in || 3600) * 1000; if (j.user) { P.sb.uid = j.user.id; P.sb.email = j.user.email; } savePref(); }
+function sbToken() {
+  if (P.sb.at && P.sb.exp - Date.now() > 90000) return Promise.resolve(P.sb.at);
+  return sbAuth('token?grant_type=refresh_token', { refresh_token: P.sb.rt }).then(function (j) { sbKeep(j); return P.sb.at; }, function (e) {
+    if (e.code === 400 || e.code === 401) { P.sb.rt = ''; P.sb.at = ''; savePref(); SB_ERR = 'انتهت جلسة الدخول؛ سجّل الدخول مرة أخرى من الإعدادات.'; }
+    throw e;
+  });
+}
+function sbRest(method, query, body, prefer) {
+  return sbToken().then(function (tok) {
+    var h = { apikey: P.sb.key, Authorization: 'Bearer ' + tok };
+    if (body) h['content-type'] = 'application/json'; if (prefer) h.Prefer = prefer;
+    return fetch(P.sb.url.replace(/\/+$/, '') + '/rest/v1/kitabi_kv' + query, { method: method, headers: h, body: body ? JSON.stringify(body) : undefined })
+      .then(function (r) { if (!r.ok) return r.text().then(function (t) { var m = ''; try { m = JSON.parse(t).message; } catch (e) { m = t.slice(0, 160); } throw sbErr(r.status, m); }); return method === 'GET' ? r.json() : null; }, function () { throw sbErr('net'); });
+  });
+}
+function sbMsg(e) {
+  var c = e && e.code, m = (e && e.message) || '';
+  if (c === 'net') return 'لا اتصال بالإنترنت أو تعذّر الوصول إلى Supabase. تأكد من رابط المشروع، وأن المشروع ليس متوقفًا.';
+  if (c === 400 && /invalid login|credentials/i.test(m)) return 'الإيميل أو كلمة المرور غير صحيحة.';
+  if (c === 400 && /confirm/i.test(m)) return 'الحساب لم يُفعَّل بعد: افتح رسالة التفعيل في بريدك، أو أنشئ المستخدم من لوحة Supabase مع «Auto Confirm User».';
+  if (c === 401 || c === 403) return 'رُفض الطلب: تأكد من المفتاح العام (anon/publishable) ومن تشغيل كود SQL.';
+  if (c === 404 || /kitabi_kv/.test(m)) return 'الجدول kitabi_kv غير موجود: شغّل كود SQL في مشروعك (الإعدادات ← المزامنة ← طريقة الإعداد).';
+  if (c === 422 && /already/i.test(m)) return 'هذا الإيميل مسجّل من قبل؛ استعمل «دخول».';
+  return m || String(c);
+}
+
+/* local records */
+function recT(st, r) { return r ? (st === 'aids' ? +r.at || 0 : +r.t || +r.at || 0) : 0; }
+function cleanOut(st, r) { // what leaves the device
+  if (st === 'books') { var b = {}; ['id', 'title', 'lessons', 'offset', 'pages', 'term', 'added', 'file', 'size', 't'].forEach(function (k) { if (r[k] != null) b[k] = r[k]; }); return b; }
+  return r;
+}
+function localGet(st, k) { if (st === 'st') return Promise.resolve(null); return dbGet(st, k)['catch'](function () { return null; }); }
+
+/* applying what came from the other device */
+function applyRow(row, ctx) {
+  var st = row.store, k = row.k, v = row.v, del = row.deleted, rt = v ? +(v.t || v.at || 0) : 0;
+  if (st === 'st') {
+    var snap = SBS[k];
+    if (!ctx.first && snap && snap[1] >= rt) return Promise.resolve(false); // on the first sync of a device, what is in the project wins
+    if (ctx.first && !del && /^taught:/.test(k)) { var cur = S.taught[k.slice(7)] || {}, merged = Object.assign({}, v.d || {}, cur); setPiece(k, merged); }
+    else if (ctx.first && snap == null && k.indexOf('pref:') === 0 && !del && k === 'pref:classes' && P.classes.length) { /* keep this device's classes on the very first sync */ }
+    else setPiece(k, del ? null : v.d);
+    var o = statePieces(); SBS[k] = [k in o ? hashOf(o[k]) : 'x', rt]; ctx.state = true; return Promise.resolve(true);
+  }
+  if (!SB_STORES[st]) return Promise.resolve(false);
+  return localGet(st, k).then(function (loc) {
+    if (st === 'books' && !loc && !del && ctx.first) { // the same book, added on this device from another copy of the file
+      var same = BOOKS.filter(function (x) { return !x.synced && x.id !== k && +x.pages === +v.pages && (norm(x.title) === norm(v.title) || !x.lessons.length) && !ctx.remoteBooks[x.id]; });
+      if (same.length === 1) return rekeyBook(same[0].id, k).then(function () { return applyRow(row, ctx); });
+    }
+    var lt = recT(st, loc);
+    var fill = st === 'books' && loc && !del && !(loc.lessons || []).length && (v.lessons || []).length; // a book still without lessons takes the other device's
+    if (loc && lt >= rt && !fill && !(del && rt > lt)) return false;
+    APPLYING = true;
+    try {
+      if (del) {
+        if (!loc) return false;
+        dbDel(st, k);
+        if (st === 'aids') delete AIDS[k]; else if (st === 'notes') delete XC[k]; else if (st === 'books') BOOKS = BOOKS.filter(function (x) { return x.id !== k; });
+      } else if (st === 'books') {
+        var b = bookById(k);
+        if (!b) { b = { id: k, lessons: [] }; BOOKS.push(b); b.missing = !ctx.files[k]; }
+        ['title', 'lessons', 'offset', 'pages', 'term', 'added', 'file', 'size', 't'].forEach(function (f) { if (v[f] != null) b[f] = v[f]; });
+        b.synced = true; dbPut('books', b);
+      } else if (st === 'aids') {
+        var d; try { d = cleanAid(v.d); } catch (e) { return false; }
+        var rec = { k: k, src: v.src === 'ai' ? 'ai' : 'pack', at: rt, model: str(v.model), d: d }; AIDS[k] = rec; dbPut('aids', rec);
+      } else if (st === 'ink') { if (Array.isArray(v.s)) dbPut('ink', { k: k, s: v.s, t: rt }); }
+      else if (st === 'notes') { var c = Object.assign({}, v, { k: k }); XC[k] = c; dbPut('notes', c); }
+    } finally { APPLYING = false; }
+    ctx.changed = true; return true;
+  });
+}
+function rekeyBook(oldId, nu) { // move everything of a book to the id the other device uses
+  APPLYING = true;
+  function moveStore(st, match, mapKey, fix) {
+    return dbAll(st).then(function (all) {
+      var jobs = [];
+      (all || []).forEach(function (r) { var key = r.k != null ? r.k : r.id; if (!match(key)) return; var n = JSON.parse(JSON.stringify(r)); var nk = mapKey(key); if (r.k != null) n.k = nk; else n.id = nk; if (fix) fix(n); jobs.push(tx(st, 'readwrite', function (s) { s.put(n); s['delete'](key); })); });
+      return Promise.all(jobs);
+    });
+  }
+  var pre = oldId + ':', pk = function (key) { return key.indexOf(pre) === 0; }, mk = function (key) { return nu + key.slice(oldId.length); };
+  var npk = function (key) { return /^[bxp]:/.test(key) && key.indexOf(pre, 2) === 2; }, nmk = function (key) { return key.slice(0, 2) + nu + key.slice(2 + oldId.length); };
+  return Promise.all([
+    dbGet('books', oldId).then(function (b) { if (!b) return; b.id = nu; return tx('books', 'readwrite', function (s) { s.put(b); s['delete'](oldId); }); }),
+    dbGet('files', oldId).then(function (f) { if (!f) return; f.id = nu; return tx('files', 'readwrite', function (s) { s.put(f); s['delete'](oldId); }); }),
+    moveStore('aids', pk, mk), moveStore('ink', pk, mk),
+    moveStore('notes', npk, nmk, function (n) { if (Array.isArray(n.imgs)) n.imgs.forEach(function (m) { if (m.mk) m.mk = 'm:' + nmk(String(m.mk).slice(2)); }); }),
+    moveStore('media', function (key) { return key.indexOf('m:' + pre) === 0; }, function (key) { return 'm:' + nu + key.slice(2 + oldId.length); })
+  ]).then(function () {
+    var b = bookById(oldId); if (b) { b.id = nu; b.synced = true; }
+    Object.keys(AIDS).forEach(function (key) { if (pk(key)) { var a = AIDS[key]; delete AIDS[key]; a.k = mk(key); AIDS[a.k] = a; } });
+    Object.keys(XC).forEach(function (key) { if (npk(key)) { var x = XC[key]; delete XC[key]; x.k = nmk(key); XC[x.k] = x; } });
+    ['taught', 'notes', 'ans'].forEach(function (f) { Object.keys(S[f]).forEach(function (key) { if (pk(key)) { S[f][mk(key)] = S[f][key]; delete S[f][key]; } }); });
+    ['plan', 'last'].forEach(function (f) { if (S[f][oldId] != null) { S[f][nu] = S[f][oldId]; delete S[f][oldId]; } });
+    if (S.cur === oldId) S.cur = nu; delete DOCS[oldId];
+    Object.keys(SBQ).forEach(function (q) { if (q.indexOf(oldId) >= 0) delete SBQ[q]; });
+    APPLYING = false; saveState(true);
+  }, function (e) { APPLYING = false; throw e; });
+}
+
+/* one round: pull what changed, then push what changed here */
+function sbSync(manual) {
+  if (!sbOn()) return Promise.resolve();
+  if (SB_BUSY) return SB_BUSY;
+  if (navigator.onLine === false) { SB_ERR = 'لا اتصال بالإنترنت؛ ستُرفع التغييرات حين يعود.'; return Promise.resolve(); }
+  var first = !P.sb.cursor, ctx = { first: first, changed: false, state: false, remoteBooks: {}, remoteT: {}, files: {} }, pulled = 0, pushed = 0;
+  SB_BUSY = tx('files', 'readonly', function (s) { return s.getAllKeys(); }).then(function (fk) {
+    (fk || []).forEach(function (k) { ctx.files[k] = 1; });
+    var cursor = P.sb.cursor || '1970-01-01T00:00:00Z', maxSeen = cursor;
+    function page() {
+      return sbRest('GET', '?select=store,k,v,deleted,updated_at&updated_at=gt.' + encodeURIComponent(cursor) + '&order=updated_at.asc&limit=300').then(function (rows) {
+        rows.forEach(function (r) { ctx.remoteT[r.store + '\u0001' + r.k] = r.v ? +(r.v.t || r.v.at || 0) : 0; if (r.store === 'books') ctx.remoteBooks[r.k] = 1; });
+        rows.sort(function (a, b) { return (a.store === 'books' ? 0 : 1) - (b.store === 'books' ? 0 : 1); }); // books first: their ids decide where the rest goes
+        return rows.reduce(function (p, r) { return p.then(function () { return applyRow(r, ctx); }).then(function (x) { if (x) pulled++; }); }, Promise.resolve()).then(function () {
+          rows.forEach(function (r) { if (r.updated_at > maxSeen) maxSeen = r.updated_at; });
+          if (rows.length === 300) { cursor = maxSeen; return page(); }
+        });
+      });
+    }
+    return page().then(function () {
+      if (ctx.state) { APPLYING = true; saveState(true); savePref(); APPLYING = false; }
+      if (!first) return;
+      // first sync on this device: everything here that the project lacks or holds older
+      return Promise.all(Object.keys(SB_STORES).map(function (st) { return dbAll(st).then(function (all) { (all || []).forEach(function (r) { var key = r.k != null ? r.k : r.id; if (recT(st, r) > (ctx.remoteT[st + '\u0001' + key] || -1)) SBQ[st + '\u0001' + key] = 1; }); }); })).then(function () {
+        var o = statePieces(), now = Date.now(); Object.keys(o).forEach(function (k) { if (ctx.remoteT['st\u0001' + k] == null) { SBS[k] = [hashOf(o[k]), now]; SBQ['st\u0001' + k] = 1; } }); sbSaveS(); sbSaveQ();
+      });
+    }).then(function () { P.sb.cursor = maxSeen; savePref(); return sbPush(); });
+  }).then(function (n) {
+    pushed = n || 0; SB_ERR = ''; P.sb.last = Date.now(); savePref();
+    if (ctx.changed || ctx.state) sbRefresh();
+    if (manual) toast(pulled || pushed ? 'زُومن: وصل ' + pulled + ' ورُفع ' + pushed : 'كل شيء متزامن');
+    return { pulled: pulled, pushed: pushed };
+  }, function (e) {
+    SB_ERR = sbMsg(e); if (manual) toast(SB_ERR, 5000);
+  }).then(function (x) { SB_BUSY = null; refreshSyncInfo(); return x; });
+  return SB_BUSY;
+}
+function sbPush() {
+  var keys = Object.keys(SBQ); if (!keys.length) return Promise.resolve(0);
+  var o = statePieces();
+  return Promise.all(keys.map(function (q) {
+    var i = q.indexOf('\u0001'), st = q.slice(0, i), k = q.slice(i + 1);
+    if (st === 'st') { var del = !(k in o); return { store: 'st', k: k, v: { d: del ? null : o[k], t: (SBS[k] || [0, Date.now()])[1] }, deleted: del }; }
+    return localGet(st, k).then(function (r) { return r ? { store: st, k: String(k), v: cleanOut(st, r), deleted: false } : { store: st, k: String(k), v: { t: Date.now() }, deleted: true }; });
+  })).then(function (rows) {
+    var batches = [], cur = [], size = 0;
+    rows.forEach(function (r) { var n = JSON.stringify(r).length; if (cur.length && size + n > 800000) { batches.push(cur); cur = []; size = 0; } cur.push(r); size += n; });
+    if (cur.length) batches.push(cur);
+    return batches.reduce(function (p, b) {
+      return p.then(function () { return sbRest('POST', '?on_conflict=user_id,store,k', b, 'resolution=merge-duplicates,return=minimal'); })
+        .then(function () { b.forEach(function (r) { delete SBQ[r.store + '\u0001' + r.k]; }); sbSaveQ(); });
+    }, Promise.resolve()).then(function () { BOOKS.forEach(function (b) { b.synced = true; }); return rows.length; });
+  });
+}
+function sbRefresh() { // show what arrived, unless the teacher is in the middle of something
+  var busy = route.v === 'read' || !document.getElementById('modal').hidden || !document.getElementById('pv').hidden || XA_LIVE || NB_LIVE.some(function (B) { return B.cur; }) || (document.activeElement && /input|textarea|select/i.test(document.activeElement.tagName));
+  if (busy) { SB_LATER = true; return; }
+  SB_LATER = false; render(true);
+}
+var SB_LATER = false;
+AFTER.push(function () { if (SB_LATER && route.v !== 'read') { SB_LATER = false; setTimeout(function () { render(true); }, 0); } });
+document.addEventListener('visibilitychange', function () { if (!document.hidden) sbSoon(500); else if (Object.keys(SBQ).length) sbSync(); });
+window.addEventListener('online', function () { sbSoon(500); });
+setInterval(function () { if (!document.hidden) sbSync(); }, 90000);
+
+/* settings */
+var SB_SQL = [
+  'create table if not exists public.kitabi_kv (',
+  '  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,',
+  '  store text not null,',
+  '  k text not null,',
+  '  v jsonb,',
+  '  deleted boolean not null default false,',
+  '  updated_at timestamptz not null default clock_timestamp(),',
+  '  primary key (user_id, store, k)',
+  ');',
+  'create index if not exists kitabi_kv_sync on public.kitabi_kv (user_id, updated_at);',
+  'alter table public.kitabi_kv enable row level security;',
+  'drop policy if exists "kitabi own rows" on public.kitabi_kv;',
+  'create policy "kitabi own rows" on public.kitabi_kv for all to authenticated',
+  '  using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);',
+  'create or replace function public.kitabi_touch() returns trigger language plpgsql set search_path = \'\' as $$',
+  'begin new.updated_at := clock_timestamp(); return new; end $$;',
+  'drop trigger if exists kitabi_touch on public.kitabi_kv;',
+  'create trigger kitabi_touch before insert or update on public.kitabi_kv for each row execute function public.kitabi_touch();',
+  'grant select, insert, update, delete on public.kitabi_kv to authenticated;'
+].join('\n');
+function syncSec() {
+  var sb = P.sb || {}, on = sbOn();
+  if (on) return '<section class="set-sec" id="sync-sec"><h3>المزامنة بين أجهزتك (Supabase)</h3><p class="small">متصل بحساب <b dir="ltr">' + esc(sb.email || '') + '</b></p><p class="small muted" id="sync-info">' + syncInfo() + '</p>' +
+    '<div class="actions" style="margin-top:0"><button class="btn" data-act="sb-now">زامن الآن</button><button class="btn ghost sm" data-act="sb-out">خروج</button></div>' +
+    '<p class="small muted">يتزامن: الدروس ومساعدها، والكتابة على الصفحات والشرح، والسبورات والصور، والملاحظات، و«شُرح في»، والتقويم، وفصولك. ويبقى على كل جهاز: ملف الكتاب ومقاطع الفيديو. أضف الكتاب مرة على كل جهاز.</p></section>';
+  return '<section class="set-sec" id="sync-sec"><h3>المزامنة بين أجهزتك (Supabase)</h3><p class="small muted">اربط التطبيق بمشروعك في Supabase فيظهر ما تجهّزه وتكتبه على الآيفون في الآيباد تلقائيًا. الرابط والمفتاح وبيانات الدخول تبقى على هذا الجهاز. <button class="link" data-act="sb-how">طريقة الإعداد</button></p>' +
+    '<label class="field"><span>رابط المشروع (Project URL)</span><input type="url" id="sb-url" dir="ltr" autocapitalize="off" spellcheck="false" placeholder="https://xxxx.supabase.co" value="' + esc(sb.url || '') + '"></label>' +
+    '<label class="field"><span>المفتاح العام (anon أو publishable)</span><input type="text" id="sb-key" dir="ltr" autocapitalize="off" spellcheck="false" placeholder="eyJ… أو sb_publishable_…" value="' + esc(sb.key || '') + '"></label>' +
+    '<label class="field"><span>الإيميل</span><input type="email" id="sb-email" dir="ltr" autocapitalize="off" value="' + esc(sb.email || '') + '"></label>' +
+    '<label class="field"><span>كلمة المرور</span><input type="password" id="sb-pass" dir="ltr" autocomplete="current-password"></label>' +
+    '<div class="actions" style="margin-top:0"><button class="btn" data-act="sb-in">دخول</button><button class="btn ghost sm" data-act="sb-up">إنشاء حساب</button></div><p class="small muted" id="sync-info">' + esc(SB_ERR) + '</p></section>';
+}
+function syncInfo() {
+  var sb = P.sb || {}, q = Object.keys(SBQ).length;
+  if (SB_ERR) return esc(SB_ERR);
+  if (SB_BUSY) return 'تجري المزامنة…';
+  return (sb.last ? 'آخر مزامنة: ' + new Date(sb.last).toLocaleTimeString('ar-SA-u-nu-latn', { hour: 'numeric', minute: '2-digit' }) + ' ' + relDay(sb.last) : 'لم تتم مزامنة بعد') + (q ? ' · بانتظار الرفع: ' + q : '');
+}
+function refreshSyncInfo() { var el = document.getElementById('sync-info'); if (el && sbOn()) el.innerHTML = syncInfo(); }
+function sbForm() {
+  var url = (document.getElementById('sb-url').value || '').trim().replace(/\/+$/, ''), key = (document.getElementById('sb-key').value || '').trim(), em = (document.getElementById('sb-email').value || '').trim(), pw = document.getElementById('sb-pass').value || '';
+  if (!/^(https:\/\/[^\s/]+|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/.test(url)) { toast('اكتب رابط المشروع كما في Supabase: https://….supabase.co'); return null; }
+  if (key.length < 20) { toast('الصق المفتاح العام كاملًا'); return null; }
+  if (!/@/.test(em) || pw.length < 6) { toast('اكتب الإيميل وكلمة مرور من 6 أحرف فأكثر'); return null; }
+  P.sb = { url: url, key: key, email: em }; savePref(); return { email: em, password: pw };
+}
+function sbAfterIn(j) {
+  sbKeep(j); P.sb.cursor = ''; SBS = {}; sbSaveS(); SBQ = {}; sbSaveQ(); SB_ERR = '';
+  toast('تم الدخول؛ تجري أول مزامنة…', 3000); refreshSettings();
+  sbSync(true).then(function () { refreshSettings(); });
+}
+ACT['sb-in'] = function () { var f = sbForm(); if (!f) return; var o = document.getElementById('sync-info'); if (o) o.textContent = 'جارٍ الدخول…'; sbAuth('token?grant_type=password', f).then(sbAfterIn, function (e) { SB_ERR = sbMsg(e); if (o) o.textContent = SB_ERR; }); };
+ACT['sb-up'] = function () {
+  var f = sbForm(); if (!f) return; var o = document.getElementById('sync-info'); if (o) o.textContent = 'جارٍ إنشاء الحساب…';
+  sbAuth('signup', f).then(function (j) { if (j.access_token) sbAfterIn(j); else if (o) o.textContent = 'أُنشئ الحساب. افتح رسالة التفعيل في بريدك، ثم اضغط «دخول». (أو أوقف «Confirm email» في Supabase.)'; }, function (e) { SB_ERR = sbMsg(e); if (o) o.textContent = SB_ERR; });
+};
+ACT['sb-now'] = function () { SB_ERR = ''; refreshSyncInfo(); sbSync(true); };
+ACT['sb-out'] = function () { confirmBox('الخروج من المزامنة؟', 'تبقى كل بياناتك على هذا الجهاز، وتتوقف المزامنة حتى تدخل مرة أخرى.', 'sb-out-yes', 'اخرج', ''); };
+ACT['sb-out-yes'] = function () { var sb = P.sb || {}; if (sb.at) fetch(sb.url + '/auth/v1/logout', { method: 'POST', headers: { apikey: sb.key, Authorization: 'Bearer ' + sb.at } })['catch'](function () {}); P.sb = { url: sb.url, key: sb.key, email: sb.email }; savePref(); SBQ = {}; sbSaveQ(); closeModal(); ACT.settings(); };
+ACT['sb-how'] = function () {
+  openModal(sheet('إعداد Supabase للمزامنة', '<ol class="steps small">' +
+    '<li>ادخل <a href="https://supabase.com/dashboard" target="_blank" rel="noopener">supabase.com/dashboard</a> وأنشئ مشروعًا جديدًا (Free). اختر منطقة قريبة واحفظ كلمة مرور قاعدة البيانات.</li>' +
+    '<li>من <b>SQL Editor</b> ← New query: الصق الكود أدناه واضغط <b>Run</b>. ينشئ جدولًا واحدًا لا يقرأ صفوفه إلا صاحبها.</li>' +
+    '<li>من <b>Authentication ← Users ← Add user ← Create new user</b>: اكتب إيميلك وكلمة مرور، وفعّل <b>Auto Confirm User</b>.</li>' +
+    '<li>من <b>Authentication ← Sign In / Providers</b>: أطفئ <b>Allow new users to sign up</b>، حتى لا ينشئ غيرك حسابات في مشروعك.</li>' +
+    '<li>من <b>Project Settings ← API</b> (أو زر Connect): انسخ <b>Project URL</b> و<b>المفتاح العام</b> (anon أو publishable)، لا المفتاح السري service_role أو secret.</li>' +
+    '<li>في هذا التطبيق على كل جهاز: الإعدادات ← المزامنة: الصق الرابط والمفتاح، واكتب الإيميل وكلمة المرور، ثم «دخول». ابدأ بالجهاز الذي فيه عملك.</li></ol>' +
+    '<p class="small muted">المشروع المجاني يتوقف إذا لم يُستعمل أسبوعًا؛ أعِد تشغيله من لوحة Supabase بزر Restore، والتطبيق يعمل على الجهاز في أثناء ذلك.</p>' +
+    '<div class="actions"><button class="btn" data-act="sb-sql">انسخ كود SQL</button></div><pre class="sql" dir="ltr">' + esc(SB_SQL) + '</pre>'), true);
+};
+ACT['sb-sql'] = function () { copyText(SB_SQL); };
+
 /* ---------- settings ---------- */
 function segBtns(act, cur, items) { return '<div class="seg" role="group">' + items.map(function (x) { return '<button type="button" data-act="' + act + '" data-v="' + x[0] + '" aria-pressed="' + (String(cur) === String(x[0])) + '">' + x[1] + '</button>'; }).join('') + '</div>'; }
 function settingsHtml() {
@@ -2144,6 +2435,7 @@ function settingsHtml() {
     '<label class="field"><span>النموذج</span><select id="ai-model">' + MODELS.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === m ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '<option value="custom"' + (known ? '' : ' selected') + '>نموذج آخر…</option></select></label>' +
     (known ? '' : '<label class="field"><span>اسم النموذج</span><input type="text" id="ai-custom" dir="ltr" value="' + esc(m) + '"></label>') +
     '<div class="actions" style="margin-top:0"><button class="btn ghost sm" data-act="ai-test">جرّب المفتاح</button><span class="small muted" id="ai-test-out"></span></div></section>' +
+    syncSec() +
     '<section class="set-sec"><h3>فصولي</h3><label class="field"><span>أسماء الفصول التي تدرّسها، تفصل بينها بفاصلة</span><input type="text" id="classes" placeholder="1/1، 1/2، 2/1" value="' + esc(P.classes.join('، ')) + '"></label><p class="small muted">تعلّم في كل درس الفصول التي شرحته لها، وترى تقدم كل فصل في الرئيسية.</p></section>' +
     '<section class="set-sec"><h3>التقويم الدراسي</h3>' + segBtns('pref-region', P.region === 'west' ? 'west' : 'std', [['std', 'باقي مناطق المملكة'], ['west', 'مكة والمدينة وجدة والطائف']]) + '</section>' +
     '<section class="set-sec"><h3>النسخ الاحتياطي</h3><p class="small muted">' + (S.backupAt ? 'آخر نسخة: ' + relDay(S.backupAt) + '. ' : '') + 'يحفظ الدروس ومساعدها وكتابتك على الصفحات وسبوراتك وملاحظاتك وتقدم فصولك في ملف واحد، دون ملفات الكتب نفسها (تضيفها مرة أخرى فتعود إليها كتابتها)، ودون مقاطع الفيديو التي أضفتها من جهازك لكبر حجمها؛ روابط يوتيوب تدخل فيها.</p>' +
@@ -2175,7 +2467,7 @@ document.addEventListener('change', function (e) {
 /* ---------- backup ---------- */
 ACT['backup-save'] = function () {
   Promise.all([dbAll('aids'), dbAll('ink'), dbAll('notes')]).then(function (r) {
-    var pref = JSON.parse(JSON.stringify(P)); if (pref.ai) delete pref.ai.key;
+    var pref = JSON.parse(JSON.stringify(P)); if (pref.ai) delete pref.ai.key; delete pref.sb;
     var o = { kitabiBackup: 1, ver: VERSION, at: Date.now(), books: BOOKS, aids: r[0], ink: r[1], notes: r[2], state: S, pref: pref };
     return saveFile('كتابي-نسخة-' + isoOf(today()) + '.json', JSON.stringify(o));
   }).then(function (how) { if (how === 'cancel') return; S.backupAt = Date.now(); saveState(true); render(true); refreshSettings(); toast(how === 'shared' ? 'حُفظت النسخة الاحتياطية' : 'نُزّل ملف النسخة الاحتياطية'); }, function () { toast('تعذّر حفظ الملف'); });
@@ -2275,7 +2567,7 @@ function restore(o) {
 ACT.reset = function () { confirmBox('حذف كل بيانات التطبيق؟', 'تُحذف من هذا الجهاز الكتب والدروس ومساعدها وكتابتك وتقدم فصولك والإعدادات. لا يمكن التراجع؛ احفظ نسخة احتياطية أولًا.', 'reset-yes', 'احذف الكل', '', true); };
 ACT['reset-yes'] = function () {
   closeDocs(); if (DB) { DB.close(); DB = null; }
-  try { localStorage.removeItem(STATE_KEY); localStorage.removeItem(PREF_KEY); } catch (e) {}
+  try { [STATE_KEY, PREF_KEY, SBQ_KEY, SBS_KEY].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
   var r = indexedDB.deleteDatabase(DBN); r.onsuccess = r.onerror = r.onblocked = function () { location.reload(); };
 };
 ACT['app-update'] = function () {
@@ -2329,6 +2621,7 @@ Promise.all([idb().then(function () { return Promise.all([dbAll('books'), dbAll(
   try { rs = JSON.parse(sessionStorage.getItem('kitabi-resume') || 'null'); sessionStorage.removeItem('kitabi-resume'); } catch (e) {}
   if (rs && Date.now() - rs.t < 120000 && rs.r && VIEWS[rs.r.v]) { route = rs.r; route.present = false; render(); window.scrollTo(0, rs.y || 0); toast('حُدّث التطبيق'); }
   else { var hm = /^lesson=(.+)$/.exec(h), hk = hm ? decodeURIComponent(hm[1]) : ''; if (hk && lessonByKey(hk)) { route = { v: 'lesson', k: hk, tab: 'goals' }; S.cur = lessonByKey(hk).b.id; } else if (VIEWS[h] && h !== 'lesson') route = { v: h }; render(); }
+  if (sbOn()) setTimeout(function () { sbSync(); }, 1500);
   var obs = new MutationObserver(function () { document.getElementById('tabs').hidden = !BOOKS.length; }); obs.observe(document.getElementById('main'), { childList: true });
 })['catch'](function (e) {
   document.getElementById('main').innerHTML = '<section class="panel welcome"><h1>تعذّر فتح التخزين</h1><p class="muted">' + esc((e && (e.message || e.name)) || String(e)) + '</p><p>إن كنت في وضع التصفح الخاص فافتح التطبيق في نافذة عادية أو من أيقونته على الشاشة الرئيسية.</p></section>';
