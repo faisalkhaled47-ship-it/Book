@@ -1299,7 +1299,7 @@ L_TAB.figs = function (a, b, l) {
   var k = lk(b, l), extra = figsOf(b, l), ai = !!P.ai.key, ref = FIG_REF && FIG_REF.k === k ? FIG_REF : null;
   var h = a.figs.length ? FIGS_BASE(a, b, l) : '<p class="muted small">لا رسوم في مساعد هذا الدرس بعد.</p>';
   if (extra.length) h += '<h3 class="sec-h">رسومي الإضافية</h3><div class="figs">' + extra.map(function (f) {
-    return '<div class="fig-x">' + figure({ svg: f.svg, cap: f.cap }, true) + '<div class="fig-xa"><span class="small muted">' + (f.from === 'image' ? 'محاكاة صورة' : f.from === 'page' ? 'من صفحة ' + esc(f.page || '') : 'من وصفك') + ' · ' + relDay(f.at) + '</span><button class="link small danger" data-act="fig-del" data-k="' + esc(k) + '" data-id="' + f.id + '">احذف</button></div></div>';
+    return '<div class="fig-x">' + (f.img ? figure({ img: f.img, cap: f.cap }) : figure({ svg: f.svg, cap: f.cap }, true)) + (f.img && f.credit ? '<p class="fig-cr small muted">' + esc(f.credit) + '</p>' : '') + '<div class="fig-xa"><span class="small muted">' + (f.from === 'photo' ? 'صورة حرة' : f.from === 'image' ? 'محاكاة صورة' : f.from === 'page' ? 'من صفحة ' + esc(f.page || '') : 'من وصفك') + ' · ' + relDay(f.at) + '</span><button class="link small danger" data-act="fig-del" data-k="' + esc(k) + '" data-id="' + f.id + '">احذف</button></div></div>';
   }).join('') + '</div>';
   h += '<details class="panel gen ai-fold" data-fold="fig"' + (foldOpen('fig', !!ref) ? ' open' : '') + ' style="margin-top:16px"><summary class="hh">' + ico('spark', 'violet') + 'ارسم مع Claude<span class="small muted">رسوم إضافية أو محاكاة صورة</span></summary>' +
     (ai ? '<p class="small muted">صف الرسم الذي تريده، أو أعطه صورة أو صفحة من الكتاب ليحاكيها برسم توضيحي نظيف بتسميات عربية.</p>' +
@@ -1309,7 +1309,7 @@ L_TAB.figs = function (a, b, l) {
       '<div class="actions"><label class="fig-n"><span class="small">عدد الرسوم</span><select id="fig-n"><option>1</option><option selected>2</option><option>3</option></select></label><button class="btn" data-act="fig-gen" data-k="' + esc(k) + '">' + svgI('spark') + 'ارسم</button></div>' +
       '<p class="small muted">التكلفة نحو 3 إلى 8 سنتات للرسم مع Sonnet. الرسوم توضيحية مبسطة (SVG)، لا صور واقعية.</p>'
       : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
-  return h;
+  return h + photoPanel(b, l);
 };
 ICONS.image = ICONS.image || '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 3.5 3 3-2.5L20 17"/>';
 ACT['fig-ref-img'] = function (el) {
@@ -1404,6 +1404,66 @@ ACT['qg-undo'] = function (el) {
   delete r.qadd; r.at = Date.now(); AIDS[r.k] = r; dbPut('aids', r); render(true); toast('حُذفت الأسئلة التي أضافها Claude آخر مرة');
 };
 
+/* ---------- «الرسوم»: a real picture for the lesson, free to use, from Wikimedia Commons ----------
+   Only files whose licence is public domain / CC0 (or, if the teacher chooses, CC BY / CC BY-SA with the credit kept).
+   The picture is saved into the lesson (f:<bookId>:<lessonId>) as a JPEG, with its source, author and licence. */
+var PHOTO = { k: null, q: '', en: '', lic: 'pd', res: null, busy: false, err: '' };
+function photoPanel(b, l) {
+  var k = lk(b, l), S0 = PHOTO.k === k ? PHOTO : { q: '', en: '', lic: 'pd', res: null };
+  var h = '<details class="panel gen ai-fold" data-fold="photo"' + (foldOpen('photo', !!S0.res) ? ' open' : '') + ' style="margin-top:12px"><summary class="hh">' + ico('image', 'green') + 'صورة حقيقية حرة<span class="small muted">صور وتوضيحات من ويكيميديا كومنز بلا حقوق نشر</span></summary>' +
+    '<label class="field"><span>ابحث عن</span><input type="search" id="ph-q" enterkeyhint="search" value="' + esc(S0.q || l.title.replace(/^الدرس\s*\d+\s*[:：]\s*/, '')) + '" placeholder="مثال: محطة توليد كهرباء، دورة الماء، خلية نباتية تحت المجهر"></label>' +
+    '<div class="qg-opts"><label><span class="small">الترخيص</span><select id="ph-lic"><option value="pd"' + (S0.lic === 'pd' ? ' selected' : '') + '>بلا حقوق (ملكية عامة)</option><option value="by"' + (S0.lic === 'by' ? ' selected' : '') + '>وتشمل المشروط بذكر المصدر</option></select></label>' +
+    '<button class="btn" data-act="ph-search" data-k="' + esc(k) + '">ابحث</button></div>' +
+    (S0.en ? '<p class="small muted">بُحث بالإنجليزية عن: <b dir="ltr">' + esc(S0.en) + '</b></p>' : '');
+  if (PHOTO.k === k && PHOTO.busy) h += '<p class="small muted">جارٍ البحث…</p>';
+  else if (PHOTO.k === k && PHOTO.err) h += '<p class="small bad">' + esc(PHOTO.err) + '</p>';
+  else if (S0.res) h += S0.res.length ? '<div class="ph-res">' + S0.res.map(function (r, i) { return '<div class="ph-r"><img src="' + esc(r.thumb) + '" alt="' + esc(r.title) + '" loading="lazy"><span class="ph-lic">' + esc(r.licName) + '</span><button class="btn sm" data-act="ph-take" data-k="' + esc(k) + '" data-i="' + i + '">أضف</button></div>'; }).join('') + '</div>' : '<p class="small muted">لا نتائج بهذا الترخيص. جرّب كلمات أبسط، أو اختر «وتشمل المشروط بذكر المصدر».</p>';
+  return h + '<p class="small muted">الصور من <a href="https://commons.wikimedia.org" target="_blank" rel="noopener">Wikimedia Commons</a>، ويُحفظ مع كل صورة مصدرها ومؤلفها وترخيصها ويظهر تحتها. تحتاج اتصالًا بالإنترنت للبحث فقط.</p></details>';
+}
+function phStrip(h) { var d = document.createElement('div'); d.innerHTML = String(h || ''); return (d.textContent || '').replace(/\s+/g, ' ').trim(); }
+function phFree(md, lic) { // public domain / CC0, or also CC BY / BY-SA when allowed
+  var a = ((md.License && md.License.value) || '') + ' ' + ((md.LicenseShortName && md.LicenseShortName.value) || '');
+  if (/(^|\s)(pd|cc0|cc-zero|public domain)/i.test(a) || /\bpd-/i.test(a)) return 'pd';
+  if (lic === 'by' && /cc[- ]by(-sa)?[- ]?\d/i.test(a) && !/nc|nd/i.test(a)) return 'by';
+  return '';
+}
+function phTerms(q) { // Arabic words become a short English query (Commons is searched in English); without a key, the words as typed
+  if (!/[؀-ۿ]/.test(q) || !P.ai.key) return Promise.resolve(q);
+  return claude('حوّل طلب صورة تعليمية لدرس علوم إلى كلمات بحث إنجليزية قصيرة (2 إلى 4 كلمات) تناسب البحث في Wikimedia Commons. أعد الكلمات فقط.', [{ type: 'text', text: q }], 40, null)
+    .then(function (r) { return r.text.replace(/["\n]/g, ' ').trim().slice(0, 80) || q; }, function () { return q; });
+}
+ACT['ph-search'] = function (el) {
+  var k = el.getAttribute('data-k'), q = (document.getElementById('ph-q').value || '').trim(), lic = document.getElementById('ph-lic').value;
+  if (!q) { toast('اكتب ما تبحث عنه'); return; }
+  PHOTO = { k: k, q: q, en: '', lic: lic, res: null, busy: true, err: '' }; FOLD.photo = true; render(true);
+  phTerms(q).then(function (en) {
+    PHOTO.en = en !== q ? en : '';
+    var url = 'https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit=40&gsrsearch=' + encodeURIComponent(en + ' filetype:bitmap|drawing') +
+      '&prop=imageinfo&iiprop=url|mime|extmetadata&iiurlwidth=1000&iiextmetadatafilter=LicenseShortName|License|Artist|ObjectName';
+    return fetch(url, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('http'); return r.json(); });
+  }).then(function (j) {
+    var pages = j && j.query && j.query.pages ? Object.keys(j.query.pages).map(function (id) { return j.query.pages[id]; }) : [];
+    pages.sort(function (a, b) { return (a.index || 0) - (b.index || 0); });
+    PHOTO.res = pages.map(function (p) {
+      var ii = p.imageinfo && p.imageinfo[0], md = ii && ii.extmetadata || {}; if (!ii || !ii.thumburl || !/image\/(jpeg|png|svg|gif|webp)/.test(ii.mime || '')) return null;
+      var free = phFree(md, PHOTO.lic); if (!free) return null;
+      return { title: phStrip((md.ObjectName && md.ObjectName.value) || p.title.replace(/^File:|\.\w+$/g, '')), thumb: ii.thumburl, page: ii.descriptionurl, free: free,
+        licName: free === 'pd' ? 'ملكية عامة' : phStrip(md.LicenseShortName && md.LicenseShortName.value), author: phStrip(md.Artist && md.Artist.value).slice(0, 80) };
+    }).filter(Boolean).slice(0, 18);
+  })['catch'](function () { PHOTO.err = 'تعذّر البحث: تأكد من الاتصال بالإنترنت وأعد المحاولة.'; }).then(function () { PHOTO.busy = false; render(true); });
+};
+ACT['ph-take'] = function (el) {
+  var x = lessonByKey(el.getAttribute('data-k')), r = PHOTO.res && PHOTO.res[+el.getAttribute('data-i')]; if (!x || !r) return;
+  el.disabled = true; el.textContent = 'جارٍ الحفظ…';
+  fetch(r.thumb, { mode: 'cors' }).then(function (res) { if (!res.ok) throw new Error('img'); return res.blob(); }).then(function (blob) { return phShrink(new File([blob], 'p.jpg', { type: blob.type || 'image/jpeg' })); })
+  ['catch'](function () { return /^https:\/\/upload\.wikimedia\.org\//.test(r.thumb) ? { src: r.thumb, remote: true } : Promise.reject(new Error('img')); }) // kept as a link if the copy cannot be made here
+  .then(function (im) {
+    var credit = 'المصدر: Wikimedia Commons' + (r.author ? ' · ' + r.author : '') + ' · ' + r.licName;
+    var list = figsOf(x.b, x.l).concat([{ id: 'p' + Date.now().toString(36), img: im.src, cap: r.title, credit: credit, url: r.page, lic: r.licName, from: 'photo', at: Date.now() }]);
+    figsSave(x.b, x.l, list); render(true); toast(im.remote ? 'أُضيفت الصورة (رابطًا: تظهر حين يتوفر الإنترنت)' : 'أُضيفت الصورة تحت «رسومي الإضافية»');
+  })['catch'](function () { el.disabled = false; el.textContent = 'أضف'; toast('تعذّر تنزيل الصورة؛ جرّب صورة أخرى'); });
+};
+
 /* ---------- presenting a lesson to the class: one idea per screen ---------- */
 var PV = null;
 function pvSlides(x, a) {
@@ -1414,6 +1474,7 @@ function pvSlides(x, a) {
   if (d.vocab.length) sl.push({ k: 'vocab', h: '<h2>المفردات</h2><dl class="vocab pv-vocab">' + d.vocab.map(function (v) { return '<div><dt>' + fx(v.t) + '</dt><dd>' + fx(v.d) + '</dd></div>'; }).join('') + '</dl>' });
   d.exp.forEach(function (e) { sl.push({ k: 'exp', h: '<h2>' + fx(e.h) + '</h2>' + (e.fig >= 0 ? figure(d.figs[e.fig]) : '') + '<div class="x-body">' + blocks(e.body) + '</div>' }); });
   d.figs.forEach(function (f, k) { if (!d.exp.some(function (e) { return e.fig === k; })) sl.push({ k: 'fig', h: figure(f) }); });
+  figsOf(x.b, x.l).forEach(function (f) { sl.push({ k: 'fig', h: f.img ? figure({ img: f.img, cap: f.cap }) + (f.credit ? '<p class="fig-cr small muted">' + esc(f.credit) + '</p>' : '') : figure({ svg: f.svg, cap: f.cap }) }); }); // the teacher's own drawings and photos
   d.maps.forEach(function (m, k) { sl.push({ k: 'map', h: mapHtml(m, 'pv:' + k) }); });
   sl.push({ k: 'quiz0', h: '<h1 class="pv-t">اختبر فهمك</h1><p class="pv-idea">' + cnt(d.quiz.mcq.length + d.quiz.tf.length, WORDS.q) + '</p>', quiz: true });
   d.quiz.mcq.forEach(function (q, i) { sl.push({ k: 'mcq', q: q, i: i, quiz: true }); });
