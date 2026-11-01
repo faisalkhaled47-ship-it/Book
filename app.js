@@ -537,29 +537,37 @@ function drawInk(pg, onlyM) {
     if (pg.live) stroke(x, pg.live);
   });
 }
+/* a stroke is drawn as smooth curves through the middles of its points, so handwriting reads as one flowing line, not a chain of straight dashes */
+function inkW(st, p, i) { var n = p.length / 3, a = p[Math.max(0, i - 1) * 3 + 2], b = p[i * 3 + 2], c = p[Math.min(n - 1, i + 1) * 3 + 2]; return (st.w || 3.2) * (0.45 + (a + 2 * b + c) / 360); }
+function inkPiece(ctx, st, i, tail) { // the piece that point i completes (i ≥ 1); tail: the last half-step up to the final point
+  var p = st.p, n = p.length / 3;
+  if (tail) { if (n < 2) return; var j = n - 1; ctx.lineWidth = inkW(st, p, j); ctx.beginPath(); ctx.moveTo((p[j * 3 - 3] + p[j * 3]) / 2, (p[j * 3 - 2] + p[j * 3 + 1]) / 2); ctx.lineTo(p[j * 3], p[j * 3 + 1]); ctx.stroke(); return; }
+  if (i === 1) { ctx.lineWidth = inkW(st, p, 0); ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo((p[0] + p[3]) / 2, (p[1] + p[4]) / 2); ctx.stroke(); return; }
+  var c = i - 1; ctx.lineWidth = inkW(st, p, c); ctx.beginPath();
+  ctx.moveTo((p[c * 3 - 3] + p[c * 3]) / 2, (p[c * 3 - 2] + p[c * 3 + 1]) / 2);
+  ctx.quadraticCurveTo(p[c * 3], p[c * 3 + 1], (p[c * 3] + p[i * 3]) / 2, (p[c * 3 + 1] + p[i * 3 + 1]) / 2); ctx.stroke();
+}
 function stroke(ctx, st) {
   var p = st.p, n = p.length / 3; if (!n) return;
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   if (st.k === 'hl') {
     ctx.save(); ctx.globalAlpha = 0.42; ctx.strokeStyle = HL_C[st.hc || 0]; ctx.lineWidth = st.w || 18; ctx.beginPath(); ctx.moveTo(p[0], p[1]);
-    for (var i = 1; i < n; i++) ctx.lineTo(p[i * 3], p[i * 3 + 1]); if (n === 1) ctx.lineTo(p[0] + 0.1, p[1]);
+    if (n === 1) ctx.lineTo(p[0] + 0.1, p[1]);
+    else { ctx.lineTo((p[0] + p[3]) / 2, (p[1] + p[4]) / 2); for (var i = 1; i < n - 1; i++) ctx.quadraticCurveTo(p[i * 3], p[i * 3 + 1], (p[i * 3] + p[i * 3 + 3]) / 2, (p[i * 3 + 1] + p[i * 3 + 4]) / 2); ctx.lineTo(p[n * 3 - 3], p[n * 3 - 2]); }
     ctx.stroke(); ctx.restore(); return;
   }
   ctx.strokeStyle = ctx.fillStyle = st.c || PEN_C[0];
-  var base = st.w || 3.2;
-  if (n === 1) { ctx.beginPath(); ctx.arc(p[0], p[1], base * (0.45 + p[2] / 90) / 2, 0, 7); ctx.fill(); return; }
-  for (var j = 1; j < n; j++) {
-    ctx.lineWidth = base * (0.45 + (p[j * 3 + 2] + p[j * 3 - 1]) / 180);
-    ctx.beginPath(); ctx.moveTo(p[j * 3 - 3], p[j * 3 - 2]); ctx.lineTo(p[j * 3], p[j * 3 + 1]); ctx.stroke();
-  }
+  if (n === 1) { ctx.beginPath(); ctx.arc(p[0], p[1], inkW(st, p, 0) / 2, 0, 7); ctx.fill(); return; }
+  for (var j = 1; j < n; j++) inkPiece(ctx, st, j);
+  inkPiece(ctx, st, 0, true);
 }
 function hookInk(R, pg) {
-  var cur = null, touch = null;
-  function pt(cx, cy, f) { var r = pg.el.getBoundingClientRect(), k = r.width / INK_W; return [Math.round((cx - r.left) / k * 10) / 10, Math.round((cy - r.top) / k * 10) / 10, Math.max(0, Math.min(99, Math.round((f == null ? 0.5 : f) * 100)))]; }
+  var cur = null, touch = null, rc = null;
+  function pt(cx, cy, f) { var r = rc || pg.el.getBoundingClientRect(), k = r.width / INK_W; return [Math.round((cx - r.left) / k * 10) / 10, Math.round((cy - r.top) / k * 10) / 10, Math.max(0, Math.min(99, Math.round((f == null || !(f > 0) ? 0.5 : Math.min(f, 1)) * 100)))]; }
   function begin(q) {
     var o = rt(); if (o.tool === 'off') return false;
-    inkOf(R, pg.n);
-    cur = o.tool === 'er' ? { er: true, gone: [] } : o.tool === 'hl' ? { k: 'hl', hc: o.hlc, w: 18, p: [] } : { c: PEN_C[o.ink], w: 3.2, p: [] };
+    inkOf(R, pg.n); rc = pg.el.getBoundingClientRect(); R.inking = true; // the page does not move while writing, so where it sits is read once
+    cur = o.tool === 'er' ? { er: true, gone: [] } : o.tool === 'hl' ? { k: 'hl', hc: o.hlc, w: 18, p: [] } : { c: PEN_C[o.ink], w: 3.2, p: [], dn: 0 };
     if (!cur.er) pg.live = cur;
     move(q); return true;
   }
@@ -571,24 +579,28 @@ function hookInk(R, pg) {
       if (hit) rafInk(pg); return;
     }
     var a = cur.p, n = a.length;
-    if (n && Math.abs(a[n - 3] - q[0]) + Math.abs(a[n - 2] - q[1]) < 1.2) return;
+    if (n && Math.abs(a[n - 3] - q[0]) + Math.abs(a[n - 2] - q[1]) < 0.8) return;
     if (cur.k === 'hl' && n >= 3) q[1] = a[1] + (q[1] - a[1]) * 0.25; // a highlighter keeps to its line
     a.push(q[0], q[1], q[2]);
-    if (cur.k === 'hl') rafInk(pg); else seg(cur, a.length / 3 - 1);
+    if (cur.k === 'hl') rafInk(pg); else if (!cur.raf) { var st = cur; st.raf = requestAnimationFrame(function () { st.raf = 0; flush(st); }); }
   }
-  function seg(st, i) { // only the newest piece of the stroke: redrawing every stroke on each move made the pen lag
-    var p = st.p, x0 = p[i * 3 - 3], x1 = p[i * 3], base = st.w || 3.2;
-    [pg.ic, pg.mc && pg.mc.width && (i === 0 ? x1 < 8 || x1 > INK_W - 8 : Math.min(x0, x1) < 8 || Math.max(x0, x1) > INK_W - 8) ? pg.mc : null].forEach(function (cv) {
-      if (!cv) return; var x = cv.getContext('2d'); x.lineCap = 'round'; x.lineJoin = 'round'; x.strokeStyle = x.fillStyle = st.c || PEN_C[0];
-      if (i === 0) { x.beginPath(); x.arc(p[0], p[1], base * (0.45 + p[2] / 90) / 2, 0, 7); x.fill(); return; }
-      x.lineWidth = base * (0.45 + (p[i * 3 + 2] + p[i * 3 - 1]) / 180);
-      x.beginPath(); x.moveTo(x0, p[i * 3 - 2]); x.lineTo(x1, p[i * 3 + 1]); x.stroke();
+  function flush(st) { // draws only what the pen added since the last frame
+    if (st !== pg.live) return; var p = st.p, n = p.length / 3;
+    if (n === 1 && !st.dn) { [pg.ic, edge(p, 0, 0) ? pg.mc : null].forEach(function (cv) { if (!cv || !cv.width) return; var x = cv.getContext('2d'); x.fillStyle = st.c; x.beginPath(); x.arc(p[0], p[1], inkW(st, p, 0) / 2, 0, 7); x.fill(); }); st.dn = 0; return; }
+    var from = Math.max(1, st.dn + 1);
+    [pg.ic, edge(p, Math.max(0, from - 2), n - 1) ? pg.mc : null].forEach(function (cv) {
+      if (!cv || !cv.width) return; var x = cv.getContext('2d'); x.lineCap = 'round'; x.lineJoin = 'round'; x.strokeStyle = st.c;
+      for (var i = from; i < n; i++) inkPiece(x, st, i);
     });
+    st.dn = n - 1;
   }
+  function edge(p, i0, i1) { if (!pg.mc || !pg.mc.width) return false; for (var i = i0; i <= i1; i++) if (p[i * 3] < 10 || p[i * 3] > INK_W - 10) return true; return false; }
   function end() {
-    var s = cur; cur = null; pg.live = null; if (!s) return;
+    var s = cur; cur = null; pg.live = null; rc = null; R.inking = false; R.penT = Date.now(); if (!s) return;
+    if (s.raf) { cancelAnimationFrame(s.raf); s.raf = 0; }
     var d = R.ink[pg.n]; if (!d) return;
     if (s.er) { if (s.gone.length) { R.undo.push({ n: pg.n, a: 'del', items: s.gone.reverse() }); saveInk(R, pg.n); } return; }
+    delete s.raf; delete s.dn; delete s.pe;
     if (!s.p.length) { drawInk(pg); return; }
     d.s.push(s); R.undo.push({ n: pg.n, a: 'add' }); drawInk(pg); saveInk(R, pg.n);
   }
@@ -597,7 +609,7 @@ function hookInk(R, pg) {
     if (!c) return;
     c.addEventListener('touchstart', function (e) {
       if (touch != null) { e.preventDefault(); return; }
-      if (e.touches.length > 1 && cur) { cur = null; pg.live = null; touch = null; drawInk(pg); return; }
+      if (e.touches.length > 1 && cur) { cur = null; pg.live = null; touch = null; rc = null; R.inking = false; drawInk(pg); return; }
       for (var k = 0; k < e.changedTouches.length; k++) {
         var t = e.changedTouches[k]; if (!wants(t) || e.touches.length > 1) continue;
         if (begin(pt(t.clientX, t.clientY, t.touchType === 'stylus' ? t.force : null))) { e.preventDefault(); touch = t.identifier; }
@@ -605,13 +617,24 @@ function hookInk(R, pg) {
       }
     }, { passive: false });
     c.addEventListener('touchmove', function (e) {
-      if (touch == null) return; e.preventDefault();
+      if (touch == null) return; e.preventDefault(); if (cur && cur.pe) return; // the pencil's own samples come through pointer events (all of them, not one per frame)
       for (var k = 0; k < e.changedTouches.length; k++) { var t = e.changedTouches[k]; if (t.identifier === touch) move(pt(t.clientX, t.clientY, t.touchType === 'stylus' ? t.force : null)); }
     }, { passive: false });
     function tend(e) { for (var k = 0; k < e.changedTouches.length; k++) if (e.changedTouches[k].identifier === touch) { touch = null; end(); } }
     c.addEventListener('touchend', tend); c.addEventListener('touchcancel', tend);
-    c.addEventListener('pointerdown', function (e) { if (e.pointerType !== 'mouse' || e.button !== 0) return; if (!begin(pt(e.clientX, e.clientY, 0.5))) return; e.preventDefault(); try { c.setPointerCapture(e.pointerId); } catch (x) {} });
-    c.addEventListener('pointermove', function (e) { if (e.pointerType === 'mouse' && cur && touch == null) move(pt(e.clientX, e.clientY, 0.5)); });
+    c.addEventListener('pointerdown', function (e) {
+      if (e.pointerType === 'pen') { try { c.setPointerCapture(e.pointerId); } catch (x) {} return; }
+      if (e.pointerType !== 'mouse' || e.button !== 0) return; if (!begin(pt(e.clientX, e.clientY, 0.5))) return; e.preventDefault(); try { c.setPointerCapture(e.pointerId); } catch (x) {}
+    });
+    c.addEventListener('pointermove', function (e) {
+      if (e.pointerType === 'pen') {
+        if (!cur || touch == null) return;
+        var list = e.getCoalescedEvents ? e.getCoalescedEvents() : null; if (!list || !list.length) list = [e];
+        cur.pe = 1; for (var k = 0; k < list.length; k++) move(pt(list[k].clientX, list[k].clientY, list[k].pressure));
+        return;
+      }
+      if (e.pointerType === 'mouse' && cur && touch == null) move(pt(e.clientX, e.clientY, 0.5));
+    });
     c.addEventListener('pointerup', function (e) { if (e.pointerType === 'mouse' && touch == null) end(); });
   });
 }
@@ -627,7 +650,7 @@ function hookShift(R) {
   var g = null, el = R.wrap;
   el.addEventListener('touchstart', function (e) {
     g = null; var t = e.touches[0];
-    if (e.touches.length !== 1 || t.touchType === 'stylus' || rt().finger || shiftMax(R) < 4) return;
+    if (e.touches.length !== 1 || t.touchType === 'stylus' || rt().finger || R.inking || Date.now() - (R.penT || 0) < 500 || (t.radiusX || 0) > 30 || shiftMax(R) < 4) return;
     if (e.target.closest && e.target.closest('.stk,.ans,button,a,input,textarea,select,[contenteditable]')) return;
     g = { x: t.clientX, y: t.clientY, s: R.sx || 0, h: null };
   }, { passive: true });
@@ -635,7 +658,7 @@ function hookShift(R) {
     if (!g) return; if (e.touches.length !== 1) { g = null; return; }
     var t = e.touches[0], dx = t.clientX - g.x, dy = t.clientY - g.y;
     if (g.h == null) { if (!dx && !dy) return; g.h = e.cancelable && Math.abs(dx) > Math.abs(dy); if (!g.h) { g = null; return; } }
-    e.preventDefault(); shiftTo(R, g.s + dx);
+    e.preventDefault(); if (R.inking) { g = null; return; } if (!g.go && Math.abs(dx) < 10) return; g.go = 1; shiftTo(R, g.s + dx);
   }, { passive: false });
   el.addEventListener('touchend', function () { g = null; }); el.addEventListener('touchcancel', function () { g = null; });
 }
