@@ -1093,16 +1093,24 @@ var LAB_SYS = [
   'المحتوى:',
   '- عنوان قصير، و«سؤال التجربة»، ثم «توقّع» يختار فيه الطالب توقعه قبل التشغيل، ثم المحاكاة، ثم «المهمة» في 3 إلى 5 خطوات، ثم «استنتج» بسؤالين أو ثلاثة اختيار من متعدد تظهر بعدها تغذية راجعة فورية تشرح السبب، وزر «إعادة».',
   '- دقيقة علميًا: استعمل المعادلات والقيم الحقيقية والوحدات الصحيحة، وبسّط دون أن تخطئ، وبمصطلحات الكتاب. اجعلها تجربة يغيّر فيها الطالب متغيرًا ويلاحظ أثره، لا رسمًا متحركًا فقط.',
-  '- عربية فصيحة قصيرة الجمل. إن كان للتجربة الحقيقية خطر فاذكر احتياط السلامة في سطر.'
+  '- عربية فصيحة قصيرة الجمل. إن كان للتجربة الحقيقية خطر فاذكر احتياط السلامة في سطر.',
+  'قبل أن تكتب، راجع هذه الأخطاء الشائعة وتجنبها:',
+  '- كل عمود أو خط في رسم بياني يُقاس على أكبر قيمة ممكنة فيه فلا يخرج عن حدود الرسم أبدًا، وتظهر قيمته رقمًا فوقه.',
+  '- لا تخلط محورين بوحدتين مختلفتين في رسم واحد (مثل الارتفاع بالمتر والطاقة بالجول): لكل رسم محوره ووحدته.',
+  '- الحالة الأولى قبل التشغيل متسقة فيزيائيًا (جسم ساكن طاقته الحركية صفر)، وكل الأرقام والرسوم تتحدث معًا في كل إطار.',
+  '- الرسم البياني مع الزمن يُرسم أثناء الحركة نفسها، والأزرار المعطّلة واضحة ويُشرح سبب تعطيلها، وزر «إعادة» يعيد كل شيء.',
+  '- المشهد يتسع لكامل الحركة (الكرة لا تخرج من الإطار) مهما كانت قيم المنزلقات، وأبعاده تُحسب من القيم القصوى.',
+  '- النص لا يتداخل مع الرسم، وكل التسميات مقروءة على شاشة الجوال.'
 ].join('\n');
 function labKey(b, l) { return 'l:' + lk(b, l); }
 function labsOf(b, l) { var r = XC[labKey(b, l)]; return r && Array.isArray(r.labs) ? r.labs : []; }
 function labsSave(b, l, labs) { var k = labKey(b, l); if (!labs.length) { delete XC[k]; dbDel('notes', k); return; } var rec = { k: k, labs: labs, t: Date.now() }; XC[k] = rec; dbPut('notes', rec); }
 function labDoc(html) { // a strict content policy inside the frame: nothing leaves it, nothing is loaded into it
   var csp = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\'; style-src \'unsafe-inline\'; img-src data: blob:; media-src data: blob:; font-src data:">';
-  return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, function (m) { return m + csp; }) : csp + html;
+  var rep = '<script>(function(){function s(m){try{parent.postMessage({labErr:String(m).slice(0,300)},"*")}catch(e){}}window.addEventListener("error",function(e){s((e.message||"خطأ")+(e.lineno?" (سطر "+e.lineno+")":""))});window.addEventListener("unhandledrejection",function(e){s(e.reason&&e.reason.message||e.reason)})})()<\/script>';
+  return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, function (m) { return m + csp + rep; }) : csp + rep + html;
 }
-function labFrame(lab, cls) { return '<iframe class="' + (cls || 'lab-f') + '" title="' + esc(lab.title) + '" sandbox="allow-scripts" referrerpolicy="no-referrer" srcdoc="' + esc(labDoc(lab.html)) + '"></iframe>'; }
+function labFrame(lab, cls) { return '<iframe data-lab="' + lab.id + '" class="' + (cls || 'lab-f') + '" title="' + esc(lab.title) + '" sandbox="allow-scripts" referrerpolicy="no-referrer" srcdoc="' + esc(labDoc(lab.html)) + '"></iframe>'; }
 function aidText(d) { // the lesson helper as plain text, for Claude
   function bt(bs) { return (bs || []).map(function (x) { if (typeof x === 'string') return x; if (!x) return ''; if (x.h) return x.h; if (x.ul) return x.ul.join('؛ '); if (x.ol) return x.ol.join('؛ '); if (x.box) return (x.box.h || '') + ': ' + bt(x.box.b); return ''; }).filter(Boolean).join('\n'); }
   var L = [];
@@ -1124,7 +1132,10 @@ L_TAB.lab = function (a, b, l) {
       (on ? labFrame(lab) : '') +
       '<div class="actions" style="margin-top:8px"><button class="btn' + (on ? ' ghost' : '') + ' sm" data-act="lab-open" data-k="' + esc(k) + '" data-id="' + lab.id + '">' + (on ? 'أغلق التجربة' : 'شغّل التجربة') + '</button>' +
       '<button class="btn ghost sm tint hue-violet" data-act="lab-full" data-k="' + esc(k) + '" data-id="' + lab.id + '">' + rIcon('present') + 'ملء الشاشة</button>' +
+      '<button class="btn ghost sm" data-act="lab-edit" data-k="' + esc(k) + '" data-id="' + lab.id + '">' + svgI('spark') + 'عدّلها أو أصلحها</button>' +
+      (lab.prev ? '<button class="btn ghost sm" data-act="lab-undo" data-k="' + esc(k) + '" data-id="' + lab.id + '">ارجع للنسخة السابقة</button>' : '') +
       '<button class="btn ghost sm danger" data-act="lab-del" data-k="' + esc(k) + '" data-id="' + lab.id + '">احذف</button></div>' +
+      '<p class="small bad lab-err" data-id="' + lab.id + '"' + ((LAB_ERR[lab.id] || []).length ? '' : ' hidden') + '>ظهرت أخطاء برمجية في هذه التجربة؛ اضغط «عدّلها أو أصلحها» ليصلحها Claude.</p>' +
       '<p class="small muted" style="margin:6px 0 0">صمّمها ' + esc(lab.model || 'Claude') + ' ' + relDay(lab.at) + '. جرّبها قبل الحصة وتأكد من دقتها.</p></article>';
   }).join('');
   h += '<section class="panel gen"><h2 class="hh">' + ico('spark', 'violet') + (labs.length ? 'صمّم تجربة أخرى' : 'صمّم تجربة افتراضية لهذا الدرس') + '</h2>' +
@@ -1187,6 +1198,56 @@ ACT['lab-gen'] = function (el) {
     })['catch'](function (e) { clearInterval(tick); wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم تكتمل التجربة') + '</h2><p class="muted">' + (e.code === 'stop' ? '' : e.code === 'cut' ? 'طالت صفحة التجربة أكثر من الحد المسموح للرد فانقطعت قبل نهايتها (لم يُحفظ شيء، ويُحسب ما كُتب من الرصيد). أعد المحاولة؛ وإن تكرر فاكتب فكرة أبسط تركّز على متغير واحد.' : esc(aiMsg(e))) + '</p>'); });
 };
 ACT['lab-stop'] = function () { if (LABGEN) { LABGEN.stopped = true; if (LABGEN.abort) LABGEN.abort(); } };
+
+/* errors reported from inside a running experiment, kept for the fix request */
+var LAB_ERR = {};
+window.addEventListener('message', function (e) {
+  if (!e.data || typeof e.data.labErr !== 'string') return;
+  var fr = Array.prototype.filter.call(document.querySelectorAll('iframe[data-lab]'), function (f) { return f.contentWindow === e.source; })[0]; if (!fr) return;
+  var id = fr.getAttribute('data-lab'), l = LAB_ERR[id] = LAB_ERR[id] || [];
+  if (l.indexOf(e.data.labErr) < 0 && l.length < 8) l.push(e.data.labErr);
+  Array.prototype.forEach.call(document.querySelectorAll('.lab-err[data-id="' + id + '"]'), function (p) { p.hidden = false; });
+});
+var LAB_FIXES = ['الأعمدة أو الرسوم تخرج من حدودها', 'الرسم البياني لا يُرسم أثناء الحركة', 'الأرقام لا تتطابق مع الحركة', 'كبّر الخط والأزرار للعرض', 'اجعلها أبسط وأوضح للطلاب', 'أضف مقارنة بين محاولتين'];
+ACT['lab-edit'] = function (el) {
+  var k = el.getAttribute('data-k'), id = el.getAttribute('data-id'), x = lessonByKey(k); if (!x) return;
+  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  var errs = LAB_ERR[id] || [];
+  openModal(card('<h2>عدّل التجربة أو أصلحها</h2><p class="small muted">صف ما رأيته أو ما تريد تغييره، ويعيد Claude كتابة التجربة. تبقى النسخة الحالية فتستطيع الرجوع إليها.</p>' +
+    (errs.length ? '<p class="small bad">سيُرسل معها ' + cnt(errs.length, ['خطأ برمجي واحد', 'خطآن برمجيان', 'أخطاء برمجية', 'خطأً برمجيًا']) + ' ظهر أثناء تشغيلها.</p>' : '') +
+    '<div class="lab-ideas">' + LAB_FIXES.map(function (f) { return '<button type="button" class="lab-idea lab-fix" data-act="lab-fix-pick" data-v="' + esc(f) + '"><span>' + esc(f) + '</span></button>'; }).join('') + '</div>' +
+    '<label class="field"><span>ملاحظاتك</span><textarea id="lab-note" rows="3" placeholder="مثال: عمودا الحركية والكلية يخرجان من أعلى الرسم، والرسم البياني فارغ، وزر «ارمِ الكرة» يبدو معطلًا"></textarea></label>' +
+    '<div class="actions"><button class="btn" data-act="lab-fix" data-k="' + esc(k) + '" data-id="' + id + '">' + svgI('spark') + 'عدّلها</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div><p class="small muted">التكلفة نحو ضعف تصميمها أول مرة، لأن Claude يقرأ الصفحة الحالية ثم يكتبها كاملة.</p>'));
+};
+ACT['lab-fix-pick'] = function (el) { var t = document.getElementById('lab-note'), v = el.getAttribute('data-v'); if (!t) return; el.classList.toggle('on'); var parts = t.value.split('\n').filter(Boolean); if (el.classList.contains('on')) parts.push(v); else parts = parts.filter(function (p) { return p !== v; }); t.value = parts.join('\n'); };
+ACT['lab-fix'] = function (el) {
+  var k = el.getAttribute('data-k'), id = el.getAttribute('data-id'), x = lessonByKey(k); if (!x) return;
+  var labs = labsOf(x.b, x.l), lab = labs.filter(function (y) { return y.id === id; })[0]; if (!lab) return;
+  var t = document.getElementById('lab-note'), note = t ? t.value.trim() : '', errs = LAB_ERR[id] || [];
+  if (!note && !errs.length) { toast('اكتب ما تريد تغييره، أو اختر من الاقتراحات'); return; }
+  LABGEN = { stopped: false }; wake(true);
+  var t0 = Date.now(), prog = progModal('Claude يعدّل التجربة', 'lab-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 1800, 4, 95) + '%'; }, 500);
+  prog('يقرأ التجربة الحالية…');
+  var ask = labCtx(x.b, x.l) + '\n\nهذه صفحة التجربة الحالية:\n' + lab.html + '\n\n' + (note ? 'ملاحظات المعلم بعد تجربتها:\n' + note + '\n\n' : '') + (errs.length ? 'أخطاء برمجية ظهرت أثناء تشغيلها:\n' + errs.join('\n') + '\n\n' : '') +
+    'أعد كتابة الصفحة كاملة بعد إصلاح كل ما سبق، مع الإبقاء على فكرتها وما يعمل فيها، ومراجعة الأخطاء الشائعة المذكورة في التعليمات. أعد صفحة HTML كاملة فقط (أقل من 28 ألف حرف) ومكتملة حتى </html>.';
+  claude(LAB_SYS, [{ type: 'text', text: ask }], 32000, function (n) { prog('يكتب Claude النسخة المعدّلة… ' + num(n) + ' حرفًا'); }, LABGEN).then(function (res) {
+    clearInterval(tick); wake(false);
+    var s2 = res.text, i = s2.search(/<!DOCTYPE html|<html[\s>]/i), j = s2.toLowerCase().lastIndexOf('</html>');
+    if (i < 0 || j < i) throw aiErr(res.stop === 'max_tokens' ? 'cut' : 'json');
+    var html = s2.slice(i, j + 7), tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
+    lab.prev = { html: lab.html, title: lab.title, at: lab.at };
+    lab.html = html; lab.title = ((tm && tm[1]) || lab.title).trim().slice(0, 90); lab.at = Date.now(); lab.model = aiModel();
+    labsSave(x.b, x.l, labs); delete LAB_ERR[id];
+    var m = document.getElementById('modal'); m.__busy = false; closeModal();
+    route.tab = 'lab'; route.lab = id; render(true); toast('عُدّلت التجربة. جرّبها، وإن لم تعجبك فارجع للنسخة السابقة', 4500);
+  })['catch'](function (e) { clearInterval(tick); wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم يكتمل التعديل') + '</h2><p class="muted">' + (e.code === 'stop' ? '' : e.code === 'cut' ? 'طالت الصفحة أكثر من الحد فانقطعت قبل نهايتها، ولم يتغير شيء. أعد المحاولة، أو اطلب «اجعلها أبسط».' : esc(aiMsg(e))) + '</p>'); });
+};
+ACT['lab-undo'] = function (el) {
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var id = el.getAttribute('data-id'), labs = labsOf(x.b, x.l), lab = labs.filter(function (y) { return y.id === id; })[0];
+  if (!lab || !lab.prev) return;
+  var cur = { html: lab.html, title: lab.title, at: lab.at }; lab.html = lab.prev.html; lab.title = lab.prev.title; lab.at = lab.prev.at; lab.prev = cur;
+  labsSave(x.b, x.l, labs); delete LAB_ERR[id]; render(true); toast('رجعت للنسخة السابقة (والمعدّلة محفوظة: اضغط مرة أخرى للتبديل)');
+};
 
 /* ---------- presenting a lesson to the class: one idea per screen ---------- */
 var PV = null;

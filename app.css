@@ -260,3 +260,5 @@ html.lab-on,html.lab-on body{overflow:hidden}
 .lab-idea{appearance:none;text-align:start;border:1px solid var(--rule);background:var(--panel);color:var(--ink);border-radius:12px;padding:10px 12px;font:inherit;cursor:pointer;display:flex;flex-direction:column;gap:4px}
 .lab-idea span{font-size:13px;color:var(--ink-2);line-height:1.6}
 .lab-idea.on{box-shadow:0 0 0 2px var(--accent)}
+#lab-idea,#lab-note{font:inherit;font-size:16px;line-height:1.6;width:100%;box-sizing:border-box;resize:vertical}
+.lab-fix{padding:8px 12px}
