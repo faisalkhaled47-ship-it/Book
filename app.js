@@ -1963,7 +1963,7 @@ function quizResult() {
 /* ---------- plan: lessons over the weeks of the term ---------- */
 function planOf(b) { // each term keeps its own dates, review weeks and lesson lengths
   var P0 = S.plan[b.id] = S.plan[b.id] || {}, T = termsList();
-  if (b.term && !P0.termSet) P0.term = b.term; // a book of one term opens on its term
+  if (b.term && (!P0.termSet || BOOKS.some(function (x) { return x !== b && x.term && x.term === P0.term; }))) P0.term = b.term; // a book of one term opens on its term; another term with its own book belongs to that book
   var t = T.filter(function (x) { return x[0] === P0.term; })[0];
   if (!t) { var td = today(); t = T.filter(function (x) { return td <= parseISO(x[3]); })[0] || T[0]; P0.term = t[0]; }
   if (!P0.terms) { P0.terms = {}; if (P0.start || P0.dur) P0.terms[P0.term] = { start: P0.start, end: P0.end, review: P0.review, dur: P0.dur || {} }; ['start', 'end', 'review', 'dur', 'manual'].forEach(function (k) { delete P0[k]; }); }
@@ -2018,7 +2018,7 @@ VIEWS.plan = function () {
   var X = buildSchedule(b), p = X.p, W = X.W, cw = curWeek(W), nTeach = W.filter(function (w) { return w.days; }).length;
   var planned = b.lessons.filter(function (l) { return X.weeks[l.id].length; }).length;
   h += '<h2 class="sec-h hh">' + ico('target', 'teal') + 'دروس كل أسبوع</h2>';
-  h += '<section class="panel plan-set"><div class="seg" role="group">' + termsList().map(function (t) { return '<button type="button" data-act="plan-term" data-v="' + t[0] + '" aria-pressed="' + (p.term === t[0]) + '">' + t[1] + '</button>'; }).join('') + '</div>' +
+  h += '<section class="panel plan-set"><div class="seg" role="group">' + termsList().map(function (t) { var tb = BOOKS.filter(function (x) { return x.term === t[0]; }); return '<button type="button" data-act="plan-term" data-v="' + t[0] + '" aria-pressed="' + (p.term === t[0]) + '">' + t[1] + (tb.length === 1 && BOOKS.length > 1 ? '<small class="seg-sub">' + esc(tb[0].title.replace(/^.*?(الجزء \S+)$/, '$1')) + '</small>' : '') + '</button>'; }).join('') + '</div>' +
     '<p class="small muted">' + cnt(nTeach, WORDS.week) + ' دراسية. اختر درس كل أسبوع من القائمة تحته؛ تختار الدرس نفسه في أكثر من أسبوع إن امتد، وتضيف درسًا ثانيًا للأسبوع نفسه من «＋ درس آخر». ' + (X.empty ? '' : 'وُزّع ' + planned + ' من ' + cnt(b.lessons.length, WORDS.lesson) + '.') + '</p>' +
     '<div class="actions" style="margin-top:0">' + (X.empty ? '<button class="btn ghost sm" data-act="plan-fill">املأ الأسابيع مبدئيًا ثم أعدّل</button>' : '<button class="btn ghost sm danger" data-act="plan-clear">امسح دروس الأسابيع</button>') + '</div>' +
     '<details class="small"><summary>بداية الفصل ونهايته وأسابيع المراجعة</summary><div class="row2" style="margin-top:8px"><label class="field"><span>من</span><input type="date" id="plan-a" value="' + esc(p.start) + '"></label><label class="field"><span>إلى</span><input type="date" id="plan-b" value="' + esc(p.end) + '"></label></div>' +
@@ -2039,7 +2039,14 @@ VIEWS.plan = function () {
   return h;
 };
 AFTER.push(function () { if (route.v === 'plan') { var n = document.querySelector('.wk.now'); if (n && route.jump) { route.jump = false; n.scrollIntoView({ block: 'center' }); } } });
-ACT['plan-term'] = function (el) { var b = curBook(); planOf(b); S.plan[b.id].term = el.getAttribute('data-v'); S.plan[b.id].termSet = true; saveState(); render(true); };
+ACT['plan-term'] = function (el) {
+  var b = curBook(), v = el.getAttribute('data-v'), tb = BOOKS.filter(function (x) { return x.term === v; });
+  if (tb.length === 1) { // the term has its own book: open it
+    if (tb[0].id !== b.id) { S.cur = tb[0].id; saveState(); render(true); toast('فُتح «' + tb[0].title + '»'); }
+    return;
+  }
+  planOf(b); S.plan[b.id].term = v; S.plan[b.id].termSet = true; saveState(); render(true);
+};
 ACT['plan-rv'] = function (el) { var p = planOf(curBook()); p.review = +el.getAttribute('data-v'); saveState(); render(true); };
 ACT['plan-fill'] = function () { autoFill(curBook()); render(true); toast('وُزّعت الدروس مبدئيًا بحسب صفحاتها؛ عدّل أي أسبوع من قائمته'); };
 ACT['plan-clear'] = function () { confirmBox('مسح دروس الأسابيع؟', 'تُفرَّغ أسابيع هذا الفصل الدراسي من الدروس لتختارها من جديد.', 'plan-clear-yes', 'امسح', '', true); };
