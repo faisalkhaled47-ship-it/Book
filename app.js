@@ -420,14 +420,14 @@ function readerMount() {
     return doc.getPage(Math.min(start, doc.numPages)).then(function (pg) {
       if (R.dead) return;
       var v = pg.getViewport({ scale: 1 }), ratio = v.width / v.height, h = '';
-      for (var n = 1; n <= doc.numPages; n++) h += '<div class="pg" data-n="' + n + '" style="aspect-ratio:' + v.width.toFixed(1) + ' / ' + v.height.toFixed(1) + '"><canvas class="pg-c"></canvas><canvas class="pg-i"></canvas><div class="pg-a"></div><div class="stk-l"></div><span class="pg-no">' + pLabel(b, n) + '</span></div>';
+      for (var n = 1; n <= doc.numPages; n++) h += '<div class="pgr"><canvas class="pg-m" aria-hidden="true"></canvas><div class="pg" data-n="' + n + '" style="aspect-ratio:' + v.width.toFixed(1) + ' / ' + v.height.toFixed(1) + '"><canvas class="pg-c"></canvas><canvas class="pg-i"></canvas><div class="pg-a"></div><div class="stk-l"></div><span class="pg-no">' + pLabel(b, n) + '</span></div></div>';
       if (rt().spread) h = (rt().solo ? '<div class="pg-sp" aria-hidden="true"></div>' : '') + h; // two pages side by side; the first one alone, like a book's cover
       wrap.classList.toggle('spread', rt().spread);
       wrap.innerHTML = h;
       R.ratio = ratio;
       Array.prototype.forEach.call(wrap.querySelectorAll('.pg'), function (el) {
         var n = +el.getAttribute('data-n');
-        R.pages[n - 1] = { n: n, el: el, c: el.querySelector('.pg-c'), ic: el.querySelector('.pg-i'), a: el.querySelector('.pg-a'), s: el.querySelector('.stk-l'), ratio: ratio, sized: false, done: 0, task: null };
+        R.pages[n - 1] = { n: n, el: el, c: el.querySelector('.pg-c'), ic: el.querySelector('.pg-i'), mc: el.parentNode.querySelector('.pg-m'), a: el.querySelector('.pg-a'), s: el.querySelector('.stk-l'), ratio: ratio, sized: false, done: 0, task: null };
         var P0 = R.pages[n - 1]; hookInk(R, P0); hookAns(R, P0); drawAns(P0); P0.stk = stkCtx(R, P0); stkBind(P0.s, P0.stk); drawStk(P0);
       });
       if (route.present) presentFit(true);
@@ -496,7 +496,7 @@ function renderPage(pg) {
 }
 function releasePage(pg) {
   if (pg.task) { try { pg.task.cancel(); } catch (e) {} pg.task = null; }
-  if (pg.done) { pg.c.width = pg.c.height = 0; pg.ic.width = pg.ic.height = 0; pg.done = 0; pg.el.classList.remove('ok'); }
+  if (pg.done) { pg.c.width = pg.c.height = 0; pg.ic.width = pg.ic.height = 0; if (pg.mc) pg.mc.width = pg.mc.height = 0; pg.done = 0; pg.el.classList.remove('ok'); }
 }
 function rerenderAll() { if (!RD) return; RD.gen = (RD.gen || 0) + 1; RD.pages.forEach(function (pg) { if (pg.vis) renderPage(pg); }); }
 
@@ -519,13 +519,22 @@ function sizeInk(pg) {
   var w = pg.el.clientWidth, h = pg.el.clientHeight, dpr = Math.min(window.devicePixelRatio || 1, 2);
   pg.ic.width = Math.round(w * dpr); pg.ic.height = Math.round(h * dpr);
   pg.k = w / INK_W; pg.ic.getContext('2d').setTransform(dpr * pg.k, 0, 0, dpr * pg.k, 0, 0);
+  if (pg.mc) { // the blank space beside the page: a board that shares the page's writing (in page units, beyond 0–1000)
+    var row = pg.mc.parentNode, rw = row.clientWidth, rh = row.clientHeight, ox = pg.el.offsetLeft, oy = pg.el.offsetTop, room = rw - w > 8;
+    pg.mc.hidden = !room;
+    if (room) { pg.mc.width = Math.round(rw * dpr); pg.mc.height = Math.round(rh * dpr); pg.mc.getContext('2d').setTransform(dpr * pg.k, 0, 0, dpr * pg.k, dpr * ox, dpr * oy); }
+    else pg.mc.width = pg.mc.height = 0;
+  }
   inkOf(R, pg.n).then(function () { drawInk(pg); });
 }
 function drawInk(pg) {
-  var R = RD; if (!R || !pg.ic.width) return; var d = R.ink[pg.n], x = pg.ic.getContext('2d');
-  x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, pg.ic.width, pg.ic.height); x.restore();
-  if (d) d.s.forEach(function (st) { stroke(x, st); });
-  if (pg.live) stroke(x, pg.live);
+  var R = RD; if (!R || !pg.ic.width) return; var d = R.ink[pg.n];
+  [pg.ic, pg.mc && pg.mc.width ? pg.mc : null].forEach(function (cv) {
+    if (!cv) return; var x = cv.getContext('2d');
+    x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cv.width, cv.height); x.restore();
+    if (d) d.s.forEach(function (st) { stroke(x, st); });
+    if (pg.live) stroke(x, pg.live);
+  });
 }
 function stroke(ctx, st) {
   var p = st.p, n = p.length / 3; if (!n) return;
@@ -544,8 +553,8 @@ function stroke(ctx, st) {
   }
 }
 function hookInk(R, pg) {
-  var c = pg.ic, cur = null, touch = null;
-  function pt(cx, cy, f) { var r = c.getBoundingClientRect(), k = r.width / INK_W; return [Math.round((cx - r.left) / k * 10) / 10, Math.round((cy - r.top) / k * 10) / 10, Math.max(0, Math.min(99, Math.round((f == null ? 0.5 : f) * 100)))]; }
+  var cur = null, touch = null;
+  function pt(cx, cy, f) { var r = pg.el.getBoundingClientRect(), k = r.width / INK_W; return [Math.round((cx - r.left) / k * 10) / 10, Math.round((cy - r.top) / k * 10) / 10, Math.max(0, Math.min(99, Math.round((f == null ? 0.5 : f) * 100)))]; }
   function begin(q) {
     var o = rt(); if (o.tool === 'off') return false;
     inkOf(R, pg.n);
@@ -574,24 +583,27 @@ function hookInk(R, pg) {
     d.s.push(s); R.undo.push({ n: pg.n, a: 'add' }); drawInk(pg); saveInk(R, pg.n);
   }
   function wants(t) { return t.touchType === 'stylus' || rt().finger; }
-  c.addEventListener('touchstart', function (e) {
-    if (touch != null) { e.preventDefault(); return; }
-    if (e.touches.length > 1 && cur) { cur = null; pg.live = null; touch = null; drawInk(pg); return; }
-    for (var k = 0; k < e.changedTouches.length; k++) {
-      var t = e.changedTouches[k]; if (!wants(t) || e.touches.length > 1) continue;
-      if (begin(pt(t.clientX, t.clientY, t.touchType === 'stylus' ? t.force : null))) { e.preventDefault(); touch = t.identifier; }
-      return;
-    }
-  }, { passive: false });
-  c.addEventListener('touchmove', function (e) {
-    if (touch == null) return; e.preventDefault();
-    for (var k = 0; k < e.changedTouches.length; k++) { var t = e.changedTouches[k]; if (t.identifier === touch) move(pt(t.clientX, t.clientY, t.touchType === 'stylus' ? t.force : null)); }
-  }, { passive: false });
-  function tend(e) { for (var k = 0; k < e.changedTouches.length; k++) if (e.changedTouches[k].identifier === touch) { touch = null; end(); } }
-  c.addEventListener('touchend', tend); c.addEventListener('touchcancel', tend);
-  c.addEventListener('pointerdown', function (e) { if (e.pointerType !== 'mouse' || e.button !== 0) return; if (!begin(pt(e.clientX, e.clientY, 0.5))) return; e.preventDefault(); try { c.setPointerCapture(e.pointerId); } catch (x) {} });
-  c.addEventListener('pointermove', function (e) { if (e.pointerType === 'mouse' && cur && touch == null) move(pt(e.clientX, e.clientY, 0.5)); });
-  c.addEventListener('pointerup', function (e) { if (e.pointerType === 'mouse' && touch == null) end(); });
+  [pg.ic, pg.mc].forEach(function (c) {
+    if (!c) return;
+    c.addEventListener('touchstart', function (e) {
+      if (touch != null) { e.preventDefault(); return; }
+      if (e.touches.length > 1 && cur) { cur = null; pg.live = null; touch = null; drawInk(pg); return; }
+      for (var k = 0; k < e.changedTouches.length; k++) {
+        var t = e.changedTouches[k]; if (!wants(t) || e.touches.length > 1) continue;
+        if (begin(pt(t.clientX, t.clientY, t.touchType === 'stylus' ? t.force : null))) { e.preventDefault(); touch = t.identifier; }
+        return;
+      }
+    }, { passive: false });
+    c.addEventListener('touchmove', function (e) {
+      if (touch == null) return; e.preventDefault();
+      for (var k = 0; k < e.changedTouches.length; k++) { var t = e.changedTouches[k]; if (t.identifier === touch) move(pt(t.clientX, t.clientY, t.touchType === 'stylus' ? t.force : null)); }
+    }, { passive: false });
+    function tend(e) { for (var k = 0; k < e.changedTouches.length; k++) if (e.changedTouches[k].identifier === touch) { touch = null; end(); } }
+    c.addEventListener('touchend', tend); c.addEventListener('touchcancel', tend);
+    c.addEventListener('pointerdown', function (e) { if (e.pointerType !== 'mouse' || e.button !== 0) return; if (!begin(pt(e.clientX, e.clientY, 0.5))) return; e.preventDefault(); try { c.setPointerCapture(e.pointerId); } catch (x) {} });
+    c.addEventListener('pointermove', function (e) { if (e.pointerType === 'mouse' && cur && touch == null) move(pt(e.clientX, e.clientY, 0.5)); });
+    c.addEventListener('pointerup', function (e) { if (e.pointerType === 'mouse' && touch == null) end(); });
+  });
 }
 /* two fingers: zoom the pages around the point between them */
 function hookPinch(R) {

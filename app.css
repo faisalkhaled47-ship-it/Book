@@ -359,3 +359,14 @@ details.ai-fold:not([open]){padding-top:14px;padding-bottom:14px}
 .rd-pages.spread{width:calc(min(100%,1800px) * var(--z,1));grid-template-columns:1fr 1fr;gap:10px 6px;align-items:start}
 .rd-pages.spread .pg-sp{visibility:hidden}
 @media (max-width:700px){.rb[data-act="rd-spread"],.rb-sp{display:none}}
+/* the page in a full-width row: the blank space on both sides is a board that takes the page's writing */
+.rd-x{container-type:inline-size}
+.rd-pages{width:max(100%,calc(min(100cqw,900px) * var(--z,1)))}
+.pgr{position:relative;display:flex;justify-content:center}
+.pgr>.pg{width:calc(min(100cqw,900px) * var(--z,1));flex:none;z-index:1}
+.pg-m{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0;touch-action:pan-x pan-y}
+.pg-m[hidden]{display:none}
+.rd-finger .pg-m{touch-action:none}
+.rd-pages.spread{width:calc(min(100cqw,1800px) * var(--z,1));margin:0 auto}
+.rd-pages.spread .pgr>.pg{width:100%}
+.rd-pages.spread .pg-m{display:none}
