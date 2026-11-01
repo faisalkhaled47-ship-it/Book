@@ -2376,7 +2376,7 @@ var SB_SQL = [
 function syncSec() {
   var sb = P.sb || {}, on = sbOn();
   if (on) return '<section class="set-sec" id="sync-sec"><h3>المزامنة بين أجهزتك (Supabase)</h3><p class="small">متصل بحساب <b dir="ltr">' + esc(sb.email || '') + '</b></p><p class="small muted" id="sync-info">' + syncInfo() + '</p>' +
-    '<div class="actions" style="margin-top:0"><button class="btn" data-act="sb-now">زامن الآن</button><button class="btn ghost sm" data-act="sb-out">خروج</button></div>' +
+    '<div class="actions" style="margin-top:0"><button class="btn" data-act="sb-now">زامن الآن</button><button class="btn ghost sm" data-act="sb-copy">انسخ الرابط والمفتاح</button><button class="btn ghost sm" data-act="sb-out">خروج</button></div>' +
     '<p class="small muted">يتزامن: الدروس ومساعدها، والكتابة على الصفحات والشرح، والسبورات والصور، والملاحظات، و«شُرح في»، والتقويم، وفصولك. ويبقى على كل جهاز: ملف الكتاب ومقاطع الفيديو. أضف الكتاب مرة على كل جهاز.</p></section>';
   return '<section class="set-sec" id="sync-sec"><h3>المزامنة بين أجهزتك (Supabase)</h3><p class="small muted">اربط التطبيق بمشروعك في Supabase فيظهر ما تجهّزه وتكتبه على الآيفون في الآيباد تلقائيًا. الرابط والمفتاح وبيانات الدخول تبقى على هذا الجهاز. <button class="link" data-act="sb-how">طريقة الإعداد</button></p>' +
     '<label class="field"><span>رابط المشروع (Project URL)</span><input type="url" id="sb-url" dir="ltr" autocapitalize="off" spellcheck="false" placeholder="https://xxxx.supabase.co" value="' + esc(sb.url || '') + '"></label>' +
@@ -2438,6 +2438,7 @@ ACT['sb-how'] = function () {
     '<div class="actions"><button class="btn" data-act="sb-sql">انسخ كود SQL</button></div><pre class="sql" dir="ltr">' + esc(SB_SQL) + '</pre>'), true);
 };
 ACT['sb-sql'] = function () { copyText(SB_SQL); };
+ACT['sb-copy'] = function () { var sb = P.sb || {}; Promise.resolve(copyText(sb.url + ' ' + sb.key)).then(function () { toast('نُسخ الرابط والمفتاح (بلا كلمة المرور). الصقهما في خانة الرابط في إتقان أو مصروفي.', 4000); }); };
 
 /* ---------- settings ---------- */
 function segBtns(act, cur, items) { return '<div class="seg" role="group">' + items.map(function (x) { return '<button type="button" data-act="' + act + '" data-v="' + x[0] + '" aria-pressed="' + (String(cur) === String(x[0])) + '">' + x[1] + '</button>'; }).join('') + '</div>'; }
