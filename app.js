@@ -942,7 +942,7 @@ function destPage(doc, dest) {
 }
 
 /* ---------- one lesson ---------- */
-var LTABS = [['goals', 'الأهداف'], ['exp', 'الشرح'], ['figs', 'الرسوم'], ['map', 'خريطة المفاهيم'], ['eval', 'التقويم'], ['sum', 'الملخص والأنشطة'], ['notes', 'ملاحظاتي']];
+var LTABS = [['goals', 'الأهداف'], ['exp', 'الشرح'], ['figs', 'الرسوم'], ['map', 'خريطة المفاهيم'], ['eval', 'التقويم'], ['lab', 'المختبر'], ['sum', 'الملخص والأنشطة'], ['notes', 'ملاحظاتي']];
 VIEWS.lesson = function () {
   var x = lessonByKey(route.k || ''); if (!x) { route = { v: 'lessons' }; return VIEWS.lessons(); }
   var b = x.b, l = x.l, a = aidOf(b, l), k = lk(b, l), idx = b.lessons.indexOf(l);
@@ -956,7 +956,7 @@ VIEWS.lesson = function () {
   if (!a) h += genPanel(b, l);
   else {
     var tab = route.tab || 'goals';
-    h += '<div class="subtabs" role="tablist">' + LTABS.map(function (t) { return '<button role="tab" aria-selected="' + (tab === t[0]) + '" class="stab' + (tab === t[0] ? ' on' : '') + '" data-act="ltab" data-tab="' + t[0] + '">' + t[1] + (t[0] === 'eval' ? ' (' + aidCounts(a.d).q + ')' : '') + '</button>'; }).join('') + '</div>';
+    h += '<div class="subtabs" role="tablist">' + LTABS.map(function (t) { return '<button role="tab" aria-selected="' + (tab === t[0]) + '" class="stab' + (tab === t[0] ? ' on' : '') + '" data-act="ltab" data-tab="' + t[0] + '">' + t[1] + (t[0] === 'eval' ? ' (' + aidCounts(a.d).q + ')' : t[0] === 'lab' && labsOf(b, l).length ? ' (' + labsOf(b, l).length + ')' : '') + '</button>'; }).join('') + '</div>';
     h += '<div class="l-body">' + (L_TAB[tab] || L_TAB.goals)(a.d, b, l) + '</div>';
   }
   h += '<div class="l-nav">' + (prev ? '<button class="btn ghost sm" data-act="lesson" data-k="' + esc(lk(b, prev)) + '">→ ' + esc(prev.title) + '</button>' : '<span></span>') + (next ? '<button class="btn ghost sm" data-act="lesson" data-k="' + esc(lk(b, next)) + '">' + esc(next.title) + ' ←</button>' : '<span></span>') + '</div>';
@@ -1074,6 +1074,118 @@ ACT['q-copy'] = function (el) {
   openModal(card('<h2>انسخ أسئلة الدرس</h2><p class="muted">تلصقها في ورقة عمل أو اختبار قصير.</p><div class="actions"><button class="btn" data-act="q-copy-do" data-k="' + esc(k) + '" data-a="0">الأسئلة فقط</button><button class="btn ghost" data-act="q-copy-do" data-k="' + esc(k) + '" data-a="1">مع الإجابات</button></div>'));
 };
 ACT['q-copy-do'] = function (el) { var x = lessonByKey(el.getAttribute('data-k')), a = x && aidOf(x.b, x.l); closeModal(); if (a) copyText(quizText(x, a, el.getAttribute('data-a') === '1')); };
+
+/* ---------- «المختبر»: interactive virtual experiments for a lesson, designed by Claude ----------
+   Each experiment is one self-contained HTML page, kept in the notes store as l:<bookId>:<lessonId> {labs:[{id, title, html, idea, at, model}], t}
+   (so it goes into the backup and the sync). It runs inside a sandboxed frame with no access to the app, its storage or the network. */
+var LAB_SYS = [
+  'أنت مصمم مختبرات علوم افتراضية تفاعلية ومعلم علوم خبير في المرحلة المتوسطة في المملكة العربية السعودية.',
+  'صمّم تجربة افتراضية تفاعلية واحدة مبدعة عن الدرس المعطى، يستعملها المعلم على الآيباد أو جهاز العرض ويتفاعل معها الطلاب.',
+  'أعد صفحة HTML كاملة واحدة فقط، تبدأ بـ <!DOCTYPE html> وتنتهي بـ </html>، دون أي شرح أو علامات ``` قبلها أو بعدها.',
+  'شروط تقنية لازمة:',
+  '- <html lang="ar" dir="rtl">، وكل CSS وJavaScript داخل الصفحة. ممنوع أي مورد خارجي: لا خطوط ولا صور ولا مكتبات ولا روابط ولا fetch.',
+  '- ممنوع localStorage وsessionStorage وcookies وalert وconfirm وprompt وwindow.open (الصفحة تعمل في إطار معزول).',
+  '- الرسم بـ canvas أو SVG مع حركة سلسة (requestAnimationFrame)، يراعي devicePixelRatio ويتكيف مع تغيّر الحجم (من عرض 360 إلى 1400 بكسل).',
+  '- التحكم باللمس والقلم والفأرة عبر Pointer Events: منزلقات range وأزرار كبيرة (44 بكسل على الأقل)، وعناصر تُسحب إن كان ذلك مناسبًا.',
+  '- قراءات حية بالأرقام والوحدات، وجدول بيانات يُضاف إليه صف عند الضغط على «سجّل القراءة»، ورسم بياني بسيط على canvas إن كان مفيدًا.',
+  '- خط system-ui، وأرقام غربية 0-9، وألوان هادئة واضحة على خلفية فاتحة، وتباين جيد على جهاز العرض. حجم الصفحة أقل من 45 ألف حرف، والكود سليم بلا أخطاء.',
+  'المحتوى:',
+  '- عنوان قصير، و«سؤال التجربة»، ثم «توقّع» يختار فيه الطالب توقعه قبل التشغيل، ثم المحاكاة، ثم «المهمة» في 3 إلى 5 خطوات، ثم «استنتج» بسؤالين أو ثلاثة اختيار من متعدد تظهر بعدها تغذية راجعة فورية تشرح السبب، وزر «إعادة».',
+  '- دقيقة علميًا: استعمل المعادلات والقيم الحقيقية والوحدات الصحيحة، وبسّط دون أن تخطئ، وبمصطلحات الكتاب. اجعلها تجربة يغيّر فيها الطالب متغيرًا ويلاحظ أثره، لا رسمًا متحركًا فقط.',
+  '- عربية فصيحة قصيرة الجمل. إن كان للتجربة الحقيقية خطر فاذكر احتياط السلامة في سطر.'
+].join('\n');
+function labKey(b, l) { return 'l:' + lk(b, l); }
+function labsOf(b, l) { var r = XC[labKey(b, l)]; return r && Array.isArray(r.labs) ? r.labs : []; }
+function labsSave(b, l, labs) { var k = labKey(b, l); if (!labs.length) { delete XC[k]; dbDel('notes', k); return; } var rec = { k: k, labs: labs, t: Date.now() }; XC[k] = rec; dbPut('notes', rec); }
+function labDoc(html) { // a strict content policy inside the frame: nothing leaves it, nothing is loaded into it
+  var csp = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\'; style-src \'unsafe-inline\'; img-src data: blob:; media-src data: blob:; font-src data:">';
+  return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, function (m) { return m + csp; }) : csp + html;
+}
+function labFrame(lab, cls) { return '<iframe class="' + (cls || 'lab-f') + '" title="' + esc(lab.title) + '" sandbox="allow-scripts" referrerpolicy="no-referrer" srcdoc="' + esc(labDoc(lab.html)) + '"></iframe>'; }
+function aidText(d) { // the lesson helper as plain text, for Claude
+  function bt(bs) { return (bs || []).map(function (x) { if (typeof x === 'string') return x; if (!x) return ''; if (x.h) return x.h; if (x.ul) return x.ul.join('؛ '); if (x.ol) return x.ol.join('؛ '); if (x.box) return (x.box.h || '') + ': ' + bt(x.box.b); return ''; }).filter(Boolean).join('\n'); }
+  var L = [];
+  if (d.idea) L.push('الفكرة الرئيسة: ' + d.idea);
+  if (d.goals && d.goals.length) L.push('الأهداف: ' + d.goals.join('؛ '));
+  if (d.vocab && d.vocab.length) L.push('المفردات: ' + d.vocab.map(function (v) { return v.t + ' (' + v.d + ')'; }).join('؛ '));
+  (d.exp || []).forEach(function (x) { L.push('## ' + x.h + '\n' + bt(x.body)); });
+  if (d.sum && d.sum.length) L.push('الخلاصة: ' + d.sum.join('؛ '));
+  if (d.acts && d.acts.length) L.push('أنشطة الكتاب والمساعد: ' + d.acts.map(function (x) { return x.t; }).join('؛ '));
+  return L.join('\n').replace(/\*\*|`/g, '').slice(0, 14000);
+}
+L_TAB.lab = function (a, b, l) {
+  var labs = labsOf(b, l), k = lk(b, l), ai = !!P.ai.key, open = route.lab;
+  var h = '<p class="muted small" style="margin-bottom:12px">تجارب افتراضية تفاعلية يصممها Claude لهذا الدرس: يغيّر الطالب المتغيرات بإصبعه ويلاحظ ويسجّل ويستنتج. اعرضها على جهاز العرض أو أعطِ الآيباد لطالب.</p>';
+  h += labs.map(function (lab) {
+    var on = open === lab.id;
+    return '<article class="xcard lab-card hue-violet"><header class="x-head"><span class="i-num">' + svgI('spark') + '</span><p class="x-ind">' + esc(lab.title) + '</p></header>' +
+      (lab.idea ? '<p class="small muted" style="margin:0 0 8px">الفكرة: ' + esc(lab.idea) + '</p>' : '') +
+      (on ? labFrame(lab) : '') +
+      '<div class="actions" style="margin-top:8px"><button class="btn' + (on ? ' ghost' : '') + ' sm" data-act="lab-open" data-k="' + esc(k) + '" data-id="' + lab.id + '">' + (on ? 'أغلق التجربة' : 'شغّل التجربة') + '</button>' +
+      '<button class="btn ghost sm tint hue-violet" data-act="lab-full" data-k="' + esc(k) + '" data-id="' + lab.id + '">' + rIcon('present') + 'ملء الشاشة</button>' +
+      '<button class="btn ghost sm danger" data-act="lab-del" data-k="' + esc(k) + '" data-id="' + lab.id + '">احذف</button></div>' +
+      '<p class="small muted" style="margin:6px 0 0">صمّمها ' + esc(lab.model || 'Claude') + ' ' + relDay(lab.at) + '. جرّبها قبل الحصة وتأكد من دقتها.</p></article>';
+  }).join('');
+  h += '<section class="panel gen"><h2 class="hh">' + ico('spark', 'violet') + (labs.length ? 'صمّم تجربة أخرى' : 'صمّم تجربة افتراضية لهذا الدرس') + '</h2>' +
+    (ai ? '<label class="field"><span>فكرة التجربة (اختياري، أو اترك Claude يختار)</span><textarea id="lab-idea" rows="2" placeholder="مثال: كرة على مسار متعرج تتحول طاقتها بين الوضع والحركة، مع منزلق للارتفاع والكتلة"></textarea></label>' +
+      '<div id="lab-ideas" class="lab-ideas"></div>' +
+      '<div class="actions"><button class="btn" data-act="lab-gen" data-k="' + esc(k) + '">' + svgI('spark') + 'صمّم التجربة</button><button class="btn ghost" data-act="lab-ideas" data-k="' + esc(k) + '">اقترح عليّ أفكارًا</button></div>' +
+      '<p class="small muted">' + labCost() + '</p>'
+      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</section>';
+  return h;
+};
+function labCost() {
+  var m = MODELS.filter(function (x) { return x[0] === aiModel(); })[0]; if (!m) return 'التكلفة بحسب النموذج الذي اخترته.';
+  var usd = (5000 * m[2] + 14000 * m[3]) / 1e6;
+  return 'التكلفة التقريبية من رصيد حسابك: نحو ' + (usd < 0.01 ? 'أقل من سنت' : usd.toFixed(2) + ' دولار') + ' للتجربة، ويستغرق التصميم دقيقة إلى ثلاث.';
+}
+function labCtx(b, l) {
+  var a = aidOf(b, l);
+  return 'الكتاب: ' + b.title + '\nالوحدة: ' + (l.unit || '') + (l.chap ? '\nالفصل: ' + l.chap : '') + '\nالدرس: ' + l.title + '\n\nمحتوى الدرس:\n' + (a ? aidText(a.d) : '(لا يوجد مساعد للدرس)');
+}
+ACT['lab-open'] = function (el) { var id = el.getAttribute('data-id'); route.lab = route.lab === id ? null : id; render(true); };
+ACT['lab-full'] = function (el) {
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var lab = labsOf(x.b, x.l).filter(function (y) { return y.id === el.getAttribute('data-id'); })[0]; if (!lab) return;
+  var ov = document.createElement('div'); ov.className = 'lab-full'; ov.innerHTML = '<div class="lab-fh"><b>' + esc(lab.title) + '</b><button class="btn sm" type="button">إغلاق</button></div>' + labFrame(lab, 'lab-ff');
+  document.body.appendChild(ov); document.documentElement.classList.add('lab-on'); wake(true);
+  ov.querySelector('button').addEventListener('click', function () { ov.remove(); document.documentElement.classList.remove('lab-on'); wake(false); });
+};
+ACT['lab-del'] = function (el) {
+  if (!el.classList.contains('arm')) { el.classList.add('arm'); el.textContent = 'اضغط مرة ثانية للحذف'; setTimeout(function () { el.classList.remove('arm'); el.textContent = 'احذف'; }, 3000); return; }
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var id = el.getAttribute('data-id');
+  labsSave(x.b, x.l, labsOf(x.b, x.l).filter(function (y) { return y.id !== id; })); render(true); toast('حُذفت التجربة');
+};
+ACT['lab-ideas'] = function (el) {
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var box = document.getElementById('lab-ideas'); if (box) box.innerHTML = '<p class="small muted">يفكّر Claude…</p>';
+  claude('أنت مصمم مختبرات علوم افتراضية للمرحلة المتوسطة في السعودية. اقترح 4 أفكار متنوعة ومبدعة لتجارب افتراضية تفاعلية عن الدرس المعطى، يغيّر فيها الطالب متغيرًا ويلاحظ أثره. أعد JSON فقط: {"ideas":[{"t":"عنوان قصير","d":"وصف في جملة: ماذا يغيّر الطالب وماذا يلاحظ"}]}', [{ type: 'text', text: labCtx(x.b, x.l) }], 1200, null)
+    .then(function (res) {
+      var o = parseJSON(res), ideas = (o.ideas || []).filter(function (i) { return i && i.t; }).slice(0, 6);
+      if (box) box.innerHTML = ideas.map(function (i) { return '<button type="button" class="lab-idea" data-act="lab-pick" data-v="' + esc(i.t + ': ' + (i.d || '')) + '"><b>' + esc(i.t) + '</b><span>' + esc(i.d || '') + '</span></button>'; }).join('');
+    }, function (e) { if (box) box.innerHTML = '<p class="small bad">' + esc(aiMsg(e)) + '</p>'; });
+};
+ACT['lab-pick'] = function (el) { var t = document.getElementById('lab-idea'); if (t) { t.value = el.getAttribute('data-v'); t.focus(); } Array.prototype.forEach.call(document.querySelectorAll('.lab-idea'), function (b) { b.classList.toggle('on', b === el); }); };
+var LABGEN = null;
+ACT['lab-gen'] = function (el) {
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return;
+  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  var t = document.getElementById('lab-idea'), idea = t ? t.value.trim() : '';
+  LABGEN = { stopped: false }; wake(true);
+  var t0 = Date.now(), prog = progModal('Claude يصمّم التجربة', 'lab-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 1600, 4, 95) + '%'; }, 500);
+  prog('يقرأ الدرس ويصمّم التجربة…');
+  claude(LAB_SYS, [{ type: 'text', text: labCtx(x.b, x.l) + '\n\n' + (idea ? 'فكرة المعلم للتجربة: ' + idea : 'اختر أنت فكرة التجربة الأنسب والأكثر إبداعًا لهذا الدرس.') + '\n\nاكتب صفحة HTML الآن.' }], 24000, function (n) { prog('يكتب Claude التجربة… ' + num(n) + ' حرفًا'); }, LABGEN)
+    .then(function (res) {
+      clearInterval(tick); wake(false);
+      var s = res.text, i = s.search(/<!DOCTYPE html|<html[\s>]/i), j = s.toLowerCase().lastIndexOf('</html>');
+      if (i < 0 || j < i) throw aiErr(res.stop === 'max_tokens' ? 'cut' : 'json');
+      var html = s.slice(i, j + 7), tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html), hm = /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
+      var title = ((tm && tm[1]) || (hm && hm[1].replace(/<[^>]+>/g, '')) || 'تجربة افتراضية').trim().slice(0, 90);
+      var lab = { id: 'x' + Date.now().toString(36), title: title, html: html, idea: idea.slice(0, 300), at: Date.now(), model: aiModel() };
+      labsSave(x.b, x.l, labsOf(x.b, x.l).concat([lab]));
+      var m = document.getElementById('modal'); m.__busy = false; closeModal();
+      route.tab = 'lab'; route.lab = lab.id; render(true); toast('جاهزة: «' + title + '». جرّبها قبل الحصة', 4000);
+    })['catch'](function (e) { clearInterval(tick); wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم تكتمل التجربة') + '</h2><p class="muted">' + (e.code === 'stop' ? '' : esc(aiMsg(e))) + '</p>'); });
+};
+ACT['lab-stop'] = function () { if (LABGEN) { LABGEN.stopped = true; if (LABGEN.abort) LABGEN.abort(); } };
 
 /* ---------- presenting a lesson to the class: one idea per screen ---------- */
 var PV = null;
@@ -2412,7 +2524,7 @@ function rekeyBook(oldId, nu) { // move everything of a book to the id the other
     });
   }
   var pre = oldId + ':', pk = function (key) { return key.indexOf(pre) === 0; }, mk = function (key) { return nu + key.slice(oldId.length); };
-  var npk = function (key) { return /^[bxpa]:/.test(key) && key.indexOf(pre, 2) === 2; }, nmk = function (key) { return key.slice(0, 2) + nu + key.slice(2 + oldId.length); };
+  var npk = function (key) { return /^[bxpal]:/.test(key) && key.indexOf(pre, 2) === 2; }, nmk = function (key) { return key.slice(0, 2) + nu + key.slice(2 + oldId.length); };
   return Promise.all([
     dbGet('books', oldId).then(function (b) { if (!b) return; b.id = nu; return tx('books', 'readwrite', function (s) { s.put(b); s['delete'](oldId); }); }),
     dbGet('files', oldId).then(function (f) { if (!f) return; f.id = nu; return tx('files', 'readwrite', function (s) { s.put(f); s['delete'](oldId); }); }),

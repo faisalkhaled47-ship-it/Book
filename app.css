@@ -249,3 +249,14 @@ pre.sql{background:var(--panel-2);border-radius:12px;padding:10px 12px;font:12px
 /* the app has its own zoom for the book: the screen itself never zooms or slides sideways (iPhone/iPad pinch and double tap) */
 html{touch-action:pan-x pan-y}
 html,body{overflow-x:clip}
+/* المختبر: Claude's virtual experiments, each in a sandboxed frame */
+.lab-card .lab-f{display:block;width:100%;height:min(80vh,760px);min-height:460px;border:1px solid var(--rule);border-radius:12px;background:#fff;margin-top:4px}
+.lab-full{position:fixed;inset:0;z-index:95;background:var(--ground);display:flex;flex-direction:column;padding:calc(6px + env(safe-area-inset-top,0px)) 8px calc(6px + env(safe-area-inset-bottom,0px))}
+.lab-fh{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:2px 6px 8px}
+.lab-fh b{font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lab-ff{flex:1;width:100%;border:0;border-radius:12px;background:#fff}
+html.lab-on,html.lab-on body{overflow:hidden}
+.lab-ideas{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin:4px 0}
+.lab-idea{appearance:none;text-align:start;border:1px solid var(--rule);background:var(--panel);color:var(--ink);border-radius:12px;padding:10px 12px;font:inherit;cursor:pointer;display:flex;flex-direction:column;gap:4px}
+.lab-idea span{font-size:13px;color:var(--ink-2);line-height:1.6}
+.lab-idea.on{box-shadow:0 0 0 2px var(--accent)}
