@@ -1087,6 +1087,7 @@ var LAB_SYS = [
   '- ممنوع localStorage وsessionStorage وcookies وalert وconfirm وprompt وwindow.open (الصفحة تعمل في إطار معزول).',
   '- الرسم بـ canvas أو SVG مع حركة سلسة (requestAnimationFrame)، يراعي devicePixelRatio ويتكيف مع تغيّر الحجم (من عرض 360 إلى 1400 بكسل).',
   '- التحكم باللمس والقلم والفأرة عبر Pointer Events: منزلقات range وأزرار كبيرة (44 بكسل على الأقل)، وعناصر تُسحب إن كان ذلك مناسبًا.',
+  '- السحب على الآيباد والآيفون: ضع touch-action:none على canvas وعلى كل عنصر يُسحب، واستعمل pointerdown وpointermove وpointerup مع setPointerCapture، وحوّل الإحداثيات بـ getBoundingClientRect مع مراعاة devicePixelRatio، واجعل منطقة اللمس حول الجسم المسحوب واسعة (30 بكسل على الأقل). ووفّر دائمًا زرًا يشغّل الحركة إلى جانب السحب.',
   '- قراءات حية بالأرقام والوحدات، وجدول بيانات يُضاف إليه صف عند الضغط على «سجّل القراءة»، ورسم بياني بسيط على canvas إن كان مفيدًا.',
   '- خط system-ui، وأرقام غربية 0-9، وألوان هادئة واضحة على خلفية فاتحة، وتباين جيد على جهاز العرض.',
   '- الحجم مهم: الصفحة كلها أقل من 28 ألف حرف. اكتب CSS وJavaScript مختصرين دون تعليقات ودون تكرار، ونصوصًا عربية قصيرة، وركّز على محاكاة واحدة متقنة بدل ميزات كثيرة. الكود سليم بلا أخطاء، وأنهِ الصفحة دائمًا بـ </html>.',
@@ -1108,6 +1109,7 @@ function labsSave(b, l, labs) { var k = labKey(b, l); if (!labs.length) { delete
 function labDoc(html) { // a strict content policy inside the frame: nothing leaves it, nothing is loaded into it
   var csp = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\'; style-src \'unsafe-inline\'; img-src data: blob:; media-src data: blob:; font-src data:">';
   var rep = '<script>(function(){function s(m){try{parent.postMessage({labErr:String(m).slice(0,300)},"*")}catch(e){}}window.addEventListener("error",function(e){s((e.message||"خطأ")+(e.lineno?" (سطر "+e.lineno+")":""))});window.addEventListener("unhandledrejection",function(e){s(e.reason&&e.reason.message||e.reason)})})()<\/script>';
+  rep += '<style>canvas,svg{touch-action:none!important;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}</style>'; // a finger on the drawing moves things instead of scrolling the page (iPhone/iPad)
   return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, function (m) { return m + csp + rep; }) : csp + rep + html;
 }
 function labFrame(lab, cls) { return '<iframe data-lab="' + lab.id + '" class="' + (cls || 'lab-f') + '" title="' + esc(lab.title) + '" sandbox="allow-scripts" referrerpolicy="no-referrer" srcdoc="' + esc(labDoc(lab.html)) + '"></iframe>'; }
@@ -1208,7 +1210,7 @@ window.addEventListener('message', function (e) {
   if (l.indexOf(e.data.labErr) < 0 && l.length < 8) l.push(e.data.labErr);
   Array.prototype.forEach.call(document.querySelectorAll('.lab-err[data-id="' + id + '"]'), function (p) { p.hidden = false; });
 });
-var LAB_FIXES = ['الأعمدة أو الرسوم تخرج من حدودها', 'الرسم البياني لا يُرسم أثناء الحركة', 'الأرقام لا تتطابق مع الحركة', 'كبّر الخط والأزرار للعرض', 'اجعلها أبسط وأوضح للطلاب', 'أضف مقارنة بين محاولتين'];
+var LAB_FIXES = ['لا أقدر أحرّك الجسم باللمس', 'الأعمدة أو الرسوم تخرج من حدودها', 'الرسم البياني لا يُرسم أثناء الحركة', 'الأرقام لا تتطابق مع الحركة', 'كبّر الخط والأزرار للعرض', 'اجعلها أبسط وأوضح للطلاب', 'أضف مقارنة بين محاولتين'];
 ACT['lab-edit'] = function (el) {
   var k = el.getAttribute('data-k'), id = el.getAttribute('data-id'), x = lessonByKey(k); if (!x) return;
   if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
