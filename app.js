@@ -349,6 +349,7 @@ var RD = null;                  // the open reader
 function rt() { var o = P.rt || {}; return { tool: o.tool || 'pen', ink: +o.ink || 0, hlc: +o.hlc || 0, finger: !!o.finger, zoom: +o.zoom || 1 }; }
 function setRt(k, v) { P.rt = P.rt || {}; P.rt[k] = v; savePref(); }
 var RSVG = {
+  stk: '<path d="M5 4h14v10l-5 6H5z"/><path d="M14 20v-6h5"/><path d="M8.5 9h7M8.5 12.5h4"/>',
   spark: '<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
   off: '<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12"/><path d="M11 11.5V4.5a1.5 1.5 0 0 1 3 0V12"/><path d="M14 11.5V6.5a1.5 1.5 0 0 1 3 0V14c0 4-2.5 7-6.5 7S5 18.5 4 16l-1.2-3a1.5 1.5 0 0 1 2.7-1.3L8 15"/>',
   hl: '<path d="M9 15l-2 5h5l1.5-2.5"/><path d="M13.5 17.5 20 8l-4-3-6.5 9.5z"/>',
@@ -388,6 +389,7 @@ function rdBar() {
     '<button type="button" class="rb rb-hl' + (o.tool === 'hl' ? ' on' : '') + '" data-act="rd-hl" style="--hc:' + HL_C[o.hlc] + '" aria-label="قلم تحديد ' + HL_N[o.hlc] + ' (اضغط مرة ثانية لتغيير اللون)" title="قلم التحديد">' + rIcon('hl') + '</button>' +
     b('rd-tool', 'er', 'er', 'ممحاة', o.tool === 'er') + '<i class="rb-sep"></i>' +
     b('rd-undo', null, 'undo', 'تراجع') + b('rd-clear', null, 'clear', 'امسح كتابة هذه الصفحة') +
+    b('rd-stk', null, 'stk', 'لاصقة على هذه الصفحة') +
     b('rd-finger', null, 'finger', o.finger ? 'الكتابة بالإصبع مفعّلة' : 'الكتابة بالإصبع', o.finger) + '<i class="rb-sep"></i>' +
     b('rd-zoom', '-1', 'minus', 'تصغير') + '<span class="rb-z" id="rb-z">' + Math.round(o.zoom * 100) + '%</span>' + b('rd-zoom', '1', 'plus', 'تكبير');
 }
@@ -416,13 +418,13 @@ function readerMount() {
     return doc.getPage(Math.min(start, doc.numPages)).then(function (pg) {
       if (R.dead) return;
       var v = pg.getViewport({ scale: 1 }), ratio = v.width / v.height, h = '';
-      for (var n = 1; n <= doc.numPages; n++) h += '<div class="pg" data-n="' + n + '" style="aspect-ratio:' + v.width.toFixed(1) + ' / ' + v.height.toFixed(1) + '"><canvas class="pg-c"></canvas><canvas class="pg-i"></canvas><div class="pg-a"></div><span class="pg-no">' + pLabel(b, n) + '</span></div>';
+      for (var n = 1; n <= doc.numPages; n++) h += '<div class="pg" data-n="' + n + '" style="aspect-ratio:' + v.width.toFixed(1) + ' / ' + v.height.toFixed(1) + '"><canvas class="pg-c"></canvas><canvas class="pg-i"></canvas><div class="pg-a"></div><div class="stk-l"></div><span class="pg-no">' + pLabel(b, n) + '</span></div>';
       wrap.innerHTML = h;
       R.ratio = ratio;
       Array.prototype.forEach.call(wrap.querySelectorAll('.pg'), function (el) {
         var n = +el.getAttribute('data-n');
-        R.pages[n - 1] = { n: n, el: el, c: el.querySelector('.pg-c'), ic: el.querySelector('.pg-i'), a: el.querySelector('.pg-a'), ratio: ratio, sized: false, done: 0, task: null };
-        hookInk(R, R.pages[n - 1]); hookAns(R, R.pages[n - 1]); drawAns(R.pages[n - 1]);
+        R.pages[n - 1] = { n: n, el: el, c: el.querySelector('.pg-c'), ic: el.querySelector('.pg-i'), a: el.querySelector('.pg-a'), s: el.querySelector('.stk-l'), ratio: ratio, sized: false, done: 0, task: null };
+        var P0 = R.pages[n - 1]; hookInk(R, P0); hookAns(R, P0); drawAns(P0); P0.stk = stkCtx(R, P0); stkBind(P0.s, P0.stk); drawStk(P0);
       });
       if (route.present) presentFit(true);
       R.io = new IntersectionObserver(function (es) {
@@ -2091,6 +2093,82 @@ ACT['solve-run'] = function (el) {
 };
 ACT['solve-stop'] = function () { if (SOLVE) { SOLVE.stopped = true; if (SOLVE.abort) SOLVE.abort(); } };
 
+/* ---------- yellow sticky notes: a note stuck on a page or a card; a tap opens it, a drag moves it ----------
+   Positions are in units of the holder's width (1000 = full width), so they stay put when the screen turns or zooms. */
+var STK_C = ['#FFE873', '#FFC6DC', '#C2F0C8', '#C4E4FF'], STK_N = ['أصفر', 'وردي', 'أخضر', 'أزرق'], STK_ED = null;
+function stkHtml(items) {
+  return (items || []).map(function (it, i) {
+    return '<div class="stk' + (it.m ? ' m' : '') + '" data-i="' + i + '" style="left:' + (it.x / 10) + '%;top:' + (it.y / 10) + 'cqw;--sc:' + (STK_C[it.c || 0] || STK_C[0]) + '" role="note" aria-label="لاصقة' + (it.txt ? ': ' + esc(it.txt.slice(0, 60)) : '') + '">' +
+      (it.m ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v10l-5 6H5z"/><path d="M14 20v-6h5"/></svg>' : '<span>' + esc(it.txt || '') + '</span>') + '</div>';
+  }).join('');
+}
+function stkBind(layer, ctx) { // ctx: {host(), get(), set(items)}
+  var drag = null;
+  layer.addEventListener('pointerdown', function (e) {
+    var el = e.target.closest && e.target.closest('.stk'); if (!el) return;
+    e.preventDefault(); e.stopPropagation();
+    drag = { el: el, i: +el.getAttribute('data-i'), x0: e.clientX, y0: e.clientY, l: el.offsetLeft, t: el.offsetTop, W: ctx.host().getBoundingClientRect().width || 1, moved: false, id: e.pointerId };
+    try { el.setPointerCapture(e.pointerId); } catch (x) {}
+  });
+  layer.addEventListener('pointermove', function (e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    var dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+    if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 8) return;
+    drag.moved = true; drag.el.classList.add('drag');
+    drag.el.style.left = (drag.l + dx) + 'px'; drag.el.style.top = (drag.t + dy) + 'px';
+  });
+  function up(e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    var d = drag; drag = null; d.el.classList.remove('drag');
+    var items = ctx.get(), it = items[d.i]; if (!it) return;
+    if (d.moved) { var k = d.W / 1000, H = (ctx.host().getBoundingClientRect().height || 1) / k; it.x = Math.round(Math.max(0, Math.min(980, d.el.offsetLeft / k))); it.y = Math.round(Math.max(0, Math.min(H - 20, d.el.offsetTop / k))); ctx.set(items); }
+    else if (it.m) { it.m = false; ctx.set(items); }
+    else stkEdit(ctx, d.i);
+  }
+  layer.addEventListener('pointerup', up); layer.addEventListener('pointercancel', up);
+}
+function stkAdd(ctx, w) { // a new note in the middle of what is on screen of this holder
+  var host = ctx.host(), r = host.getBoundingClientRect(), k = (r.width || 1) / 1000;
+  var mid = Math.max(20, Math.min(r.height - 120, window.innerHeight / 2 - r.top - 60));
+  stkEdit(ctx, -1, { id: Date.now().toString(36), x: Math.round((1000 - w) / 2), y: Math.round(mid / k), txt: '', c: 0, at: Date.now() }); // kept only once something is written
+}
+function stkEdit(ctx, i, fresh) {
+  var it = fresh || ctx.get()[i]; if (!it) return;
+  STK_ED = { ctx: ctx, i: i, fresh: fresh || null, c: it.c || 0 };
+  openModal('<div class="modal-card stk-ed" role="dialog" aria-modal="true" aria-label="لاصقة" style="--sc:' + STK_C[it.c || 0] + '"><textarea id="stk-t" rows="5" placeholder="اكتب ملاحظتك…">' + esc(it.txt || '') + '</textarea>' +
+    '<div class="stk-cs">' + STK_C.map(function (c, k) { return '<button type="button" data-stk="col" data-v="' + k + '" aria-label="' + STK_N[k] + '" aria-pressed="' + ((it.c || 0) === k) + '" style="--c:' + c + '"></button>'; }).join('') + '</div>' +
+    '<div class="actions"><button class="btn" data-stk="save">احفظ</button><button class="btn ghost" data-stk="min">صغّرها</button><button class="btn ghost danger" data-stk="del">احذف</button></div></div>');
+  setTimeout(function () { var t = document.getElementById('stk-t'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }, 60);
+}
+function stkDone(act) {
+  var E = STK_ED; if (!E) return; var items = E.ctx.get(), it = E.fresh || items[E.i]; if (!it) { STK_ED = null; closeModal(); return; }
+  var t = document.getElementById('stk-t'), txt = t ? t.value.trim().slice(0, 2000) : it.txt;
+  if (E.fresh && (act === 'del' || !txt)) { STK_ED = null; closeModal(); return; } // an empty new note is not kept
+  if (!E.fresh && (act === 'del' || (!txt && act !== 'min'))) items.splice(E.i, 1);
+  else { it.txt = txt; it.c = E.c; it.m = act === 'min'; it.at = Date.now(); if (E.fresh) items.push(it); }
+  STK_ED = null; E.ctx.set(items); closeModal();
+  if (act === 'del') toast('حُذفت اللاصقة');
+}
+document.addEventListener('click', function (e) {
+  var b = e.target && e.target.closest ? e.target.closest('[data-stk]') : null; if (!b || !STK_ED) return;
+  e.preventDefault(); e.stopPropagation();
+  var a = b.getAttribute('data-stk');
+  if (a === 'col') { STK_ED.c = +b.getAttribute('data-v'); var m = b.closest('.stk-ed'); if (m) m.style.setProperty('--sc', STK_C[STK_ED.c]); Array.prototype.forEach.call(b.parentNode.children, function (x) { x.setAttribute('aria-pressed', String(x === b)); }); return; }
+  stkDone(a);
+}, true);
+/* kitabi: notes on the book pages, kept in the notes store as n:<bookId>:<page> {items:[{id, x, y, txt, c, m}]} (backup and sync with the rest) */
+function stkKey(b, n) { return 'n:' + b.id + ':' + n; }
+function stkCtx(R, pg) {
+  return {
+    host: function () { return pg.el; },
+    get: function () { var r = XC[stkKey(R.b, pg.n)]; return r && Array.isArray(r.items) ? JSON.parse(JSON.stringify(r.items)) : []; },
+    set: function (items) { var k = stkKey(R.b, pg.n); if (!items.length) { delete XC[k]; dbDel('notes', k); } else { var rec = { k: k, items: items, t: Date.now() }; XC[k] = rec; dbPut('notes', rec); } drawStk(pg); }
+  };
+}
+function drawStk(pg) { var R = RD; if (!R || !pg.s) return; var r = XC[stkKey(R.b, pg.n)]; pg.s.innerHTML = stkHtml(r && r.items); }
+function drawStkAll() { if (RD) RD.pages.forEach(function (pg) { if (pg.s) drawStk(pg); }); }
+ACT['rd-stk'] = function () { var R = RD; if (!R) return; var pg = R.pages[R.cur - 1]; if (pg && pg.stk) stkAdd(pg.stk, 260); };
+
 /* ---------- books: adding a PDF, the library ---------- */
 function fingerprint(file, buf) { // same file → same id, so a restored backup finds its writing again
   var head = new Uint8Array(buf, 0, Math.min(buf.byteLength, 1048576));
@@ -2581,7 +2659,7 @@ function applyRow(row, ctx) {
       if (del) {
         if (!loc) return false;
         dbDel(st, k);
-        if (st === 'aids') delete AIDS[k]; else if (st === 'notes') { delete XC[k]; if (/^a:/.test(k) && RD) setTimeout(drawAnsAll, 0); } else if (st === 'books') BOOKS = BOOKS.filter(function (x) { return x.id !== k; });
+        if (st === 'aids') delete AIDS[k]; else if (st === 'notes') { delete XC[k]; if (/^a:/.test(k) && RD) setTimeout(drawAnsAll, 0); if (/^n:/.test(k) && RD) setTimeout(drawStkAll, 0); } else if (st === 'books') BOOKS = BOOKS.filter(function (x) { return x.id !== k; });
       } else if (st === 'books') {
         var b = bookById(k);
         if (!b) { b = { id: k, lessons: [] }; BOOKS.push(b); b.missing = !ctx.files[k]; }
@@ -2591,7 +2669,7 @@ function applyRow(row, ctx) {
         var d; try { d = cleanAid(v.d); } catch (e) { return false; }
         var rec = { k: k, src: v.src === 'ai' ? 'ai' : 'pack', at: rt, model: str(v.model), d: d }; AIDS[k] = rec; dbPut('aids', rec);
       } else if (st === 'ink') { if (Array.isArray(v.s)) dbPut('ink', { k: k, s: v.s, t: rt }); }
-      else if (st === 'notes') { var c = Object.assign({}, v, { k: k }); XC[k] = c; dbPut('notes', c); if (/^a:/.test(k) && RD) setTimeout(drawAnsAll, 0); }
+      else if (st === 'notes') { var c = Object.assign({}, v, { k: k }); XC[k] = c; dbPut('notes', c); if (/^a:/.test(k) && RD) setTimeout(drawAnsAll, 0); if (/^n:/.test(k) && RD) setTimeout(drawStkAll, 0); }
     } finally { APPLYING = false; }
     ctx.changed = true; return true;
   });
@@ -2606,7 +2684,7 @@ function rekeyBook(oldId, nu) { // move everything of a book to the id the other
     });
   }
   var pre = oldId + ':', pk = function (key) { return key.indexOf(pre) === 0; }, mk = function (key) { return nu + key.slice(oldId.length); };
-  var npk = function (key) { return /^[bxpal]:/.test(key) && key.indexOf(pre, 2) === 2; }, nmk = function (key) { return key.slice(0, 2) + nu + key.slice(2 + oldId.length); };
+  var npk = function (key) { return /^[bxpaln]:/.test(key) && key.indexOf(pre, 2) === 2; }, nmk = function (key) { return key.slice(0, 2) + nu + key.slice(2 + oldId.length); };
   return Promise.all([
     dbGet('books', oldId).then(function (b) { if (!b) return; b.id = nu; return tx('books', 'readwrite', function (s) { s.put(b); s['delete'](oldId); }); }),
     dbGet('files', oldId).then(function (f) { if (!f) return; f.id = nu; return tx('files', 'readwrite', function (s) { s.put(f); s['delete'](oldId); }); }),
