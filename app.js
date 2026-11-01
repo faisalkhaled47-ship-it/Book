@@ -325,6 +325,21 @@ function wake(on) {
   } catch (e) {}
 }
 
+/* iPhone/iPad: a two-finger pinch or a double tap could zoom the whole screen, so the bars and sheets slid out of place.
+   The book has its own zoom (two fingers on the pages); the screen itself stays at its size. */
+['gesturestart', 'gesturechange', 'gestureend'].forEach(function (ev) { document.addEventListener(ev, function (e) { e.preventDefault(); }, { passive: false }); });
+(function () {
+  var vv = window.visualViewport, t = null; if (!vv) return;
+  function unzoom() {
+    if (Math.abs(vv.scale - 1) < 0.01 && Math.abs(vv.offsetLeft) < 1) return;
+    var m = document.querySelector('meta[name=viewport]'); if (!m) return;
+    var c = m.getAttribute('content'); m.setAttribute('content', c.replace(/,?\s*minimum-scale=[\d.]+/, '') + ',minimum-scale=1');
+    setTimeout(function () { m.setAttribute('content', c); if (Math.abs(vv.offsetLeft) >= 1) window.scrollTo(0, window.scrollY); }, 60);
+  }
+  vv.addEventListener('resize', function () { clearTimeout(t); t = setTimeout(unzoom, 250); });
+  vv.addEventListener('scroll', function () { clearTimeout(t); t = setTimeout(unzoom, 250); });
+})();
+
 /* ---------- the book reader: PDF pages with a writing layer ---------- */
 var PEN_C = ['#1B2621', '#C62828', '#1F5FB8', '#1E7B4F'], PEN_N = ['أسود', 'أحمر', 'أزرق', 'أخضر'];
 var HL_C = ['#FFD23F', '#6FDB98', '#86B6FF', '#FF9EC4'], HL_N = ['أصفر', 'أخضر', 'أزرق', 'وردي'];

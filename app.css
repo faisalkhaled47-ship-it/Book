@@ -246,3 +246,6 @@ pre.sql{background:var(--panel-2);border-radius:12px;padding:10px 12px;font:12px
 .ans-t code{font-size:.92em}
 .ans-list{margin:6px 0 10px;padding-inline-start:20px;display:flex;flex-direction:column;gap:8px}.ans-list li span{display:block;color:var(--ink-2);margin-top:2px;line-height:1.7}
 .rd-solve svg{color:var(--accent)}
+/* the app has its own zoom for the book: the screen itself never zooms or slides sideways (iPhone/iPad pinch and double tap) */
+html{touch-action:pan-x pan-y}
+html,body{overflow-x:clip}
