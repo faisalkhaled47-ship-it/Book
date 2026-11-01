@@ -2392,11 +2392,23 @@ function syncInfo() {
   return (sb.last ? 'آخر مزامنة: ' + new Date(sb.last).toLocaleTimeString('ar-SA-u-nu-latn', { hour: 'numeric', minute: '2-digit' }) + ' ' + relDay(sb.last) : 'لم تتم مزامنة بعد') + (q ? ' · بانتظار الرفع: ' + q : '');
 }
 function refreshSyncInfo() { var el = document.getElementById('sync-info'); if (el && sbOn()) el.innerHTML = syncInfo(); }
+function sbUrl(x) { // accepts the Project URL, any URL inside the project, or the dashboard address
+  x = String(x || '').trim(); if (!x) return '';
+  var m = /supabase\.com\/dashboard\/project\/([a-z0-9]{10,40})/i.exec(x); if (m) return 'https://' + m[1].toLowerCase() + '.supabase.co';
+  if (/^[a-z0-9]{15,40}$/i.test(x)) return 'https://' + x.toLowerCase() + '.supabase.co'; // the project id alone
+  if (!/^https?:\/\//i.test(x)) x = 'https://' + x;
+  try { var u = new URL(x); return u.protocol === 'https:' || /^(localhost|127\.0\.0\.1)$/.test(u.hostname) ? u.origin : ''; } catch (e) { return ''; }
+}
 function sbForm() {
-  var url = (document.getElementById('sb-url').value || '').trim().replace(/\/+$/, ''), key = (document.getElementById('sb-key').value || '').trim(), em = (document.getElementById('sb-email').value || '').trim(), pw = document.getElementById('sb-pass').value || '';
-  if (!/^(https:\/\/[^\s/]+|http:\/\/(localhost|127\.0\.0\.1)(:\d+)?)$/.test(url)) { toast('اكتب رابط المشروع كما في Supabase: https://….supabase.co'); return null; }
-  if (key.length < 20) { toast('الصق المفتاح العام كاملًا'); return null; }
-  if (!/@/.test(em) || pw.length < 6) { toast('اكتب الإيميل وكلمة مرور من 6 أحرف فأكثر'); return null; }
+  var info = document.getElementById('sync-info');
+  function bad(t) { if (info) info.innerHTML = '<span class="bad">' + esc(t) + '</span>'; toast(t, 4000); return null; }
+  var url = sbUrl(document.getElementById('sb-url').value), key = (document.getElementById('sb-key').value || '').replace(/\s+/g, ''), em = (document.getElementById('sb-email').value || '').trim(), pw = document.getElementById('sb-pass').value || '';
+  if (!url) return bad('رابط المشروع غير صحيح. انسخه من Project Settings ← Data API، وشكله: https://….supabase.co');
+  if (key.length < 20) return bad('الصق المفتاح العام كاملًا (Publishable أو anon).');
+  if (/^sb_secret_/.test(key) || /service_role/.test(key)) return bad('هذا المفتاح السري؛ الصق المفتاح العام (Publishable أو anon) لا secret.');
+  if (!/^\S+@\S+\.\S+$/.test(em)) return bad('اكتب الإيميل كاملًا.');
+  if (pw.length < 6) return bad('كلمة المرور 6 أحرف فأكثر.');
+  document.getElementById('sb-url').value = url;
   P.sb = { url: url, key: key, email: em }; savePref(); return { email: em, password: pw };
 }
 function sbAfterIn(j) {
