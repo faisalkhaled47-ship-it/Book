@@ -1271,6 +1271,83 @@ ACT['lab-undo'] = function (el) {
   labsSave(x.b, x.l, labs); delete LAB_ERR[id]; render(true); toast('رجعت للنسخة السابقة (والمعدّلة محفوظة: اضغط مرة أخرى للتبديل)');
 };
 
+/* ---------- «الرسوم»: more drawings by Claude, from a description, a photo, or a page of the book ----------
+   Kept in the notes store as f:<bookId>:<lessonId> {figs:[{id, svg, cap, from, at, model}]} (backup and sync); the SVG is cleaned like every drawing. */
+var FIG_SYS = [
+  'أنت رسام توضيحي لكتب العلوم في المرحلة المتوسطة في المملكة العربية السعودية.',
+  'ارسم رسومًا توضيحية تعليمية أصلية بصيغة SVG، واضحة على جهاز العرض، بتسميات عربية قصيرة، دقيقة علميًا.',
+  'إن أُرفقت صورة فحاكِها: أعد رسم محتواها نفسه (الأجزاء وترتيبها وأسهمها وتسمياتها) رسمًا توضيحيًا نظيفًا مبسطًا، لا نسخة من الصورة. وإن كانت الصورة صفحة كتاب فيها أكثر من شكل فارسم الشكل الذي يطلبه المعلم، أو أهم شكل فيها.',
+  'شروط SVG لازمة:',
+  '- عنصر <svg> واحد مع viewBox="0 0 800 560" أو قريب منه، دون width أو height.',
+  '- العناصر المسموحة فقط: svg g rect circle ellipse path polygon polyline line text tspan defs marker linearGradient radialGradient stop clipPath title.',
+  '- لا style ولا class ولا CSS ولا صور ولا روابط: استعمل الخصائص المباشرة fill وstroke وstroke-width وfont-size وfont-weight وtext-anchor وopacity.',
+  '- النص العربي: font-size بين 20 و28، وtext-anchor="middle" غالبًا، وfill="#1B2621"، ولا يتداخل مع الخطوط. الأسهم بـ marker معرّف في defs.',
+  '- ألوان هادئة واضحة، وخلفية بيضاء أو فاتحة جدًا (rect بكامل المساحة).',
+  'أعد JSON فقط دون أي نص أو علامات ``` قبله أو بعده: {"figs":[{"svg":"<svg …>…</svg>","cap":"وصف قصير للرسم"}]}'
+].join('\n');
+var FIG_REF = null, FIGGEN = null;
+function figKey(b, l) { return 'f:' + lk(b, l); }
+function figsOf(b, l) { var r = XC[figKey(b, l)]; return r && Array.isArray(r.figs) ? r.figs : []; }
+function figsSave(b, l, figs) { var k = figKey(b, l); if (!figs.length) { delete XC[k]; dbDel('notes', k); return; } var rec = { k: k, figs: figs, t: Date.now() }; XC[k] = rec; dbPut('notes', rec); }
+var FIGS_BASE = L_TAB.figs;
+L_TAB.figs = function (a, b, l) {
+  var k = lk(b, l), extra = figsOf(b, l), ai = !!P.ai.key, ref = FIG_REF && FIG_REF.k === k ? FIG_REF : null;
+  var h = a.figs.length ? FIGS_BASE(a, b, l) : '<p class="muted small">لا رسوم في مساعد هذا الدرس بعد.</p>';
+  if (extra.length) h += '<h3 class="sec-h">رسومي الإضافية</h3><div class="figs">' + extra.map(function (f) {
+    return '<div class="fig-x">' + figure({ svg: f.svg, cap: f.cap }, true) + '<div class="fig-xa"><span class="small muted">' + (f.from === 'image' ? 'محاكاة صورة' : f.from === 'page' ? 'من صفحة ' + esc(f.page || '') : 'من وصفك') + ' · ' + relDay(f.at) + '</span><button class="link small danger" data-act="fig-del" data-k="' + esc(k) + '" data-id="' + f.id + '">احذف</button></div></div>';
+  }).join('') + '</div>';
+  h += '<section class="panel gen" style="margin-top:16px"><h2 class="hh">' + ico('spark', 'violet') + 'ارسم مع Claude</h2>' +
+    (ai ? '<p class="small muted">صف الرسم الذي تريده، أو أعطه صورة أو صفحة من الكتاب ليحاكيها برسم توضيحي نظيف بتسميات عربية.</p>' +
+      '<label class="field"><span>ماذا يرسم؟</span><textarea id="fig-idea" rows="2" placeholder="مثال: مخطط يوضح تحول الطاقة في المصباح الكهربائي من كهربائية إلى ضوئية وحرارية، بأسهم ونسب"></textarea></label>' +
+      '<div class="fig-ref">' + (ref ? '<img src="' + ref.src + '" alt="الصورة المرفقة"><span class="small">' + (ref.page ? 'صفحة ' + esc(ref.page) + ' من الكتاب' : 'صورة مرفقة') + '</span><button class="link small" data-act="fig-ref-x">أزلها</button>'
+        : '<button class="btn ghost sm" data-act="fig-ref-img" data-k="' + esc(k) + '">' + svgI('image') + 'أرفق صورة يحاكيها</button><span class="small muted">أو</span><label class="fig-pg"><span class="small">صفحة الكتاب</span><input type="number" inputmode="numeric" id="fig-pg" placeholder="' + l.from + '"></label><button class="btn ghost sm" data-act="fig-ref-page" data-k="' + esc(k) + '">أرفقها</button>') + '</div>' +
+      '<div class="actions"><label class="fig-n"><span class="small">عدد الرسوم</span><select id="fig-n"><option>1</option><option selected>2</option><option>3</option></select></label><button class="btn" data-act="fig-gen" data-k="' + esc(k) + '">' + svgI('spark') + 'ارسم</button></div>' +
+      '<p class="small muted">التكلفة نحو 3 إلى 8 سنتات للرسم مع Sonnet. الرسوم توضيحية مبسطة (SVG)، لا صور واقعية.</p>'
+      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</section>';
+  return h;
+};
+ICONS.image = ICONS.image || '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 3.5 3 3-2.5L20 17"/>';
+ACT['fig-ref-img'] = function (el) {
+  var k = el.getAttribute('data-k');
+  pick('image/*', false).then(function (files) { return phShrink(files[0]); }).then(function (im) { FIG_REF = { k: k, src: im.src }; render(true); }, function () { toast('تعذّرت قراءة الصورة'); });
+};
+ACT['fig-ref-page'] = function (el) {
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var inp = document.getElementById('fig-pg'), pr = +(inp && inp.value) || x.l.from;
+  if (x.b.missing) { toast('ملف الكتاب غير موجود على هذا الجهاز'); return; }
+  toast('جارٍ تجهيز الصفحة…');
+  openDoc(x.b).then(function (doc) { return pageJpeg(doc, pdfPage(x.b, pr), 1400, 0.8); }).then(function (b64) { FIG_REF = { k: lk(x.b, x.l), src: 'data:image/jpeg;base64,' + b64, page: pr }; render(true); }, function () { toast('تعذّر فتح الصفحة'); });
+};
+ACT['fig-ref-x'] = function () { FIG_REF = null; render(true); };
+ACT['fig-del'] = function (el) {
+  if (!el.classList.contains('arm')) { el.classList.add('arm'); el.textContent = 'اضغط مرة ثانية للحذف'; setTimeout(function () { el.classList.remove('arm'); el.textContent = 'احذف'; }, 3000); return; }
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var id = el.getAttribute('data-id');
+  figsSave(x.b, x.l, figsOf(x.b, x.l).filter(function (f) { return f.id !== id; })); render(true);
+};
+ACT['fig-gen'] = function (el) {
+  var k = el.getAttribute('data-k'), x = lessonByKey(k); if (!x) return;
+  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  var t = document.getElementById('fig-idea'), idea = t ? t.value.trim() : '', ref = FIG_REF && FIG_REF.k === k ? FIG_REF : null, n = +(document.getElementById('fig-n') || {}).value || 2;
+  if (!idea && !ref) { toast('صف الرسم، أو أرفق صورة أو صفحة يحاكيها'); return; }
+  var a = aidOf(x.b, x.l), content = [];
+  if (ref) content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: ref.src.slice(ref.src.indexOf(',') + 1) } });
+  content.push({ type: 'text', text: 'الدرس: ' + x.l.title + (a && a.d.idea ? '\nالفكرة الرئيسة: ' + a.d.idea : '') + (a && a.d.vocab ? '\nالمفردات: ' + a.d.vocab.map(function (v) { return v.t; }).join('، ') : '') +
+    '\n\n' + (ref ? 'حاكِ ' + (ref.page ? 'الشكل في صفحة الكتاب المرفقة' : 'الصورة المرفقة') + ' برسم توضيحي. ' : '') + (idea ? 'طلب المعلم: ' + idea : '') + '\nارسم ' + (n === 1 ? 'رسمًا واحدًا' : n === 2 ? 'رسمين مختلفين' : 'ثلاثة رسوم مختلفة') + (ref && n > 1 ? ' (الأول محاكاة الصورة، والباقي رسوم مكملة لها)' : '') + '. أعد JSON المطلوب.' });
+  FIGGEN = { stopped: false }; wake(true);
+  var t0 = Date.now(), prog = progModal('Claude يرسم', 'fig-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 900, 4, 95) + '%'; }, 400);
+  prog(ref ? 'يقرأ الصورة ويرسم…' : 'يرسم…');
+  claude(FIG_SYS, content, 16000, function (c) { prog('يرسم Claude… ' + num(c) + ' حرفًا'); }, FIGGEN).then(function (res) {
+    clearInterval(tick); wake(false);
+    var o = parseJSON(res), got = (Array.isArray(o.figs) ? o.figs : []).map(function (f) { return { svg: cleanSvg(f && f.svg), cap: str(f && f.cap).slice(0, 200) }; }).filter(function (f) { return f.svg; });
+    if (!got.length) throw aiErr('json');
+    var now = Date.now(), list = figsOf(x.b, x.l).concat(got.map(function (f, i) { return { id: 'g' + now.toString(36) + i, svg: f.svg, cap: f.cap, from: ref ? (ref.page ? 'page' : 'image') : 'text', page: ref && ref.page ? String(ref.page) : '', at: now, model: aiModel() }; }));
+    figsSave(x.b, x.l, list); FIG_REF = null;
+    var m = document.getElementById('modal'); m.__busy = false; closeModal(); render(true);
+    toast('أُضيف ' + cnt(got.length, ['رسم واحد', 'رسمان', 'رسوم', 'رسمًا']) + ' تحت «رسومي الإضافية»', 3500);
+    setTimeout(function () { var el2 = document.querySelectorAll('.fig-x'); if (el2.length) el2[el2.length - got.length].scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 200);
+  })['catch'](function (e) { clearInterval(tick); wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم يكتمل الرسم') + '</h2><p class="muted">' + (e.code === 'stop' ? '' : esc(aiMsg(e))) + '</p>'); });
+};
+ACT['fig-stop'] = function () { if (FIGGEN) { FIGGEN.stopped = true; if (FIGGEN.abort) FIGGEN.abort(); } };
+
 /* ---------- presenting a lesson to the class: one idea per screen ---------- */
 var PV = null;
 function pvSlides(x, a) {
@@ -2750,7 +2827,7 @@ function rekeyBook(oldId, nu) { // move everything of a book to the id the other
     });
   }
   var pre = oldId + ':', pk = function (key) { return key.indexOf(pre) === 0; }, mk = function (key) { return nu + key.slice(oldId.length); };
-  var npk = function (key) { return /^[bxpaln]:/.test(key) && key.indexOf(pre, 2) === 2; }, nmk = function (key) { return key.slice(0, 2) + nu + key.slice(2 + oldId.length); };
+  var npk = function (key) { return /^[bxpalnf]:/.test(key) && key.indexOf(pre, 2) === 2; }, nmk = function (key) { return key.slice(0, 2) + nu + key.slice(2 + oldId.length); };
   return Promise.all([
     dbGet('books', oldId).then(function (b) { if (!b) return; b.id = nu; return tx('books', 'readwrite', function (s) { s.put(b); s['delete'](oldId); }); }),
     dbGet('files', oldId).then(function (f) { if (!f) return; f.id = nu; return tx('files', 'readwrite', function (s) { s.put(f); s['delete'](oldId); }); }),
