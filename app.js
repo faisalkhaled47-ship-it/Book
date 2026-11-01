@@ -1179,6 +1179,28 @@ ACT['lab-ideas'] = function (el) {
 };
 ACT['lab-pick'] = function (el) { var t = document.getElementById('lab-idea'); if (t) { t.value = el.getAttribute('data-v'); t.focus(); } Array.prototype.forEach.call(document.querySelectorAll('.lab-idea'), function (b) { b.classList.toggle('on', b === el); }); };
 var LABGEN = null;
+var LAB_CONT = 'انقطع ردك عند حد الطول قبل نهاية الصفحة. أكمل الصفحة من آخر حرف كتبته بالضبط، دون أي تكرار لما سبق ودون مقدمة أو شرح أو علامات ```، حتى </html>. واختصر ما بقي قدر الإمكان.';
+function labJoin(a, b) { // the continuation, glued to what came before without repeating it
+  b = b.replace(/^\s*```(?:html)?\s*/i, '');
+  if (/^\s*(<!DOCTYPE html|<html[\s>])/i.test(b)) return b; // it started over
+  for (var k = Math.min(400, a.length, b.length); k >= 12; k--) if (a.slice(-k) === b.slice(0, k)) return a + b.slice(k);
+  return a + b;
+}
+function labWrite(ask, prog, verb) { // the page, with one continuation if the answer hit the length limit
+  var acc = '', round = 0, outT = 0;
+  function run() {
+    var msgs = round ? [{ role: 'user', content: [{ type: 'text', text: ask }] }, { role: 'assistant', content: acc }, { role: 'user', content: LAB_CONT }] : [{ type: 'text', text: ask }];
+    return claude(LAB_SYS, msgs, 32000, function (n) { prog(verb + ' ' + num(acc.length * (round ? 1 : 0) + n) + ' حرفًا' + (round ? ' (تكملة)' : '')); }, LABGEN).then(function (res) {
+      outT += (res.usage && res.usage.out) || 0;
+      acc = round ? labJoin(acc, res.text) : res.text;
+      if (/<\/html>/i.test(acc)) return acc;
+      if (res.stop === 'max_tokens' && round < 1 && /<!DOCTYPE html|<html[\s>]/i.test(acc)) { round++; return run(); }
+      var e = aiErr(res.stop === 'max_tokens' ? 'cut' : 'json'); e.chars = acc.length; e.toks = outT; throw e;
+    });
+  }
+  return run().then(function (s) { var i = s.search(/<!DOCTYPE html|<html[\s>]/i), j = s.toLowerCase().lastIndexOf('</html>'); if (i < 0 || j < i) throw aiErr('json'); return s.slice(i, j + 7); });
+}
+function labCutMsg(e) { return 'طالت صفحة التجربة أكثر من الحد المسموح للرد حتى مع التكملة، فلم تُحفظ' + (e.chars ? ' (وصل ' + num(e.chars) + ' حرفًا' + (e.toks ? ' في ' + num(e.toks) + ' وحدة' : '') + ')' : '') + '. أعد المحاولة بفكرة أبسط تركّز على متغير واحد.'; }
 ACT['lab-gen'] = function (el) {
   var x = lessonByKey(el.getAttribute('data-k')); if (!x) return;
   if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
@@ -1186,18 +1208,16 @@ ACT['lab-gen'] = function (el) {
   LABGEN = { stopped: false }; wake(true);
   var t0 = Date.now(), prog = progModal('Claude يصمّم التجربة', 'lab-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 1600, 4, 95) + '%'; }, 500);
   prog('يقرأ الدرس ويصمّم التجربة…');
-  claude(LAB_SYS, [{ type: 'text', text: labCtx(x.b, x.l) + '\n\n' + (idea ? 'فكرة المعلم للتجربة: ' + idea : 'اختر أنت فكرة التجربة الأنسب والأكثر إبداعًا لهذا الدرس.') + '\n\nاكتب صفحة HTML الآن، مختصرة (أقل من 28 ألف حرف) ومكتملة حتى </html>.' }], 32000, function (n) { prog('يكتب Claude التجربة… ' + num(n) + ' حرفًا'); }, LABGEN)
-    .then(function (res) {
+  labWrite(labCtx(x.b, x.l) + '\n\n' + (idea ? 'فكرة المعلم للتجربة: ' + idea : 'اختر أنت فكرة التجربة الأنسب والأكثر إبداعًا لهذا الدرس.') + '\n\nاكتب صفحة HTML الآن، مختصرة (أقل من 28 ألف حرف) ومكتملة حتى </html>.', prog, 'يكتب Claude التجربة…')
+    .then(function (html) {
       clearInterval(tick); wake(false);
-      var s = res.text, i = s.search(/<!DOCTYPE html|<html[\s>]/i), j = s.toLowerCase().lastIndexOf('</html>');
-      if (i < 0 || j < i) throw aiErr(res.stop === 'max_tokens' ? 'cut' : 'json');
-      var html = s.slice(i, j + 7), tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html), hm = /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
+      var tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html), hm = /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
       var title = ((tm && tm[1]) || (hm && hm[1].replace(/<[^>]+>/g, '')) || 'تجربة افتراضية').trim().slice(0, 90);
       var lab = { id: 'x' + Date.now().toString(36), title: title, html: html, idea: idea.slice(0, 300), at: Date.now(), model: aiModel() };
       labsSave(x.b, x.l, labsOf(x.b, x.l).concat([lab]));
       var m = document.getElementById('modal'); m.__busy = false; closeModal();
       route.tab = 'lab'; route.lab = lab.id; render(true); toast('جاهزة: «' + title + '». جرّبها قبل الحصة', 4000);
-    })['catch'](function (e) { clearInterval(tick); wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم تكتمل التجربة') + '</h2><p class="muted">' + (e.code === 'stop' ? '' : e.code === 'cut' ? 'طالت صفحة التجربة أكثر من الحد المسموح للرد فانقطعت قبل نهايتها (لم يُحفظ شيء، ويُحسب ما كُتب من الرصيد). أعد المحاولة؛ وإن تكرر فاكتب فكرة أبسط تركّز على متغير واحد.' : esc(aiMsg(e))) + '</p>'); });
+    })['catch'](function (e) { clearInterval(tick); wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم تكتمل التجربة') + '</h2><p class="muted">' + (e.code === 'stop' ? '' : e.code === 'cut' ? labCutMsg(e) : esc(aiMsg(e))) + '</p>'); });
 };
 ACT['lab-stop'] = function () { if (LABGEN) { LABGEN.stopped = true; if (LABGEN.abort) LABGEN.abort(); } };
 
@@ -1232,17 +1252,15 @@ ACT['lab-fix'] = function (el) {
   prog('يقرأ التجربة الحالية…');
   var ask = labCtx(x.b, x.l) + '\n\nهذه صفحة التجربة الحالية:\n' + lab.html + '\n\n' + (note ? 'ملاحظات المعلم بعد تجربتها:\n' + note + '\n\n' : '') + (errs.length ? 'أخطاء برمجية ظهرت أثناء تشغيلها:\n' + errs.join('\n') + '\n\n' : '') +
     'أعد كتابة الصفحة كاملة بعد إصلاح كل ما سبق، مع الإبقاء على فكرتها وما يعمل فيها، ومراجعة الأخطاء الشائعة المذكورة في التعليمات. أعد صفحة HTML كاملة فقط (أقل من 28 ألف حرف) ومكتملة حتى </html>.';
-  claude(LAB_SYS, [{ type: 'text', text: ask }], 32000, function (n) { prog('يكتب Claude النسخة المعدّلة… ' + num(n) + ' حرفًا'); }, LABGEN).then(function (res) {
+  labWrite(ask, prog, 'يكتب Claude النسخة المعدّلة…').then(function (html) {
     clearInterval(tick); wake(false);
-    var s2 = res.text, i = s2.search(/<!DOCTYPE html|<html[\s>]/i), j = s2.toLowerCase().lastIndexOf('</html>');
-    if (i < 0 || j < i) throw aiErr(res.stop === 'max_tokens' ? 'cut' : 'json');
-    var html = s2.slice(i, j + 7), tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
+    var tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
     lab.prev = { html: lab.html, title: lab.title, at: lab.at };
     lab.html = html; lab.title = ((tm && tm[1]) || lab.title).trim().slice(0, 90); lab.at = Date.now(); lab.model = aiModel();
     labsSave(x.b, x.l, labs); delete LAB_ERR[id];
     var m = document.getElementById('modal'); m.__busy = false; closeModal();
     route.tab = 'lab'; route.lab = id; render(true); toast('عُدّلت التجربة. جرّبها، وإن لم تعجبك فارجع للنسخة السابقة', 4500);
-  })['catch'](function (e) { clearInterval(tick); wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم يكتمل التعديل') + '</h2><p class="muted">' + (e.code === 'stop' ? '' : e.code === 'cut' ? 'طالت الصفحة أكثر من الحد فانقطعت قبل نهايتها، ولم يتغير شيء. أعد المحاولة، أو اطلب «اجعلها أبسط».' : esc(aiMsg(e))) + '</p>'); });
+  })['catch'](function (e) { clearInterval(tick); wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم يكتمل التعديل') + '</h2><p class="muted">' + (e.code === 'stop' ? '' : e.code === 'cut' ? labCutMsg(e) + ' ولم تتغير التجربة الحالية.' : esc(aiMsg(e))) + '</p>'); });
 };
 ACT['lab-undo'] = function (el) {
   var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var id = el.getAttribute('data-id'), labs = labsOf(x.b, x.l), lab = labs.filter(function (y) { return y.id === id; })[0];
@@ -1813,7 +1831,7 @@ function claude(system, content, maxTokens, onText, ctl) {
   return fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST', signal: ac ? ac.signal : undefined,
     headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-    body: JSON.stringify({ model: aiModel(), max_tokens: maxTokens, stream: true, system: system, messages: [{ role: 'user', content: content }] })
+    body: JSON.stringify({ model: aiModel(), max_tokens: maxTokens, stream: true, system: system, messages: content.length && content[0].role ? content : [{ role: 'user', content: content }] })
   }).then(function (r) {
     if (!r.ok) return r.text().then(function (t) { var m = ''; try { m = JSON.parse(t).error.message; } catch (e) { m = t.slice(0, 200); } throw aiErr(r.status, m); });
     var rd = r.body.getReader(), dec = new TextDecoder(), buf = '', out = '', stop = '', usage = {};
