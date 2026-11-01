@@ -1,5 +1,5 @@
 /* كتابي: يحفظ واجهة التطبيق ومكتبة قراءة PDF للعمل دون إنترنت. الكتب والشروح والكتابة لا تمر من هنا؛ هي في تخزين الجهاز. */
-const CACHE = 'kitabi-2026.11.01.19';
+const CACHE = 'kitabi-2026.11.01.20';
 const SHELL = ['./', './index.html', './style.css', './app.css', './app.js', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png',
   './vendor/pdfjs/pdf.min.mjs', './vendor/pdfjs/pdf.worker.min.mjs'];
 
@@ -29,8 +29,9 @@ self.addEventListener('fetch', (e) => {
       if (hit) return hit;
     }
     try {
+      // the app's own files are checked with the server every time (GitHub Pages lets browsers keep them 10 minutes otherwise)
       const res = await Promise.race([
-        fetch(req),
+        lib ? fetch(req) : fetch(new Request(req.url, { cache: 'no-cache', credentials: 'same-origin' })),
         new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), lib ? 20000 : 5000))
       ]);
       if (res && res.ok) cache.put(req, res.clone());
