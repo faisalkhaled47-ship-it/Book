@@ -1409,7 +1409,7 @@ var PV = null;
 function pvSlides(x, a) {
   var d = a.d, sl = [];
   sl.push({ k: 'title', h: '<p class="pv-eb">' + esc(x.l.unit || x.b.title) + '</p><h1 class="pv-t">' + esc(x.l.title) + '</h1>' + (d.idea ? '<p class="pv-idea">' + fx(d.idea) + '</p>' : '') });
-  if (d.intro) sl.push({ k: 'intro', h: '<h2>تمهيد</h2><p class="pv-big">' + fx(d.intro) + '</p>' });
+  var intro = pvIntro(d.intro); if (intro) sl.push({ k: 'intro', h: '<h2>تمهيد</h2>' + intro });
   if (d.goals.length) sl.push({ k: 'goals', h: '<h2>في هذا الدرس سنتعلم أن:</h2><ol class="pv-list">' + d.goals.map(function (g) { return '<li>' + fx(g) + '</li>'; }).join('') + '</ol>' });
   if (d.vocab.length) sl.push({ k: 'vocab', h: '<h2>المفردات</h2><dl class="vocab pv-vocab">' + d.vocab.map(function (v) { return '<div><dt>' + fx(v.t) + '</dt><dd>' + fx(v.d) + '</dd></div>'; }).join('') + '</dl>' });
   d.exp.forEach(function (e) { sl.push({ k: 'exp', h: '<h2>' + fx(e.h) + '</h2>' + (e.fig >= 0 ? figure(d.figs[e.fig]) : '') + '<div class="x-body">' + blocks(e.body) + '</div>' }); });
@@ -1420,6 +1420,16 @@ function pvSlides(x, a) {
   d.quiz.tf.forEach(function (q, i) { sl.push({ k: 'tf', q: q, i: i, quiz: true }); });
   if (d.sum.length) sl.push({ k: 'sum', h: '<h2>الخلاصة</h2><ul class="pv-list">' + d.sum.map(function (s) { return '<li>' + fx(s) + '</li>'; }).join('') + '</ul>' });
   return sl;
+}
+function pvIntro(t) { // the warm-up as the students should see it: a note written for the teacher shows only its questions
+  t = String(t || '').trim(); if (!t) return '';
+  var teacher = /^(اعرض|اطرح|اسأل|ابدأ|اطلب|وجّه|وجه|قدّم|قدم|أحضر|احضر|ناقش|استعرض|ذكّر|ذكر|اكتب على السبورة|شغّل|شغل|أرِ|أر|ضع|اجعل|امسك|أمسك|ارسم)[\s\u064B-\u0652]/.test(t) || /(اسألهم|اسأل الطلاب|وجّههم|وجههم|اطلب منهم|اطلب من الطلاب|المعلم)/.test(t);
+  if (!teacher) return '<p class="pv-big">' + fx(t) + '</p>';
+  var qs = (t.match(/[^.:،؛!؟\n«»"]+؟/g) || []).map(function (q) { return q.replace(/^\s*(?:ثم\s+|أو\s+|و(?=(?:من|ما|ماذا|هل|كيف|لماذا|متى|أين|لم)\s))?(?:اسألهم|اسأل الطلاب|واسألهم)?\s*[:،]?\s*/, '').trim(); }).filter(function (q) { return q.length > 6 && !/^(اسأل|اعرض|اطلب)/.test(q); });
+  var quoted = (t.match(/«([^»]+)»/g) || []).map(function (q) { return q.slice(1, -1).trim(); });
+  qs = quoted.length ? quoted : qs;
+  if (!qs.length) return '';
+  return qs.length === 1 ? '<p class="pv-big">' + fx(qs[0]) + '</p>' : '<ul class="pv-list">' + qs.map(function (q) { return '<li>' + fx(q) + '</li>'; }).join('') + '</ul>';
 }
 function pvBody(s) {
   if (s.k === 'mcq') return '<p class="pv-eb">سؤال ' + (s.i + 1) + '</p><h2 class="pv-q">' + fx(s.q.q) + '</h2><div class="opts pv-opts">' + s.q.o.map(function (o, k) { var cls = s.shown ? (k === s.q.a ? ' right' : ' dim') : ''; return '<div class="opt' + cls + '"><span class="lt">' + LET[k] + '</span><span>' + fx(o) + '</span></div>'; }).join('') + '</div>' +
@@ -1920,7 +1930,7 @@ var LESSON_SYS = [
   'اكتب «مساعد الدرس» للمعلم مبنيًا على محتوى هذه الصفحات، بعربية فصيحة واضحة قصيرة الجمل، دقيقًا علميًا، مناسبًا لمستوى الطلاب. لا تنسخ فقرات الكتاب حرفيًا؛ أعد صياغتها شرحًا للمعلم.',
   'أعد كائن JSON واحدًا فقط، دون أي نص أو علامات ``` قبله أو بعده، بهذه الحقول:',
   '{"idea":"الفكرة الرئيسة في جملة","goals":["3 إلى 6 أهداف سلوكية تبدأ بفعل مضارع: يذكر، يوضح، يقارن، يفسر، يطبق"],"prior":["التعلم القبلي اللازم (1–3)"],',
-  '"vocab":[{"t":"المصطلح كما في الكتاب","d":"تعريف قصير"}],"intro":"تمهيد مشوّق للحصة: سؤال أو موقف من حياة الطالب السعودي",',
+  '"vocab":[{"t":"المصطلح كما في الكتاب","d":"تعريف قصير"}],"intro":"تمهيد يُعرض على الطلاب على الشاشة كما هو: سؤال مثير أو موقف من حياة الطالب السعودي، بصيغة الخطاب للطلاب، دون أي تعليمات للمعلم (لا تكتب: اعرض، اسأل، وجّههم، اطلب منهم)",',
   '"exp":[{"h":"عنوان الفقرة","page":14,"fig":0,"body":[…]}],',
   '"figs":[{"svg":"<svg …>…</svg>","cap":"وصف الرسم"}],',
   '"maps":[{"t":"عنوان الخريطة","r":{"t":"المفهوم الرئيس","c":[{"l":"كلمة الربط","t":"مفهوم","c":[{"t":"مفهوم فرعي"}]}]}}],',
@@ -3122,7 +3132,8 @@ function clkDates() {
   return { day: AR_DAYS[wday(i)], hj: hj ? hj.d + ' ' + hj.m + ' ' + hj.y + 'هـ' : '', hs: hj ? hj.d + ' ' + hjShort(hj.m) : '', hm: hj ? hj.d + ' ' + hj.m : p.d + ' ' + AR_MONTHS[p.m], g: p.d + ' ' + AR_MONTHS[p.m] + ' ' + p.y + 'م' };
 }
 function clkPill() {
-  return '<button type="button" class="clk" data-act="clk-open" aria-label="التاريخ والوقت والمؤقت"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5"/></svg><span class="clk-d"></span><b class="clk-t"></b><span class="clk-r"></span></button>';
+  var D = clkDates(), on = clkOn();
+  return '<button type="button" class="clk" data-act="clk-open" aria-label="التاريخ والوقت والمؤقت"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9.5 2.5h5"/></svg><span class="clk-d">' + esc(D.day + ' ' + D.hm + ' ·') + '</span><b class="clk-t">' + clkTime() + '</b><span class="clk-r"' + (on ? '' : ' hidden') + '>' + (on ? clkFmt(clkLeft()) : '') + '</span></button>';
 }
 function clkTick() {
   var left = clkLeft(), run = !!CLK.end, on = clkOn();

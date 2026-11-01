@@ -344,3 +344,8 @@ details.ai-fold:not([open]){padding-top:14px;padding-bottom:14px}
 .qg-opts label{display:inline-flex;align-items:center;gap:6px}
 .qg-opts select{font:inherit;font-size:16px;border:1px solid var(--rule);border-radius:10px;padding:6px 8px;background:var(--panel-2);color:var(--ink)}
 #qg-ask{font:inherit;font-size:16px;line-height:1.6;width:100%;box-sizing:border-box;resize:vertical}
+/* presenting: nothing in the top row may widen the slide past the screen */
+.pv-in{grid-template-columns:minmax(0,1fr)}
+.pv-top{flex-wrap:wrap;min-width:0}
+.pv-top .clk{max-width:100%;overflow:hidden}
+@media (max-width:900px){.pv-top .clk-d{display:none}}
