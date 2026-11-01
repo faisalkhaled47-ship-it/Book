@@ -2201,7 +2201,8 @@ function sbMsg(e) {
   var c = e && e.code, m = (e && e.message) || '';
   if (c === 'net') return 'لا اتصال بالإنترنت أو تعذّر الوصول إلى Supabase. تأكد من رابط المشروع، وأن المشروع ليس متوقفًا.';
   if (c === 400 && /invalid login|credentials/i.test(m)) return 'الإيميل أو كلمة المرور غير صحيحة.';
-  if (c === 400 && /confirm/i.test(m)) return 'الحساب لم يُفعَّل بعد: افتح رسالة التفعيل في بريدك، أو أنشئ المستخدم من لوحة Supabase مع «Auto Confirm User».';
+  if (/confirm/i.test(m)) return 'الحساب لم يُفعَّل: افتح رسالة التفعيل في بريدك. أو احذف المستخدم من Authentication ← Users، وأطفئ Confirm email، ثم «إنشاء حساب» من جديد.';
+  if (/signups? not allowed|signup.*disabled/i.test(m)) return 'إنشاء الحسابات مطفأ في مشروعك (Allow new users to sign up). إن كان حسابك موجودًا فاضغط «دخول».';
   if (c === 401 || c === 403) return 'رُفض الطلب: تأكد من المفتاح العام (anon/publishable) ومن تشغيل كود SQL.';
   if (c === 404 || /kitabi_kv/.test(m)) return 'الجدول kitabi_kv غير موجود: شغّل كود SQL في مشروعك (الإعدادات ← المزامنة ← طريقة الإعداد).';
   if (c === 422 && /already/i.test(m)) return 'هذا الإيميل مسجّل من قبل؛ استعمل «دخول».';
@@ -2415,10 +2416,11 @@ ACT['sb-how'] = function () {
   openModal(sheet('إعداد Supabase للمزامنة', '<ol class="steps small">' +
     '<li>ادخل <a href="https://supabase.com/dashboard" target="_blank" rel="noopener">supabase.com/dashboard</a> وأنشئ مشروعًا جديدًا (Free). اختر منطقة قريبة واحفظ كلمة مرور قاعدة البيانات.</li>' +
     '<li>من <b>SQL Editor</b> ← New query: الصق الكود أدناه واضغط <b>Run</b>. ينشئ جدولًا واحدًا لا يقرأ صفوفه إلا صاحبها.</li>' +
-    '<li>من <b>Authentication ← Users ← Add user ← Create new user</b>: اكتب إيميلك وكلمة مرور، وفعّل <b>Auto Confirm User</b>.</li>' +
-    '<li>من <b>Authentication ← Sign In / Providers</b>: أطفئ <b>Allow new users to sign up</b>، حتى لا ينشئ غيرك حسابات في مشروعك.</li>' +
-    '<li>من <b>Project Settings ← API</b> (أو زر Connect): انسخ <b>Project URL</b> و<b>المفتاح العام</b> (anon أو publishable)، لا المفتاح السري service_role أو secret.</li>' +
-    '<li>في هذا التطبيق على كل جهاز: الإعدادات ← المزامنة: الصق الرابط والمفتاح، واكتب الإيميل وكلمة المرور، ثم «دخول». ابدأ بالجهاز الذي فيه عملك.</li></ol>' +
+    '<li>من <b>Project Settings ← API</b> (أو زر <b>Connect</b> أعلى المشروع): انسخ <b>Project URL</b> و<b>المفتاح العام</b> (anon أو publishable)، لا المفتاح السري service_role أو secret.</li>' +
+    '<li>من <b>Authentication ← Sign In / Providers</b>: أطفئ <b>Confirm email</b> واحفظ (تجده في أعلى الصفحة، أو بالضغط على <b>Email</b> في قائمة المزوّدين).</li>' +
+    '<li>في هذا التطبيق على الجهاز الذي فيه عملك: الإعدادات ← المزامنة: الصق الرابط والمفتاح، واكتب إيميلك وكلمة مرور جديدة، ثم <b>«إنشاء حساب»</b>. يدخل مباشرة ويبدأ أول مزامنة.</li>' +
+    '<li>ارجع إلى <b>Sign In / Providers</b> وأطفئ <b>Allow new users to sign up</b> واحفظ، حتى لا ينشئ غيرك حسابات في مشروعك.</li>' +
+    '<li>على الجهاز الثاني: الإعدادات ← المزامنة: الرابط والمفتاح والإيميل وكلمة المرور نفسها، ثم <b>«دخول»</b>.</li></ol>' +
     '<p class="small muted">المشروع المجاني يتوقف إذا لم يُستعمل أسبوعًا؛ أعِد تشغيله من لوحة Supabase بزر Restore، والتطبيق يعمل على الجهاز في أثناء ذلك.</p>' +
     '<div class="actions"><button class="btn" data-act="sb-sql">انسخ كود SQL</button></div><pre class="sql" dir="ltr">' + esc(SB_SQL) + '</pre>'), true);
 };
