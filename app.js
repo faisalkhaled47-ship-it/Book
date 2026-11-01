@@ -334,6 +334,7 @@ var RD = null;                  // the open reader
 function rt() { var o = P.rt || {}; return { tool: o.tool || 'pen', ink: +o.ink || 0, hlc: +o.hlc || 0, finger: !!o.finger, zoom: +o.zoom || 1 }; }
 function setRt(k, v) { P.rt = P.rt || {}; P.rt[k] = v; savePref(); }
 var RSVG = {
+  spark: '<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
   off: '<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12"/><path d="M11 11.5V4.5a1.5 1.5 0 0 1 3 0V12"/><path d="M14 11.5V6.5a1.5 1.5 0 0 1 3 0V14c0 4-2.5 7-6.5 7S5 18.5 4 16l-1.2-3a1.5 1.5 0 0 1 2.7-1.3L8 15"/>',
   hl: '<path d="M9 15l-2 5h5l1.5-2.5"/><path d="M13.5 17.5 20 8l-4-3-6.5 9.5z"/>',
   er: '<path d="M7 20h11"/><path d="M5.6 14.6 13.8 6.4a2 2 0 0 1 2.8 0l2.4 2.4a2 2 0 0 1 0 2.8L11 19.6H8.4z"/><path d="m9.5 10.5 5 5"/>',
@@ -358,6 +359,7 @@ VIEWS.read = function () {
   return '<div class="rd' + (route.present ? ' present' : '') + '" id="rd">' +
     '<div class="rd-head"><button class="rd-title" data-act="rd-goto"><b id="rd-lesson">' + esc(b.title) + '</b><span id="rd-pno">…</span></button>' +
     '<div class="rd-hb">' + (route.back && lessonByKey(route.back) ? '<button class="rd-hbtn rd-back" data-act="back-lesson">' + rIcon('back') + '<span>عُد إلى الدرس</span></button>' : '<button class="rd-hbtn" data-act="rd-aid">' + rIcon('aid') + '<span>مساعد الدرس</span></button>') +
+    '<button class="rd-hbtn rd-solve" data-act="rd-solve" aria-label="حلّ أسئلة الصفحة مع Claude">' + rIcon('spark') + '<span>حلّ الأسئلة</span></button>' +
     '<button class="rd-hbtn" data-act="rd-present" aria-label="وضع العرض">' + rIcon(route.present ? 'exit' : 'present') + '<span>' + (route.present ? 'إنهاء العرض' : 'عرض') + '</span></button></div></div>' +
     '<div class="rd-x" id="rd-x"><div class="rd-pages" id="rd-pages" style="--z:' + o.zoom + '"><p class="muted rd-wait">جارٍ فتح الكتاب…</p></div></div>' +
     (route.present ? '<div class="rd-nav"><button data-act="rd-step" data-d="-1" aria-label="الصفحة السابقة">' + rIcon('up') + '</button><button data-act="rd-step" data-d="1" aria-label="الصفحة التالية">' + rIcon('down') + '</button></div>' : '') +
@@ -399,13 +401,13 @@ function readerMount() {
     return doc.getPage(Math.min(start, doc.numPages)).then(function (pg) {
       if (R.dead) return;
       var v = pg.getViewport({ scale: 1 }), ratio = v.width / v.height, h = '';
-      for (var n = 1; n <= doc.numPages; n++) h += '<div class="pg" data-n="' + n + '" style="aspect-ratio:' + v.width.toFixed(1) + ' / ' + v.height.toFixed(1) + '"><canvas class="pg-c"></canvas><canvas class="pg-i"></canvas><span class="pg-no">' + pLabel(b, n) + '</span></div>';
+      for (var n = 1; n <= doc.numPages; n++) h += '<div class="pg" data-n="' + n + '" style="aspect-ratio:' + v.width.toFixed(1) + ' / ' + v.height.toFixed(1) + '"><canvas class="pg-c"></canvas><canvas class="pg-i"></canvas><div class="pg-a"></div><span class="pg-no">' + pLabel(b, n) + '</span></div>';
       wrap.innerHTML = h;
       R.ratio = ratio;
       Array.prototype.forEach.call(wrap.querySelectorAll('.pg'), function (el) {
         var n = +el.getAttribute('data-n');
-        R.pages[n - 1] = { n: n, el: el, c: el.querySelector('.pg-c'), ic: el.querySelector('.pg-i'), ratio: ratio, sized: false, done: 0, task: null };
-        hookInk(R, R.pages[n - 1]);
+        R.pages[n - 1] = { n: n, el: el, c: el.querySelector('.pg-c'), ic: el.querySelector('.pg-i'), a: el.querySelector('.pg-a'), ratio: ratio, sized: false, done: 0, task: null };
+        hookInk(R, R.pages[n - 1]); hookAns(R, R.pages[n - 1]); drawAns(R.pages[n - 1]);
       });
       if (route.present) presentFit(true);
       R.io = new IntersectionObserver(function (es) {
@@ -467,7 +469,7 @@ function renderPage(pg) {
       pg.task = null; if (R.dead || !pg.vis) { off.width = off.height = 0; return; }
       pg.c.width = off.width; pg.c.height = off.height; pg.c.getContext('2d').drawImage(off, 0, 0); off.width = off.height = 0;
       pg.done = stamp; pg.el.classList.add('ok');
-      sizeInk(pg);
+      sizeInk(pg); if (Math.abs(ratio - (pg.aRatio || 0)) > 0.001) { pg.aRatio = ratio; drawAns(pg); }
     });
   })['catch'](function () {});
 }
@@ -1752,6 +1754,134 @@ ACT['ai-test'] = function () {
   claude('أجب بكلمة واحدة.', [{ type: 'text', text: 'قل: جاهز' }], 50, null).then(function (r) { if (out) out.textContent = '✓ المفتاح يعمل (' + aiModel() + '): ' + r.text.trim().slice(0, 30); }, function (e) { if (out) out.textContent = '✗ ' + aiMsg(e); });
 };
 
+/* ---------- Claude solves the questions printed on a page, and the answers sit on the page itself ----------
+   Kept in the notes store as a:<bookId>:<page> {items:[{n, q, a, x, y, w, c}], t, model}; x, y, w in page units (the page is 1000 wide, like the ink).
+   They go into the backup and the sync with the rest of the notes. */
+var SOLVE_SYS = [
+  'أنت معلم علوم خبير في المرحلة المتوسطة في المملكة العربية السعودية. أمامك صورة صفحة واحدة من كتاب العلوم المقرر.',
+  'ابحث في الصفحة عن كل سؤال يطلب من الطالب إجابة: أسئلة «اختبر نفسك» و«مراجعة الدرس» و«التفكير الناقد» و«تطبيق الرياضيات» و«ماذا قرأت؟» و«تحقق» وأسئلة الصور والجداول ومراجعة الفصل والاختبار المقنن، وأي سؤال مرقّم أو مسبوق بفعل أمر (صف، وضح، فسر، قارن، احسب، ماذا، لماذا، كيف…).',
+  'أجب عن كل سؤال إجابة نموذجية دقيقة علميًا كما يتوقعها المعلم من طالب متوسط، بعربية فصيحة مختصرة: جملة أو جملتان غالبًا. في الاختيار من متعدد اكتب رمز الخيار ونصه. في المسائل الحسابية اكتب القانون والتعويض والناتج بالوحدة، وضع المعادلة كاملة بأرقامها ووحدتها بين علامتي ` ` مثل `KE = ½ × 2 × 5² = 25 J` حتى لا تنقلب مع النص العربي. التزم بما في الكتاب ومصطلحاته.',
+  'أعد كائن JSON واحدًا فقط، دون أي نص أو علامات ``` قبله أو بعده:',
+  '{"items":[{"n":"رقم السؤال كما في الكتاب","q":"نص السؤال مختصرًا","a":"الإجابة النموذجية","box":[x0,y0,x1,y1],"spot":[x0,y0,x1,y1]}]}',
+  'الإحداثيات أرقام من 0 إلى 1000 نسبة إلى عرض الصورة وارتفاعها، والأصل في أعلى يسار الصورة: x يزيد إلى اليمين و y يزيد إلى الأسفل.',
+  '- box: المستطيل الذي يحيط بنص السؤال في الصورة.',
+  '- spot: مساحة بيضاء فارغة قريبة من السؤال (تحته أو بجانبه أو في الهامش) تكفي لكتابة الإجابة دون أن تغطي كلامًا مطبوعًا. إن لم توجد فاكتب null.',
+  '- رتّب الأسئلة كما تظهر في الصفحة. إن لم يكن في الصفحة أسئلة فأعد {"items":[]}. لا تخترع أسئلة غير موجودة، وإن كان جزء من السؤال غير مقروء فقل ذلك في الإجابة.'
+].join('\n');
+var SOLVE = null;
+function ansKey(b, n) { return 'a:' + b.id + ':' + n; }
+function ansOf(b, n) { return XC[ansKey(b, n)] || null; }
+function ansOn() { return !P.rt || P.rt.ans !== false; }
+function ansSave(b, n, rec) { rec.k = ansKey(b, n); rec.t = Date.now(); XC[rec.k] = rec; dbPut('notes', rec); }
+function solvePage(doc, b, n, ratio, ctl) { // one page: image to Claude, answers placed in page units
+  return pageJpeg(doc, n, 1400, 0.78).then(function (d) {
+    if (ctl && ctl.stopped) throw aiErr('stop');
+    var l = lessonAtPage(b, n);
+    return claude(SOLVE_SYS, [img(d), { type: 'text', text: 'الكتاب: ' + b.title + (l ? '\nالدرس: ' + l.title : '') + '\nالصفحة ' + printedOf(b, n) + '. حلّ أسئلتها بصيغة JSON المطلوبة.' }], 6000, null, ctl);
+  }).then(function (res) {
+    var o = parseJSON(res), H = 1000 / ratio, items = [];
+    (Array.isArray(o.items) ? o.items : []).forEach(function (it) {
+      if (!it || !it.a) return;
+      var bx = Array.isArray(it.box) && it.box.length === 4 ? it.box.map(Number) : null, sp = Array.isArray(it.spot) && it.spot.length === 4 ? it.spot.map(Number) : null;
+      var x, y, w;
+      if (sp && sp.every(isFinite) && sp[2] - sp[0] >= 120) { x = sp[0]; y = sp[1] * H / 1000; w = sp[2] - sp[0]; }
+      else if (bx && bx.every(isFinite)) { x = bx[0]; y = bx[3] * H / 1000 + 4; w = Math.max(260, bx[2] - bx[0]); }
+      else { x = 40; y = 40 + items.length * 70; w = 420; }
+      w = clamp(w, 200, 900); x = clamp(x, 0, 1000 - w); y = clamp(y, 0, H - 30);
+      items.push({ n: String(it.n || items.length + 1).slice(0, 8), q: String(it.q || '').slice(0, 400), a: String(it.a).slice(0, 1200), x: Math.round(x), y: Math.round(y), w: Math.round(w) });
+    });
+    var rec = { items: items, model: aiModel(), page: n };
+    ansSave(b, n, rec);
+    return rec;
+  });
+}
+/* drawing the answers on a page */
+function drawAns(pg) {
+  var R = RD; if (!R || !pg.a) return;
+  var rec = ansOf(R.b, pg.n);
+  if (!rec || !rec.items.length || !ansOn()) { pg.a.innerHTML = ''; return; }
+  var H = 1000 / pg.ratio;
+  pg.a.innerHTML = rec.items.map(function (it, i) {
+    return '<div class="ans' + (it.c ? ' c' : '') + '" data-i="' + i + '" style="left:' + (it.x / 10) + '%;top:' + (it.y / H * 100) + '%;width:' + (it.c ? 'auto' : (it.w / 10) + '%') + '"><b class="ans-n">' + esc(it.n) + '</b><span class="ans-t">' + fx(it.a) + '</span></div>';
+  }).join('');
+}
+function drawAnsAll() { if (RD) RD.pages.forEach(function (pg) { if (pg.a) drawAns(pg); }); }
+function hookAns(R, pg) { // a tap folds an answer to its number (to reveal it later in class); a drag moves it
+  var drag = null;
+  pg.a.addEventListener('pointerdown', function (e) {
+    var el = e.target.closest('.ans'); if (!el) return;
+    e.preventDefault(); e.stopPropagation();
+    var r = pg.el.getBoundingClientRect();
+    drag = { el: el, i: +el.getAttribute('data-i'), x0: e.clientX, y0: e.clientY, l: el.offsetLeft, t: el.offsetTop, W: r.width, moved: false, id: e.pointerId };
+    try { el.setPointerCapture(e.pointerId); } catch (x) {}
+  });
+  pg.a.addEventListener('pointermove', function (e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    var dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+    if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 8) return;
+    drag.moved = true; drag.el.classList.add('drag');
+    drag.el.style.left = (drag.l + dx) + 'px'; drag.el.style.top = (drag.t + dy) + 'px';
+  });
+  function up(e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    var d = drag; drag = null; d.el.classList.remove('drag');
+    var rec = ansOf(R.b, pg.n); if (!rec || !rec.items[d.i]) return;
+    var it = rec.items[d.i], k = d.W / 1000;
+    if (d.moved) { it.x = Math.round(clamp(d.el.offsetLeft / k, 0, 990)); it.y = Math.round(Math.max(0, d.el.offsetTop / k)); }
+    else it.c = !it.c;
+    ansSave(R.b, pg.n, rec); drawAns(pg);
+  }
+  pg.a.addEventListener('pointerup', up); pg.a.addEventListener('pointercancel', up);
+}
+/* the sheet: this page's answers, and solving a page or a range */
+ACT['rd-solve'] = function () {
+  var R = RD; if (!R) return;
+  var b = R.b, n = R.cur, rec = ansOf(b, n), l = lessonAtPage(b, n), pr = printedOf(b, n);
+  var from = l ? l.from : pr, to = l ? (l.to || l.from) : pr;
+  var list = rec && rec.items.length ? '<ol class="ans-list">' + rec.items.map(function (it) { return '<li><b>' + esc(it.n) + (it.q ? ' · ' + esc(it.q) : '') + '</b><span>' + fx(it.a) + '</span></li>'; }).join('') + '</ol>' : '';
+  openModal(sheet('حلّ أسئلة الكتاب مع Claude',
+    '<section class="set-sec"><h3>صفحة ' + (pr >= 1 ? pr : n) + '</h3>' +
+    (rec ? (rec.items.length ? '<p class="small muted">حلّ Claude ' + cnt(rec.items.length, WORDS.q) + ' في هذه الصفحة. الإجابات مكتوبة على الصفحة: اضغط إجابة لتطويها إلى رقمها (فتكشفها للطلاب لاحقًا)، واسحبها لتنقلها إن غطّت شيئًا.</p>' + list : '<p class="small muted">لم يجد Claude أسئلة في هذه الصفحة.</p>') : '<p class="small muted">يقرأ Claude صورة الصفحة ويحل كل سؤال فيها، ثم تظهر الإجابة على الصفحة نفسها بجانب السؤال.</p>') +
+    '<div class="actions" style="margin-top:0"><button class="btn" data-act="solve-run" data-from="' + pr + '" data-to="' + pr + '" data-redo="1">' + (rec ? 'أعد حلّ هذه الصفحة' : 'حلّ أسئلة هذه الصفحة') + '</button>' +
+    (rec && rec.items.length ? '<button class="btn ghost sm danger" data-act="solve-del">احذف حلولها</button>' : '') + '</div></section>' +
+    '<section class="set-sec"><h3>صفحات أكثر</h3><p class="small muted">للدرس كله ومراجعة الفصل والاختبار المقنن. تُتخطى الصفحات المحلولة من قبل، والصفحات التي لا أسئلة فيها لا يظهر عليها شيء. التكلفة نحو سنتين لكل صفحة مع Sonnet.</p>' +
+    '<div class="actions" style="margin-top:0;align-items:end"><label class="field" style="margin:0;flex:1"><span>من صفحة</span><input type="number" inputmode="numeric" id="sv-from" value="' + from + '"></label><label class="field" style="margin:0;flex:1"><span>إلى صفحة</span><input type="number" inputmode="numeric" id="sv-to" value="' + to + '"></label></div>' +
+    '<div class="actions"><button class="btn ghost" data-act="solve-run">حلّ أسئلة هذه الصفحات</button></div></section>' +
+    '<section class="set-sec"><h3>العرض</h3>' + segBtns('solve-show', ansOn() ? 'on' : 'off', [['on', 'أظهر الإجابات على الصفحات'], ['off', 'أخفِها']]) + '</section>'), true);
+};
+ACT['solve-show'] = function (el) { P.rt = P.rt || {}; P.rt.ans = el.getAttribute('data-v') === 'on'; savePref(); drawAnsAll(); ACT['rd-solve'](); };
+ACT['solve-del'] = function (el) {
+  var R = RD; if (!R) return;
+  if (!el.classList.contains('arm')) { el.classList.add('arm'); el.textContent = 'اضغط مرة ثانية للحذف'; return; }
+  var k = ansKey(R.b, R.cur); delete XC[k]; dbDel('notes', k); drawAnsAll(); closeModal(); toast('حُذفت حلول هذه الصفحة');
+};
+ACT['solve-run'] = function (el) {
+  var R = RD; if (!R) return;
+  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا من الإعدادات'); ACT.settings(); return; }
+  var b = R.b, f = el.getAttribute('data-from'), t = el.getAttribute('data-to'), redo = !!el.getAttribute('data-redo');
+  if (f == null) { f = document.getElementById('sv-from').value; t = document.getElementById('sv-to').value; }
+  var a = pdfPage(b, +f), z = pdfPage(b, +t); if (!isFinite(a) || !isFinite(z)) return; if (z < a) { var s = a; a = z; z = s; }
+  if (z - a > 40) { toast('اختر 40 صفحة على الأكثر في المرة الواحدة'); return; }
+  var pages = []; for (var n = a; n <= z; n++) if (redo || !ansOf(b, n)) pages.push(n);
+  if (!pages.length) { toast('هذه الصفحات محلولة من قبل'); return; }
+  SOLVE = { stopped: false }; wake(true);
+  var prog = progModal('Claude يحلّ الأسئلة', 'solve-stop'), done = 0, found = 0, failed = [];
+  pages.reduce(function (p, n, i) {
+    return p.then(function () {
+      if (SOLVE.stopped) throw aiErr('stop');
+      prog('صفحة ' + printedOf(b, n) + ' (' + (i + 1) + ' من ' + pages.length + ')…', (i + 0.3) / pages.length * 100);
+      return solvePage(R.doc, b, n, (R.pages[n - 1] && R.pages[n - 1].ratio) || R.ratio, SOLVE).then(function (rec) {
+        done++; found += rec.items.length; var pg = RD && RD.pages[n - 1]; if (pg) drawAns(pg);
+      }, function (e) { if (e.code === 'stop' || e.code === 401 || e.code === 'nokey' || e.code === 'net') throw e; failed.push(printedOf(b, n)); });
+    });
+  }, Promise.resolve()).then(function () {
+    wake(false); var first = pages.filter(function (n) { var r = ansOf(b, n); return r && r.items.length; })[0];
+    doneModal('<h2>' + (found ? 'حُلّ ' + cnt(found, WORDS.q) : 'لا أسئلة') + '</h2><p class="muted">' + (found ? 'في ' + cnt(pages.filter(function (n) { var r = ansOf(b, n); return r && r.items.length; }).length, ['صفحة واحدة', 'صفحتين', 'صفحات', 'صفحة']) + '. الإجابات مكتوبة على الصفحات بجانب كل سؤال؛ راجعها قبل أن تعرضها، واسحب أي إجابة إن احتاجت مكانًا أنسب.' : 'لم يجد Claude أسئلة في هذه الصفحات.') + (failed.length ? ' تعذّر حل الصفحات: ' + failed.join('، ') + '؛ أعد المحاولة لها.' : '') + '</p>');
+    if (first && RD) { RD.cur = first; scrollToPage(first, true); trackPage(RD); }
+  }, function (e) { wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم يكتمل الحل') + '</h2><p class="muted">' + (done ? 'حُلّت ' + cnt(done, ['صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة']) + ' قبل التوقف. ' : '') + (e.code === 'stop' ? '' : esc(aiMsg(e))) + '</p>'); });
+};
+ACT['solve-stop'] = function () { if (SOLVE) { SOLVE.stopped = true; if (SOLVE.abort) SOLVE.abort(); } };
+
 /* ---------- books: adding a PDF, the library ---------- */
 function fingerprint(file, buf) { // same file → same id, so a restored backup finds its writing again
   var head = new Uint8Array(buf, 0, Math.min(buf.byteLength, 1048576));
@@ -2242,7 +2372,7 @@ function applyRow(row, ctx) {
       if (del) {
         if (!loc) return false;
         dbDel(st, k);
-        if (st === 'aids') delete AIDS[k]; else if (st === 'notes') delete XC[k]; else if (st === 'books') BOOKS = BOOKS.filter(function (x) { return x.id !== k; });
+        if (st === 'aids') delete AIDS[k]; else if (st === 'notes') { delete XC[k]; if (/^a:/.test(k) && RD) setTimeout(drawAnsAll, 0); } else if (st === 'books') BOOKS = BOOKS.filter(function (x) { return x.id !== k; });
       } else if (st === 'books') {
         var b = bookById(k);
         if (!b) { b = { id: k, lessons: [] }; BOOKS.push(b); b.missing = !ctx.files[k]; }
@@ -2252,7 +2382,7 @@ function applyRow(row, ctx) {
         var d; try { d = cleanAid(v.d); } catch (e) { return false; }
         var rec = { k: k, src: v.src === 'ai' ? 'ai' : 'pack', at: rt, model: str(v.model), d: d }; AIDS[k] = rec; dbPut('aids', rec);
       } else if (st === 'ink') { if (Array.isArray(v.s)) dbPut('ink', { k: k, s: v.s, t: rt }); }
-      else if (st === 'notes') { var c = Object.assign({}, v, { k: k }); XC[k] = c; dbPut('notes', c); }
+      else if (st === 'notes') { var c = Object.assign({}, v, { k: k }); XC[k] = c; dbPut('notes', c); if (/^a:/.test(k) && RD) setTimeout(drawAnsAll, 0); }
     } finally { APPLYING = false; }
     ctx.changed = true; return true;
   });
@@ -2267,7 +2397,7 @@ function rekeyBook(oldId, nu) { // move everything of a book to the id the other
     });
   }
   var pre = oldId + ':', pk = function (key) { return key.indexOf(pre) === 0; }, mk = function (key) { return nu + key.slice(oldId.length); };
-  var npk = function (key) { return /^[bxp]:/.test(key) && key.indexOf(pre, 2) === 2; }, nmk = function (key) { return key.slice(0, 2) + nu + key.slice(2 + oldId.length); };
+  var npk = function (key) { return /^[bxpa]:/.test(key) && key.indexOf(pre, 2) === 2; }, nmk = function (key) { return key.slice(0, 2) + nu + key.slice(2 + oldId.length); };
   return Promise.all([
     dbGet('books', oldId).then(function (b) { if (!b) return; b.id = nu; return tx('books', 'readwrite', function (s) { s.put(b); s['delete'](oldId); }); }),
     dbGet('files', oldId).then(function (f) { if (!f) return; f.id = nu; return tx('files', 'readwrite', function (s) { s.put(f); s['delete'](oldId); }); }),
