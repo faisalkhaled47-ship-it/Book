@@ -2416,7 +2416,8 @@ ACT['sb-how'] = function () {
   openModal(sheet('إعداد Supabase للمزامنة', '<ol class="steps small">' +
     '<li>ادخل <a href="https://supabase.com/dashboard" target="_blank" rel="noopener">supabase.com/dashboard</a> وأنشئ مشروعًا جديدًا (Free). اختر منطقة قريبة واحفظ كلمة مرور قاعدة البيانات.</li>' +
     '<li>من <b>SQL Editor</b> ← New query: الصق الكود أدناه واضغط <b>Run</b>. ينشئ جدولًا واحدًا لا يقرأ صفوفه إلا صاحبها.</li>' +
-    '<li>من <b>Project Settings ← API</b> (أو زر <b>Connect</b> أعلى المشروع): انسخ <b>Project URL</b> و<b>المفتاح العام</b> (anon أو publishable)، لا المفتاح السري service_role أو secret.</li>' +
+    '<li><b>الرابط:</b> من <b>Project Settings</b> (الترس أسفل القائمة الجانبية) ← <b>Data API</b> ← انسخ <b>Project URL</b>. أو كوّنه بنفسك: عنوان المتصفح فيه <span dir="ltr">supabase.com/dashboard/project/<b>abcd…</b></span>، فيكون الرابط <span dir="ltr">https://<b>abcd…</b>.supabase.co</span>.</li>' +
+    '<li><b>المفتاح:</b> من <b>Project Settings ← API Keys</b> ← انسخ <b>Publishable key</b> (يبدأ بـ sb_publishable_)، أو من تبويب Legacy المفتاح <b>anon</b>. لا تنسخ secret ولا service_role.</li>' +
     '<li>من <b>Authentication ← Sign In / Providers</b>: أطفئ <b>Confirm email</b> واحفظ (تجده في أعلى الصفحة، أو بالضغط على <b>Email</b> في قائمة المزوّدين).</li>' +
     '<li>في هذا التطبيق على الجهاز الذي فيه عملك: الإعدادات ← المزامنة: الصق الرابط والمفتاح، واكتب إيميلك وكلمة مرور جديدة، ثم <b>«إنشاء حساب»</b>. يدخل مباشرة ويبدأ أول مزامنة.</li>' +
     '<li>ارجع إلى <b>Sign In / Providers</b> وأطفئ <b>Allow new users to sign up</b> واحفظ، حتى لا ينشئ غيرك حسابات في مشروعك.</li>' +
