@@ -600,7 +600,7 @@ function hookInk(R, pg) {
     if (s.raf) { cancelAnimationFrame(s.raf); s.raf = 0; }
     var d = R.ink[pg.n]; if (!d) return;
     if (s.er) { if (s.gone.length) { R.undo.push({ n: pg.n, a: 'del', items: s.gone.reverse() }); saveInk(R, pg.n); } return; }
-    delete s.raf; delete s.dn; delete s.pe;
+    delete s.raf; delete s.dn;
     if (!s.p.length) { drawInk(pg); return; }
     d.s.push(s); R.undo.push({ n: pg.n, a: 'add' }); drawInk(pg); saveInk(R, pg.n);
   }
@@ -617,22 +617,15 @@ function hookInk(R, pg) {
       }
     }, { passive: false });
     c.addEventListener('touchmove', function (e) {
-      if (touch == null) return; e.preventDefault(); if (cur && cur.pe) return; // the pencil's own samples come through pointer events (all of them, not one per frame)
+      if (touch == null) return; e.preventDefault();
       for (var k = 0; k < e.changedTouches.length; k++) { var t = e.changedTouches[k]; if (t.identifier === touch) move(pt(t.clientX, t.clientY, t.touchType === 'stylus' ? t.force : null)); }
     }, { passive: false });
     function tend(e) { for (var k = 0; k < e.changedTouches.length; k++) if (e.changedTouches[k].identifier === touch) { touch = null; end(); } }
     c.addEventListener('touchend', tend); c.addEventListener('touchcancel', tend);
     c.addEventListener('pointerdown', function (e) {
-      if (e.pointerType === 'pen') { try { c.setPointerCapture(e.pointerId); } catch (x) {} return; }
       if (e.pointerType !== 'mouse' || e.button !== 0) return; if (!begin(pt(e.clientX, e.clientY, 0.5))) return; e.preventDefault(); try { c.setPointerCapture(e.pointerId); } catch (x) {}
     });
     c.addEventListener('pointermove', function (e) {
-      if (e.pointerType === 'pen') {
-        if (!cur || touch == null) return;
-        var list = e.getCoalescedEvents ? e.getCoalescedEvents() : null; if (!list || !list.length) list = [e];
-        cur.pe = 1; for (var k = 0; k < list.length; k++) move(pt(list[k].clientX, list[k].clientY, list[k].pressure));
-        return;
-      }
       if (e.pointerType === 'mouse' && cur && touch == null) move(pt(e.clientX, e.clientY, 0.5));
     });
     c.addEventListener('pointerup', function (e) { if (e.pointerType === 'mouse' && touch == null) end(); });
