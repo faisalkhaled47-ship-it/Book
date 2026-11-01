@@ -2347,6 +2347,13 @@ function sbRefresh() { // show what arrived, unless the teacher is in the middle
 }
 var SB_LATER = false;
 AFTER.push(function () { if (SB_LATER && route.v !== 'read') { SB_LATER = false; setTimeout(function () { render(true); }, 0); } });
+document.addEventListener('input', function (e) { // keep what is typed, so leaving the app to copy the key loses nothing
+  var t = e.target, id = t && t.id; if (sbOn() || (id !== 'sb-url' && id !== 'sb-key' && id !== 'sb-email')) return;
+  P.sb = P.sb || {};
+  if (id === 'sb-url') { var both = /(https?:\/\/[^\s]+)\s+((?:sb_publishable_|eyJ)[^\s]+)/.exec(t.value); if (both) { t.value = both[1]; document.getElementById('sb-key').value = both[2]; P.sb.key = both[2]; } P.sb.url = t.value.trim(); }
+  else if (id === 'sb-key') P.sb.key = t.value.replace(/\s+/g, ''); else P.sb.email = t.value.trim();
+  savePref();
+}, true);
 document.addEventListener('visibilitychange', function () { if (!document.hidden) sbSoon(500); else if (Object.keys(SBQ).length) sbSync(); });
 window.addEventListener('online', function () { sbSoon(500); });
 setInterval(function () { if (!document.hidden) sbSync(); }, 90000);
