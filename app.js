@@ -1088,7 +1088,8 @@ var LAB_SYS = [
   '- الرسم بـ canvas أو SVG مع حركة سلسة (requestAnimationFrame)، يراعي devicePixelRatio ويتكيف مع تغيّر الحجم (من عرض 360 إلى 1400 بكسل).',
   '- التحكم باللمس والقلم والفأرة عبر Pointer Events: منزلقات range وأزرار كبيرة (44 بكسل على الأقل)، وعناصر تُسحب إن كان ذلك مناسبًا.',
   '- قراءات حية بالأرقام والوحدات، وجدول بيانات يُضاف إليه صف عند الضغط على «سجّل القراءة»، ورسم بياني بسيط على canvas إن كان مفيدًا.',
-  '- خط system-ui، وأرقام غربية 0-9، وألوان هادئة واضحة على خلفية فاتحة، وتباين جيد على جهاز العرض. حجم الصفحة أقل من 45 ألف حرف، والكود سليم بلا أخطاء.',
+  '- خط system-ui، وأرقام غربية 0-9، وألوان هادئة واضحة على خلفية فاتحة، وتباين جيد على جهاز العرض.',
+  '- الحجم مهم: الصفحة كلها أقل من 28 ألف حرف. اكتب CSS وJavaScript مختصرين دون تعليقات ودون تكرار، ونصوصًا عربية قصيرة، وركّز على محاكاة واحدة متقنة بدل ميزات كثيرة. الكود سليم بلا أخطاء، وأنهِ الصفحة دائمًا بـ </html>.',
   'المحتوى:',
   '- عنوان قصير، و«سؤال التجربة»، ثم «توقّع» يختار فيه الطالب توقعه قبل التشغيل، ثم المحاكاة، ثم «المهمة» في 3 إلى 5 خطوات، ثم «استنتج» بسؤالين أو ثلاثة اختيار من متعدد تظهر بعدها تغذية راجعة فورية تشرح السبب، وزر «إعادة».',
   '- دقيقة علميًا: استعمل المعادلات والقيم الحقيقية والوحدات الصحيحة، وبسّط دون أن تخطئ، وبمصطلحات الكتاب. اجعلها تجربة يغيّر فيها الطالب متغيرًا ويلاحظ أثره، لا رسمًا متحركًا فقط.',
@@ -1172,7 +1173,7 @@ ACT['lab-gen'] = function (el) {
   LABGEN = { stopped: false }; wake(true);
   var t0 = Date.now(), prog = progModal('Claude يصمّم التجربة', 'lab-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 1600, 4, 95) + '%'; }, 500);
   prog('يقرأ الدرس ويصمّم التجربة…');
-  claude(LAB_SYS, [{ type: 'text', text: labCtx(x.b, x.l) + '\n\n' + (idea ? 'فكرة المعلم للتجربة: ' + idea : 'اختر أنت فكرة التجربة الأنسب والأكثر إبداعًا لهذا الدرس.') + '\n\nاكتب صفحة HTML الآن.' }], 24000, function (n) { prog('يكتب Claude التجربة… ' + num(n) + ' حرفًا'); }, LABGEN)
+  claude(LAB_SYS, [{ type: 'text', text: labCtx(x.b, x.l) + '\n\n' + (idea ? 'فكرة المعلم للتجربة: ' + idea : 'اختر أنت فكرة التجربة الأنسب والأكثر إبداعًا لهذا الدرس.') + '\n\nاكتب صفحة HTML الآن، مختصرة (أقل من 28 ألف حرف) ومكتملة حتى </html>.' }], 32000, function (n) { prog('يكتب Claude التجربة… ' + num(n) + ' حرفًا'); }, LABGEN)
     .then(function (res) {
       clearInterval(tick); wake(false);
       var s = res.text, i = s.search(/<!DOCTYPE html|<html[\s>]/i), j = s.toLowerCase().lastIndexOf('</html>');
@@ -1183,7 +1184,7 @@ ACT['lab-gen'] = function (el) {
       labsSave(x.b, x.l, labsOf(x.b, x.l).concat([lab]));
       var m = document.getElementById('modal'); m.__busy = false; closeModal();
       route.tab = 'lab'; route.lab = lab.id; render(true); toast('جاهزة: «' + title + '». جرّبها قبل الحصة', 4000);
-    })['catch'](function (e) { clearInterval(tick); wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم تكتمل التجربة') + '</h2><p class="muted">' + (e.code === 'stop' ? '' : esc(aiMsg(e))) + '</p>'); });
+    })['catch'](function (e) { clearInterval(tick); wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم تكتمل التجربة') + '</h2><p class="muted">' + (e.code === 'stop' ? '' : e.code === 'cut' ? 'طالت صفحة التجربة أكثر من الحد المسموح للرد فانقطعت قبل نهايتها (لم يُحفظ شيء، ويُحسب ما كُتب من الرصيد). أعد المحاولة؛ وإن تكرر فاكتب فكرة أبسط تركّز على متغير واحد.' : esc(aiMsg(e))) + '</p>'); });
 };
 ACT['lab-stop'] = function () { if (LABGEN) { LABGEN.stopped = true; if (LABGEN.abort) LABGEN.abort(); } };
 
