@@ -439,7 +439,7 @@ function readerMount() {
       R.onResize = function () { clearTimeout(R.rzT); R.rzT = setTimeout(function () { if (route.present) presentFit(); rerenderAll(); }, 200); };
       window.addEventListener('scroll', R.onScroll, { passive: true });
       window.addEventListener('resize', R.onResize);
-      hookPinch(R);
+      hookPinch(R); hookShift(R);
       requestAnimationFrame(function () { scrollToPage(start, true); trackPage(R); });
     });
   })['catch'](function (e) {
@@ -498,7 +498,7 @@ function releasePage(pg) {
   if (pg.task) { try { pg.task.cancel(); } catch (e) {} pg.task = null; }
   if (pg.done) { pg.c.width = pg.c.height = 0; pg.ic.width = pg.ic.height = 0; if (pg.mc) pg.mc.width = pg.mc.height = 0; pg.done = 0; pg.el.classList.remove('ok'); }
 }
-function rerenderAll() { if (!RD) return; RD.gen = (RD.gen || 0) + 1; RD.pages.forEach(function (pg) { if (pg.vis) renderPage(pg); }); }
+function rerenderAll() { if (!RD) return; shiftTo(RD, RD.sx || 0); RD.gen = (RD.gen || 0) + 1; RD.pages.forEach(function (pg) { if (pg.vis) renderPage(pg); }); }
 
 /* writing: strokes per page in IndexedDB (ink store, key bookId:page) */
 function inkKey(R, n) { return R.b.id + ':' + n; }
@@ -522,14 +522,15 @@ function sizeInk(pg) {
   if (pg.mc) { // the blank space beside the page: a board that shares the page's writing (in page units, beyond 0–1000)
     var row = pg.mc.parentNode, rw = row.clientWidth, rh = row.clientHeight, ox = pg.el.offsetLeft, oy = pg.el.offsetTop, room = rw - w > 8;
     pg.mc.hidden = !room;
-    if (room) { pg.mc.width = Math.round(rw * dpr); pg.mc.height = Math.round(rh * dpr); pg.mc.getContext('2d').setTransform(dpr * pg.k, 0, 0, dpr * pg.k, dpr * ox, dpr * oy); }
+    if (room) { pg.mc.width = Math.round(rw * dpr); pg.mc.height = Math.round(rh * dpr); pg.dpr = dpr; mcFit(pg); }
     else pg.mc.width = pg.mc.height = 0;
   }
   inkOf(R, pg.n).then(function () { drawInk(pg); });
 }
-function drawInk(pg) {
+function mcFit(pg) { var dpr = pg.dpr || 1; pg.mc.getContext('2d').setTransform(dpr * pg.k, 0, 0, dpr * pg.k, dpr * pg.el.offsetLeft, dpr * pg.el.offsetTop); }
+function drawInk(pg, onlyM) {
   var R = RD; if (!R || !pg.ic.width) return; var d = R.ink[pg.n];
-  [pg.ic, pg.mc && pg.mc.width ? pg.mc : null].forEach(function (cv) {
+  [onlyM ? null : pg.ic, pg.mc && pg.mc.width ? pg.mc : null].forEach(function (cv) {
     if (!cv) return; var x = cv.getContext('2d');
     x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cv.width, cv.height); x.restore();
     if (d) d.s.forEach(function (st) { stroke(x, st); });
@@ -567,13 +568,22 @@ function hookInk(R, pg) {
     if (cur.er) {
       var hit = false;
       for (var i = d.s.length - 1; i >= 0; i--) { var p = d.s[i].p, rr = d.s[i].k === 'hl' ? 14 : 10; for (var j = 0; j < p.length; j += 3) if (Math.abs(p[j] - q[0]) < rr && Math.abs(p[j + 1] - q[1]) < rr) { cur.gone.push({ i: i, s: d.s[i] }); d.s.splice(i, 1); hit = true; break; } }
-      if (hit) drawInk(pg); return;
+      if (hit) rafInk(pg); return;
     }
     var a = cur.p, n = a.length;
     if (n && Math.abs(a[n - 3] - q[0]) + Math.abs(a[n - 2] - q[1]) < 1.2) return;
     if (cur.k === 'hl' && n >= 3) q[1] = a[1] + (q[1] - a[1]) * 0.25; // a highlighter keeps to its line
     a.push(q[0], q[1], q[2]);
-    drawInk(pg);
+    if (cur.k === 'hl') rafInk(pg); else seg(cur, a.length / 3 - 1);
+  }
+  function seg(st, i) { // only the newest piece of the stroke: redrawing every stroke on each move made the pen lag
+    var p = st.p, x0 = p[i * 3 - 3], x1 = p[i * 3], base = st.w || 3.2;
+    [pg.ic, pg.mc && pg.mc.width && (i === 0 ? x1 < 8 || x1 > INK_W - 8 : Math.min(x0, x1) < 8 || Math.max(x0, x1) > INK_W - 8) ? pg.mc : null].forEach(function (cv) {
+      if (!cv) return; var x = cv.getContext('2d'); x.lineCap = 'round'; x.lineJoin = 'round'; x.strokeStyle = x.fillStyle = st.c || PEN_C[0];
+      if (i === 0) { x.beginPath(); x.arc(p[0], p[1], base * (0.45 + p[2] / 90) / 2, 0, 7); x.fill(); return; }
+      x.lineWidth = base * (0.45 + (p[i * 3 + 2] + p[i * 3 - 1]) / 180);
+      x.beginPath(); x.moveTo(x0, p[i * 3 - 2]); x.lineTo(x1, p[i * 3 + 1]); x.stroke();
+    });
   }
   function end() {
     var s = cur; cur = null; pg.live = null; if (!s) return;
@@ -605,7 +615,31 @@ function hookInk(R, pg) {
     c.addEventListener('pointerup', function (e) { if (e.pointerType === 'mouse' && touch == null) end(); });
   });
 }
-/* two fingers: zoom the pages around the point between them */
+function rafInk(pg) { if (!pg.raf) pg.raf = requestAnimationFrame(function () { pg.raf = 0; drawInk(pg); }); }
+/* sliding the page sideways over its board (one finger across, when not writing with the finger) */
+function shiftMax(R) { var pg = R.pages[0]; if (!pg || rt().spread) return 0; return Math.max(0, (R.wrap.clientWidth - pg.el.offsetWidth) / 2); }
+function shiftTo(R, v) {
+  var m = shiftMax(R); v = m < 4 ? 0 : clamp(v, -m, m); if (v === R.sx) return;
+  R.sx = v; R.wrap.style.setProperty('--sx', Math.round(v) + 'px');
+  if (!R.sxT) R.sxT = requestAnimationFrame(function () { R.sxT = 0; R.pages.forEach(function (pg) { if (pg.mc && pg.mc.width) { mcFit(pg); drawInk(pg, true); } }); });
+}
+function hookShift(R) {
+  var g = null, el = R.wrap;
+  el.addEventListener('touchstart', function (e) {
+    g = null; var t = e.touches[0];
+    if (e.touches.length !== 1 || t.touchType === 'stylus' || rt().finger || shiftMax(R) < 4) return;
+    if (e.target.closest && e.target.closest('.stk,.ans,button,a,input,textarea,select,[contenteditable]')) return;
+    g = { x: t.clientX, y: t.clientY, s: R.sx || 0, h: null };
+  }, { passive: true });
+  el.addEventListener('touchmove', function (e) {
+    if (!g) return; if (e.touches.length !== 1) { g = null; return; }
+    var t = e.touches[0], dx = t.clientX - g.x, dy = t.clientY - g.y;
+    if (g.h == null) { if (!dx && !dy) return; g.h = e.cancelable && Math.abs(dx) > Math.abs(dy); if (!g.h) { g = null; return; } }
+    e.preventDefault(); shiftTo(R, g.s + dx);
+  }, { passive: false });
+  el.addEventListener('touchend', function () { g = null; }); el.addEventListener('touchcancel', function () { g = null; });
+}
+/* two fingers: zoom the pages around the point between them, and move them along with the fingers */
 function hookPinch(R) {
   var g = null, el = R.wrap;
   function dist(t) { var a = t[0], b = t[1]; return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); }
@@ -618,14 +652,16 @@ function hookPinch(R) {
   }, { passive: true });
   el.addEventListener('touchmove', function (e) {
     if (!g || e.touches.length !== 2) return; e.preventDefault();
-    var z = R.zoom; g.s = clamp(dist(e.touches) / g.d0, 0.4 / z, 3 / z);
-    el.style.transform = 'scale(' + g.s.toFixed(3) + ')';
+    var z = R.zoom, m = mid(e.touches); g.s = clamp(dist(e.touches) / g.d0, 0.4 / z, 3 / z); g.dx = m.x - g.m.x; g.dy = m.y - g.m.y;
+    el.style.transform = 'translate(' + Math.round(g.dx) + 'px,' + Math.round(g.dy) + 'px) scale(' + g.s.toFixed(3) + ')';
   }, { passive: false });
   function fin() {
     if (!g) return; var s = g.s, G = g; g = null;
     el.style.transform = ''; el.style.transformOrigin = '';
-    if (Math.abs(s - 1) < 0.04) return;
-    setZoom(R.zoom * s, G);
+    if (Math.abs(s - 1) >= 0.04) setZoom(R.zoom * s, G);
+    var dx = G.dx || 0, dy = G.dy || 0;
+    if (dy) window.scrollBy(0, -dy);
+    if (dx) { if (shiftMax(R) >= 4) shiftTo(R, (R.sx || 0) + dx); else R.x.scrollLeft -= dx; }
   }
   el.addEventListener('touchend', function (e) { if (e.touches.length < 2) fin(); });
   el.addEventListener('touchcancel', fin);
@@ -641,7 +677,7 @@ function setZoom(z, G) {
   z = clamp(Math.round(z * 100) / 100, 0.4, 3); if (z === R.zoom) return;
   var m = G && G.m ? G.m : { x: window.innerWidth / 2, y: window.innerHeight / 2 }, A = zoomAnchor(R, m.x, m.y);
   R.zoom = z; if (!route.present) setRt('zoom', z);
-  R.wrap.style.setProperty('--z', z);
+  R.wrap.style.setProperty('--z', z); shiftTo(R, R.sx || 0);
   if (A) { // the same spot of the same page stays under the fingers (the gaps between pages do not grow with the zoom, so the whole list cannot be scaled)
     var r1 = A.el.getBoundingClientRect();
     R.x.scrollLeft += (r1.left + A.fx * r1.width) - A.x;
