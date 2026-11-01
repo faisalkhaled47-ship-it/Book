@@ -2094,24 +2094,48 @@ ACT['solve-run'] = function (el) {
 };
 ACT['solve-stop'] = function () { if (SOLVE) { SOLVE.stopped = true; if (SOLVE.abort) SOLVE.abort(); } };
 
-/* ---------- yellow sticky notes: a note stuck on a page or a card; a tap opens it, a drag moves it ----------
-   Positions are in units of the holder's width (1000 = full width), so they stay put when the screen turns or zooms. */
+/* ---------- sticky notes: a note stuck on a page or a card, typed or handwritten ----------
+   On the note itself: the Apple Pencil writes, a finger drags it, a tap opens it. Inside the open note the finger writes too.
+   Positions are in units of the holder's width (1000 = full width); handwriting is in the note's own 1000 × 800 box. */
 var STK_C = ['#FFE873', '#FFC6DC', '#C2F0C8', '#C4E4FF'], STK_N = ['أصفر', 'وردي', 'أخضر', 'أزرق'], STK_ED = null;
+var STK_INK = ['#2A2412', '#C62828', '#1F5FB8'], STK_INKN = ['أسود', 'أحمر', 'أزرق'], STK_H = 800;
+function stkPath(st) {
+  var p = st.p || [], d = '';
+  for (var j = 0; j < p.length; j += 3) d += (j ? 'L' : 'M') + p[j] + ' ' + p[j + 1];
+  if (p.length === 3) d += 'l0.1 0';
+  return '<path d="' + d + '" stroke="' + (STK_INK[st.c || 0] || STK_INK[0]) + '" stroke-width="' + (st.w || 9) + '"/>';
+}
+function stkSvg(ink) { return '<svg class="stk-ink" viewBox="0 0 1000 ' + STK_H + '" preserveAspectRatio="none" aria-hidden="true">' + (ink || []).map(stkPath).join('') + '</svg>'; }
 function stkHtml(items) {
   return (items || []).map(function (it, i) {
-    return '<div class="stk' + (it.m ? ' m' : '') + '" data-i="' + i + '" style="left:' + (it.x / 10) + '%;top:' + (it.y / 10) + 'cqw;--sc:' + (STK_C[it.c || 0] || STK_C[0]) + '" role="note" aria-label="لاصقة' + (it.txt ? ': ' + esc(it.txt.slice(0, 60)) : '') + '">' +
-      (it.m ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v10l-5 6H5z"/><path d="M14 20v-6h5"/></svg>' : '<span>' + esc(it.txt || '') + '</span>') + '</div>';
+    var ink = it.ink && it.ink.length;
+    return '<div class="stk' + (it.m ? ' m' : '') + (ink ? ' has-ink' : '') + '" data-i="' + i + '" style="left:' + (it.x / 10) + '%;top:' + (it.y / 10) + 'cqw;--sc:' + (STK_C[it.c || 0] || STK_C[0]) + '" role="note" aria-label="لاصقة' + (it.txt ? ': ' + esc(it.txt.slice(0, 60)) : '') + '">' +
+      (it.m ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v10l-5 6H5z"/><path d="M14 20v-6h5"/></svg>' : (it.txt ? '<span>' + esc(it.txt) + '</span>' : '') + stkSvg(it.ink)) + '</div>';
   }).join('');
 }
+function stkPt(box, e) { var r = box.getBoundingClientRect(); return [Math.round(Math.max(0, Math.min(1000, (e.clientX - r.left) / (r.width || 1) * 1000))), Math.round(Math.max(0, Math.min(STK_H, (e.clientY - r.top) / (r.height || 1) * STK_H))), Math.round(Math.max(0.1, Math.min(1, e.pressure || 0.5)) * 99)]; }
+function stkInkBegin(svg, e, col, w) { // a live stroke drawn into the note's svg
+  var st = { c: col || 0, w: w || 9, p: stkPt(svg, e) }, el = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  el.setAttribute('stroke', STK_INK[st.c]); el.setAttribute('stroke-width', st.w); svg.appendChild(el);
+  return { st: st, el: el, svg: svg, add: function (ev) { var q = stkPt(svg, ev), p = st.p, n = p.length; if (Math.abs(p[n - 3] - q[0]) + Math.abs(p[n - 2] - q[1]) < 3) return; p.push(q[0], q[1], q[2]); var d = ''; for (var j = 0; j < p.length; j += 3) d += (j ? 'L' : 'M') + p[j] + ' ' + p[j + 1]; el.setAttribute('d', d); } };
+}
 function stkBind(layer, ctx) { // ctx: {host(), get(), set(items)}
-  var drag = null;
+  var drag = null, pen = null;
   layer.addEventListener('pointerdown', function (e) {
     var el = e.target.closest && e.target.closest('.stk'); if (!el) return;
     e.preventDefault(); e.stopPropagation();
-    drag = { el: el, i: +el.getAttribute('data-i'), x0: e.clientX, y0: e.clientY, l: el.offsetLeft, t: el.offsetTop, W: ctx.host().getBoundingClientRect().width || 1, moved: false, id: e.pointerId };
+    var i = +el.getAttribute('data-i'), it = ctx.get()[i];
+    if (e.pointerType === 'pen' && it && !it.m) { // the pencil writes on the note where it is
+      var svg = el.querySelector('svg.stk-ink'); if (!svg) return;
+      pen = stkInkBegin(svg, e, STK_LAST.ink, 9); pen.i = i; pen.id = e.pointerId; pen.x0 = e.clientX; pen.y0 = e.clientY;
+      try { el.setPointerCapture(e.pointerId); } catch (x) {}
+      return;
+    }
+    drag = { el: el, i: i, x0: e.clientX, y0: e.clientY, l: el.offsetLeft, t: el.offsetTop, W: ctx.host().getBoundingClientRect().width || 1, moved: false, id: e.pointerId };
     try { el.setPointerCapture(e.pointerId); } catch (x) {}
   });
   layer.addEventListener('pointermove', function (e) {
+    if (pen && e.pointerId === pen.id) { var evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e]; (evs.length ? evs : [e]).forEach(pen.add); return; }
     if (!drag || e.pointerId !== drag.id) return;
     var dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
     if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 8) return;
@@ -2119,34 +2143,56 @@ function stkBind(layer, ctx) { // ctx: {host(), get(), set(items)}
     drag.el.style.left = (drag.l + dx) + 'px'; drag.el.style.top = (drag.t + dy) + 'px';
   });
   function up(e) {
+    if (pen && e.pointerId === pen.id) {
+      var P = pen; pen = null; var items = ctx.get(), it = items[P.i]; if (!it) return;
+      if (P.st.p.length <= 6 && Math.abs(e.clientX - P.x0) + Math.abs(e.clientY - P.y0) < 6) { P.el.remove(); stkEdit(ctx, P.i); return; } // a tap of the pencil opens the note
+      (it.ink = it.ink || []).push(P.st); it.at = Date.now(); ctx.set(items); return;
+    }
     if (!drag || e.pointerId !== drag.id) return;
     var d = drag; drag = null; d.el.classList.remove('drag');
-    var items = ctx.get(), it = items[d.i]; if (!it) return;
-    if (d.moved) { var k = d.W / 1000, H = (ctx.host().getBoundingClientRect().height || 1) / k; it.x = Math.round(Math.max(0, Math.min(980, d.el.offsetLeft / k))); it.y = Math.round(Math.max(0, Math.min(H - 20, d.el.offsetTop / k))); ctx.set(items); }
-    else if (it.m) { it.m = false; ctx.set(items); }
+    var items2 = ctx.get(), it2 = items2[d.i]; if (!it2) return;
+    if (d.moved) { var k = d.W / 1000, H = (ctx.host().getBoundingClientRect().height || 1) / k; it2.x = Math.round(Math.max(0, Math.min(980, d.el.offsetLeft / k))); it2.y = Math.round(Math.max(0, Math.min(H - 20, d.el.offsetTop / k))); ctx.set(items2); }
+    else if (it2.m) { it2.m = false; ctx.set(items2); }
     else stkEdit(ctx, d.i);
   }
   layer.addEventListener('pointerup', up); layer.addEventListener('pointercancel', up);
 }
+var STK_LAST = { ink: 0 };
 function stkAdd(ctx, w) { // a new note in the middle of what is on screen of this holder
   var host = ctx.host(), r = host.getBoundingClientRect(), k = (r.width || 1) / 1000;
   var mid = Math.max(20, Math.min(r.height - 120, window.innerHeight / 2 - r.top - 60));
-  stkEdit(ctx, -1, { id: Date.now().toString(36), x: Math.round((1000 - w) / 2), y: Math.round(mid / k), txt: '', c: 0, at: Date.now() }); // kept only once something is written
+  stkEdit(ctx, -1, { id: Date.now().toString(36), x: Math.round((1000 - w) / 2), y: Math.round(mid / k), txt: '', ink: [], c: 0, at: Date.now() }); // kept only once something is written
 }
 function stkEdit(ctx, i, fresh) {
   var it = fresh || ctx.get()[i]; if (!it) return;
-  STK_ED = { ctx: ctx, i: i, fresh: fresh || null, c: it.c || 0 };
-  openModal('<div class="modal-card stk-ed" role="dialog" aria-modal="true" aria-label="لاصقة" style="--sc:' + STK_C[it.c || 0] + '"><textarea id="stk-t" rows="5" placeholder="اكتب ملاحظتك…">' + esc(it.txt || '') + '</textarea>' +
-    '<div class="stk-cs">' + STK_C.map(function (c, k) { return '<button type="button" data-stk="col" data-v="' + k + '" aria-label="' + STK_N[k] + '" aria-pressed="' + ((it.c || 0) === k) + '" style="--c:' + c + '"></button>'; }).join('') + '</div>' +
+  STK_ED = { ctx: ctx, i: i, fresh: fresh || null, c: it.c || 0, ink: JSON.parse(JSON.stringify(it.ink || [])) };
+  openModal('<div class="modal-card stk-ed" role="dialog" aria-modal="true" aria-label="لاصقة" style="--sc:' + STK_C[it.c || 0] + '">' +
+    '<div class="stk-pad" id="stk-pad" aria-label="اكتب هنا بالقلم أو بإصبعك">' + stkSvg(STK_ED.ink) + '<span class="stk-hint"' + (STK_ED.ink.length ? ' hidden' : '') + '>اكتب هنا بقلم الآيباد أو بإصبعك</span></div>' +
+    '<textarea id="stk-t" rows="2" placeholder="أو اكتب نصًا بلوحة المفاتيح…">' + esc(it.txt || '') + '</textarea>' +
+    '<div class="stk-tools"><span class="stk-cs">' + STK_INK.map(function (c, k) { return '<button type="button" data-stk="ink" data-v="' + k + '" aria-label="قلم ' + STK_INKN[k] + '" aria-pressed="' + (STK_LAST.ink === k) + '" style="--c:' + c + '"></button>'; }).join('') + '</span>' +
+    '<button type="button" class="stk-tb" data-stk="undo">تراجع</button><button type="button" class="stk-tb" data-stk="wipe">امسح الكتابة</button></div>' +
+    '<div class="stk-cs stk-bg">' + STK_C.map(function (c, k) { return '<button type="button" data-stk="col" data-v="' + k + '" aria-label="لاصقة ' + STK_N[k] + '" aria-pressed="' + ((it.c || 0) === k) + '" style="--c:' + c + '"></button>'; }).join('') + '</div>' +
     '<div class="actions"><button class="btn" data-stk="save">احفظ</button><button class="btn ghost" data-stk="min">صغّرها</button><button class="btn ghost danger" data-stk="del">احذف</button></div></div>');
-  setTimeout(function () { var t = document.getElementById('stk-t'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }, 60);
+  stkPadBind(document.getElementById('stk-pad'));
 }
+function stkPadBind(pad) { // inside the open note: pencil and finger both write
+  if (!pad) return; var cur = null;
+  pad.addEventListener('pointerdown', function (e) {
+    e.preventDefault(); var a = document.activeElement; if (a && a.blur && a.id === 'stk-t') a.blur();
+    var h = pad.querySelector('.stk-hint'); if (h) h.hidden = true;
+    cur = stkInkBegin(pad.querySelector('svg.stk-ink'), e, STK_LAST.ink, 9); cur.id = e.pointerId; try { pad.setPointerCapture(e.pointerId); } catch (x) {}
+  });
+  pad.addEventListener('pointermove', function (e) { if (cur && e.pointerId === cur.id) { var evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e]; (evs.length ? evs : [e]).forEach(cur.add); } });
+  function up(e) { if (!cur || e.pointerId !== cur.id) return; var c = cur; cur = null; if (STK_ED) STK_ED.ink.push(c.st); }
+  pad.addEventListener('pointerup', up); pad.addEventListener('pointercancel', up);
+}
+function stkRedrawPad() { var pad = document.getElementById('stk-pad'); if (!pad || !STK_ED) return; var old = pad.querySelector('svg.stk-ink'), w = document.createElement('div'); w.innerHTML = stkSvg(STK_ED.ink); pad.replaceChild(w.firstChild, old); }
 function stkDone(act) {
   var E = STK_ED; if (!E) return; var items = E.ctx.get(), it = E.fresh || items[E.i]; if (!it) { STK_ED = null; closeModal(); return; }
-  var t = document.getElementById('stk-t'), txt = t ? t.value.trim().slice(0, 2000) : it.txt;
-  if (E.fresh && (act === 'del' || !txt)) { STK_ED = null; closeModal(); return; } // an empty new note is not kept
-  if (!E.fresh && (act === 'del' || (!txt && act !== 'min'))) items.splice(E.i, 1);
-  else { it.txt = txt; it.c = E.c; it.m = act === 'min'; it.at = Date.now(); if (E.fresh) items.push(it); }
+  var t = document.getElementById('stk-t'), txt = t ? t.value.trim().slice(0, 2000) : it.txt, empty = !txt && !E.ink.length;
+  if (E.fresh && (act === 'del' || empty)) { STK_ED = null; closeModal(); return; } // an empty new note is not kept
+  if (!E.fresh && (act === 'del' || (empty && act !== 'min'))) items.splice(E.i, 1);
+  else { it.txt = txt; it.ink = E.ink; it.c = E.c; it.m = act === 'min'; it.at = Date.now(); if (E.fresh) items.push(it); }
   STK_ED = null; E.ctx.set(items); closeModal();
   if (act === 'del') toast('حُذفت اللاصقة');
 }
@@ -2155,6 +2201,9 @@ document.addEventListener('click', function (e) {
   e.preventDefault(); e.stopPropagation();
   var a = b.getAttribute('data-stk');
   if (a === 'col') { STK_ED.c = +b.getAttribute('data-v'); var m = b.closest('.stk-ed'); if (m) m.style.setProperty('--sc', STK_C[STK_ED.c]); Array.prototype.forEach.call(b.parentNode.children, function (x) { x.setAttribute('aria-pressed', String(x === b)); }); return; }
+  if (a === 'ink') { STK_LAST.ink = +b.getAttribute('data-v'); Array.prototype.forEach.call(b.parentNode.children, function (x) { x.setAttribute('aria-pressed', String(x === b)); }); return; }
+  if (a === 'undo') { STK_ED.ink.pop(); stkRedrawPad(); return; }
+  if (a === 'wipe') { STK_ED.ink = []; stkRedrawPad(); return; }
   stkDone(a);
 }, true);
 /* kitabi: notes on the book pages, kept in the notes store as n:<bookId>:<page> {items:[{id, x, y, txt, c, m}]} (backup and sync with the rest) */

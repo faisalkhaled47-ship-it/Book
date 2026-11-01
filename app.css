@@ -263,21 +263,29 @@ html.lab-on,html.lab-on body{overflow:hidden}
 #lab-idea,#lab-note{font:inherit;font-size:16px;line-height:1.6;width:100%;box-sizing:border-box;resize:vertical}
 .lab-fix{padding:8px 12px}
 
-/* yellow sticky notes */
+/* sticky notes, typed or handwritten */
 .stk-l{position:absolute;inset:0;pointer-events:none;z-index:3}
-.stk{position:absolute;pointer-events:auto;touch-action:none;box-sizing:border-box;background:var(--sc,#FFE873);color:#3A3205;border-radius:2px 2px 10px 2px;box-shadow:0 1px 1px rgba(0,0,0,.08),0 6px 14px rgba(60,48,0,.22);padding:.7em .8em;transform:rotate(-1.2deg);white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55;cursor:grab;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;direction:rtl;text-align:start}
-.stk::before{content:"";position:absolute;top:-7px;left:50%;width:42%;height:13px;transform:translateX(-50%) rotate(1.5deg);background:rgba(255,255,255,.55);box-shadow:0 1px 2px rgba(0,0,0,.08);border-radius:2px}
-.stk span{display:block;max-height:18em;overflow:hidden}
-.stk.m{padding:.35em;border-radius:4px;width:auto!important;transform:rotate(-4deg)}
+.stk{position:absolute;pointer-events:auto;touch-action:none;box-sizing:border-box;background:var(--sc,#FFE873);color:#3A3205;border-radius:2px 2px 10px 2px;box-shadow:0 1px 1px rgba(0,0,0,.08),0 6px 14px rgba(60,48,0,.22);padding:.7em .8em;transform:rotate(-1.2deg);white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55;cursor:grab;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;direction:rtl;text-align:start;aspect-ratio:5/4}
+.stk::before{content:"";position:absolute;top:-7px;left:50%;width:42%;height:13px;transform:translateX(-50%) rotate(1.5deg);background:rgba(255,255,255,.55);box-shadow:0 1px 2px rgba(0,0,0,.08);border-radius:2px;z-index:1}
+.stk span{display:block;position:relative}
+.stk-ink{position:absolute;inset:0;width:100%;height:100%;fill:none;stroke-linecap:round;stroke-linejoin:round;pointer-events:none;overflow:visible}
+.stk.m{padding:.35em;border-radius:4px;width:auto!important;transform:rotate(-4deg);aspect-ratio:auto}
 .stk.m::before{display:none}
-.stk.m svg{display:block;width:1.6em;height:1.6em;fill:none;stroke:#7A6A10;stroke-width:1.7;stroke-linejoin:round}
+.stk.m>svg{display:block;width:1.6em;height:1.6em;fill:none;stroke:#7A6A10;stroke-width:1.7;stroke-linejoin:round}
 .stk.drag{opacity:.9;box-shadow:0 12px 26px rgba(60,48,0,.3);cursor:grabbing;z-index:4;transform:rotate(0)}
 .stk-ed{background:var(--sc,#FFE873)!important;color:#3A3205}
-.stk-ed textarea{width:100%;box-sizing:border-box;border:0;background:rgba(255,255,255,.45);border-radius:10px;padding:12px;font:inherit;font-size:17px;line-height:1.6;color:#3A3205;resize:vertical;min-height:130px}
+.stk-pad{position:relative;width:100%;aspect-ratio:5/4;max-height:52vh;margin:0 auto;background:rgba(255,255,255,.35);border-radius:10px;touch-action:none;cursor:crosshair;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+.stk-hint{position:absolute;inset:0;display:grid;place-items:center;color:rgba(58,50,5,.45);font-size:15px;pointer-events:none;text-align:center;padding:0 12px}
+.stk-hint[hidden]{display:none}
+.stk-ed textarea{width:100%;box-sizing:border-box;border:0;background:rgba(255,255,255,.45);border-radius:10px;padding:10px 12px;font:inherit;font-size:16px;line-height:1.6;color:#3A3205;resize:vertical;margin-top:10px}
 .stk-ed textarea:focus{outline:2px solid rgba(0,0,0,.2)}
-.stk-cs{display:flex;gap:10px;margin:10px 0 2px}
+.stk-tools{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+.stk-tb{appearance:none;border:0;background:rgba(255,255,255,.5);color:#3A3205;border-radius:999px;padding:7px 12px;font:inherit;font-size:13.5px;font-weight:700;cursor:pointer}
+.stk-cs{display:inline-flex;gap:10px}
+.stk-bg{margin:10px 0 2px}
 .stk-cs button{width:32px;height:32px;border-radius:50%;border:2px solid rgba(0,0,0,.18);background:var(--c);cursor:pointer;padding:0}
 .stk-cs button[aria-pressed=true]{box-shadow:0 0 0 3px rgba(0,0,0,.45)}
+.stk-tools .stk-cs button{width:28px;height:28px;border-color:rgba(255,255,255,.7)}
 .stk-ed .btn.ghost{background:rgba(255,255,255,.5);color:#3A3205}
 .pg .stk{width:26cqw;font-size:max(10px,1.8cqw)}.pg .stk.m{font-size:max(10px,1.6cqw)}
 /* the class clock and countdown */
