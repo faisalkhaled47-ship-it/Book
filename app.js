@@ -3424,18 +3424,29 @@ ACT['reset-yes'] = function () {
   try { [STATE_KEY, PREF_KEY, SBQ_KEY, SBS_KEY].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
   var r = indexedDB.deleteDatabase(DBN); r.onsuccess = r.onerror = r.onblocked = function () { location.reload(); };
 };
-ACT['app-update'] = function () {
+ACT['app-update'] = function () { // ask for the new version, wait until it is installed, then reload (the old copy stays until then, so the app always opens)
   var bs = document.querySelectorAll('[data-act="app-update"]');
   if (navigator.onLine === false) { toast('التحديث يحتاج اتصالًا بالإنترنت'); return; }
   Array.prototype.forEach.call(bs, function (b) { b.disabled = true; b.classList.add('spin'); });
+  toast('جارٍ تنزيل التحديث…', 20000);
+  function go() { flushInk(); saveState(true); try { sessionStorage.setItem('kitabi-resume', JSON.stringify({ r: route, y: window.scrollY, t: Date.now() })); } catch (e) {} location.reload(); }
   fetch('./index.html', { cache: 'no-store' }).then(function (r) {
     if (!r.ok) throw new Error('http');
-    var p = Promise.resolve();
-    if ('serviceWorker' in navigator) p = p.then(function () { return navigator.serviceWorker.getRegistration(); }).then(function (g) { return g && g.update(); })['catch'](function () {});
-    if (window.caches) p = p.then(function () { return caches.keys(); }).then(function (ks) { return Promise.all(ks.filter(function (k) { return k.indexOf('kitabi-') === 0; }).map(function (k) { return caches['delete'](k); })); })['catch'](function () {});
-    return p.then(function () { flushInk(); saveState(true); try { sessionStorage.setItem('kitabi-resume', JSON.stringify({ r: route, y: window.scrollY, t: Date.now() })); } catch (e) {} location.reload(); });
+    if (!('serviceWorker' in navigator)) return go();
+    return navigator.serviceWorker.getRegistration().then(function (g) {
+      if (!g) return go();
+      return g.update().then(function () {
+        var w = g.installing || g.waiting; if (!w) return go();
+        return new Promise(function (res) {
+          var t = setTimeout(res, 25000);
+          function chk() { if (w.state === 'activated' || w.state === 'redundant') { clearTimeout(t); res(); } }
+          w.addEventListener('statechange', chk); chk();
+        }).then(go);
+      });
+    });
   })['catch'](function () { Array.prototype.forEach.call(bs, function (b) { b.disabled = false; b.classList.remove('spin'); }); toast('تعذّر الوصول إلى الخادم؛ جرّب بعد قليل'); });
 };
+
 
 /* ---------- events ---------- */
 ACT.go = function (el) { var to = el.getAttribute('data-to'); if (to === 'lessons' && route.v !== 'lesson' && route.v !== 'lessons' && LAST_LESSON && lessonByKey(LAST_LESSON.k)) { backToLesson(); return; } if (to === 'quiz' && route.v === 'quiz' && QS) QS = null; if (to === 'read' && route.v === 'read') { if (RD) scrollToPage(RD.cur); return; } if (to === 'plan') { go('plan', { jump: true }); return; } go(to); };

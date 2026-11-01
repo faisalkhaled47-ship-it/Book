@@ -15,7 +15,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<script>window.KITABI_VERSION = '2026.11.01.38';
+<script>window.KITABI_VERSION = '2026.11.01.39';
 try { var pf = JSON.parse(localStorage.getItem('kitabi-pref') || '{}') || {}; if (pf.theme === 'light' || pf.theme === 'dark') document.documentElement.setAttribute('data-theme', pf.theme); } catch (e) {}</script>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="app.css">
@@ -32,6 +32,12 @@ try { var pf = JSON.parse(localStorage.getItem('kitabi-pref') || '{}') || {}; if
     <div class="cstrip" id="cstrip"></div>
   </header>
   <main class="wrap" id="main"><p class="muted">جارٍ التحميل…</p></main>
+  <script>/* if the app has not started after a while (a file did not arrive), offer to load it again */
+  setTimeout(function () { var m = document.getElementById('main'); if (!m || !/جارٍ التحميل/.test(m.textContent)) return;
+    m.innerHTML = '<section class="panel" style="margin-top:20px"><h2>يتأخر فتح التطبيق</h2><p class="muted">ربما لم يكتمل تنزيل ملفات التحديث. بياناتك محفوظة على الجهاز ولن تتأثر.</p><div class="actions"><button class="btn" id="boot-retry">أعد المحاولة</button><button class="btn ghost" id="boot-fix">نزّل التطبيق من جديد</button></div></section>';
+    document.getElementById('boot-retry').onclick = function () { location.reload(); };
+    document.getElementById('boot-fix').onclick = function () { var p = Promise.resolve(); if (window.caches) p = caches.keys().then(function (k) { return Promise.all(k.filter(function (x) { return x.indexOf('kitabi-') === 0; }).map(function (x) { return caches.delete(x); })); }); if (navigator.serviceWorker) p = p.then(function () { return navigator.serviceWorker.getRegistrations(); }).then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }); p.catch(function () {}).then(function () { location.reload(); }); };
+  }, 15000);</script>
   <nav class="tabs" id="tabs" aria-label="أقسام التطبيق" hidden><div class="tabs-in">
     <button class="tab" data-act="go" data-to="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10.6 12 4l8 6.6V19a1.6 1.6 0 0 1-1.6 1.6H15v-5.4H9v5.4H5.6A1.6 1.6 0 0 1 4 19z"/></svg><span>الرئيسية</span></button>
     <button class="tab" data-act="go" data-to="lessons"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg><span>الدروس</span></button>

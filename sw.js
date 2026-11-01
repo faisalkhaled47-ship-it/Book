@@ -1,5 +1,5 @@
 /* كتابي: يحفظ واجهة التطبيق ومكتبة قراءة PDF للعمل دون إنترنت. الكتب والشروح والكتابة لا تمر من هنا؛ هي في تخزين الجهاز. */
-const CACHE = 'kitabi-2026.11.01.38';
+const CACHE = 'kitabi-2026.11.01.39';
 const SHELL = ['./', './index.html', './style.css', './app.css', './app.js', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png',
   './vendor/pdfjs/pdf.min.mjs', './vendor/pdfjs/pdf.worker.min.mjs'];
 
@@ -28,19 +28,21 @@ self.addEventListener('fetch', (e) => {
       const hit = await cache.match(req, { ignoreSearch: true });
       if (hit) return hit;
     }
-    try {
-      // the app's own files are checked with the server every time (GitHub Pages lets browsers keep them 10 minutes otherwise)
-      const res = await Promise.race([
-        lib ? fetch(req) : fetch(new Request(req.url, { cache: 'no-cache', credentials: 'same-origin' })),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), lib ? 20000 : 5000))
-      ]);
-      if (res && res.ok) cache.put(req, res.clone());
+    // the app's own files are checked with the server every time (GitHub Pages lets browsers keep them 10 minutes otherwise).
+    // With a copy in the cache, a slow network falls back to it after a few seconds; without one, the network is waited for.
+    const net = (lib ? fetch(req) : fetch(new Request(req.url, { cache: 'no-cache', credentials: 'same-origin' }))).then((res) => {
+      if (res && res.ok) cache.put(req, res.clone()).catch(() => {});
       return res;
+    });
+    const hit = await cache.match(req, { ignoreSearch: true }) || (req.mode === 'navigate' ? await cache.match('./index.html') : null);
+    if (!hit) {
+      try { return await net; } catch (err) { return Response.error(); }
+    }
+    try {
+      return await Promise.race([net, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), lib ? 20000 : 6000))]);
     } catch (err) {
-      const hit = await cache.match(req, { ignoreSearch: true });
-      if (hit) return hit;
-      if (req.mode === 'navigate') return (await cache.match('./index.html')) || Response.error();
-      return Response.error();
+      net.catch(() => {}); // it still lands in the cache for next time
+      return hit;
     }
   })());
 });
