@@ -378,3 +378,10 @@ details.ai-fold:not([open]){padding-top:14px;padding-bottom:14px}
 .q-skipped span{overflow:hidden;text-overflow:ellipsis}
 .q-skipnote{margin:0 0 10px}
 html.kb nav.tabs{display:none!important}html.kb .rd-bar{display:none!important}
+/* writing on an opened drawing */
+.zoom-in:has(.zbar){padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+.zwrap{position:relative;margin:0 auto;max-width:100%}
+.zwrap>svg,.zwrap>img{display:block;width:100%!important;height:100%!important;max-height:none!important;margin:0}
+.zink{position:absolute;inset:0;width:100%;height:100%;touch-action:pan-x pan-y;cursor:crosshair}
+.zk-finger .zink{touch-action:none}
+.rd-bar.zbar{bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:3}

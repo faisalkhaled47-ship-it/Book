@@ -930,6 +930,7 @@ function openZoom(inner, cap) {
   var pv = document.getElementById('pv');
   pv.innerHTML = '<div class="zoom-in"><button class="pv-x" data-act="pv-close" aria-label="إغلاق">✕</button><div class="zoom-body">' + inner + '</div>' + (cap ? '<p class="zoom-cap">' + cap + '</p>' : '') + '</div>';
   pv.hidden = false; pv.classList.add('zoom');
+  zkMount(pv, inner); // the pencil writes on it while explaining
 }
 
 /* ---------- no book yet ---------- */
@@ -1647,6 +1648,106 @@ ACT['ph-take'] = function (el) {
   })['catch'](function () { el.disabled = false; el.textContent = 'أضف'; toast('تعذّر تنزيل الصورة؛ جرّب صورة أخرى'); });
 };
 
+/* ---------- writing on an opened drawing or photo, while explaining it ----------
+   The Apple Pencil writes straight on it (the finger too, when switched on). The writing is kept with that drawing in the notes store
+   as z:<signature> {s:[strokes], t}, in units of the drawing's width (1000), so it fits any screen and comes back when it is opened again. */
+var ZK = null; // the open drawing: {k, wrap, c, ar, s, undo, ink, er}
+function zkPref() { var o = P.zk || {}; return { ink: o.ink == null ? 1 : +o.ink, finger: !!o.finger }; }
+function zkSet(k, v) { P.zk = P.zk || {}; P.zk[k] = v; savePref(); }
+function zkBar() {
+  var o = zkPref(), er = ZK && ZK.er;
+  return PEN_C.map(function (c, k) { return '<button type="button" class="rb-ink' + (!er && o.ink === k ? ' on' : '') + '" data-act="zk-ink" data-v="' + k + '" aria-label="قلم ' + PEN_N[k] + '" style="--c:' + c + '"></button>'; }).join('') +
+    '<button type="button" class="rb' + (er ? ' on' : '') + '" data-act="zk-er" aria-label="ممحاة" title="ممحاة">' + rIcon('er') + '</button><i class="rb-sep"></i>' +
+    '<button type="button" class="rb" data-act="zk-undo" aria-label="تراجع" title="تراجع">' + rIcon('undo') + '</button>' +
+    '<button type="button" class="rb" data-act="zk-clear" aria-label="امسح الكتابة على الرسمة" title="امسح الكتابة">' + rIcon('clear') + '</button>' +
+    '<button type="button" class="rb' + (o.finger ? ' on' : '') + '" data-act="zk-finger" aria-label="' + (o.finger ? 'الكتابة بالإصبع مفعّلة' : 'الكتابة بالإصبع') + '" title="الكتابة بالإصبع">' + rIcon('finger') + '</button>';
+}
+function zkMount(pv, inner) {
+  var body = pv.querySelector('.zoom-body'), media = body && body.querySelector('svg, img'); if (!media) { ZK = null; return; }
+  var wrap = document.createElement('div'); wrap.className = 'zwrap'; media.parentNode.insertBefore(wrap, media); wrap.appendChild(media);
+  var c = document.createElement('canvas'); c.className = 'zink'; wrap.appendChild(c);
+  var bar = document.createElement('div'); bar.className = 'rd-bar zbar'; bar.id = 'zbar'; pv.querySelector('.zoom-in').appendChild(bar);
+  var k = 'z:' + hashOf(inner), rec = XC[k];
+  ZK = { k: k, wrap: wrap, c: c, media: media, s: rec && Array.isArray(rec.s) ? rec.s.slice() : [], undo: [], er: false };
+  bar.innerHTML = zkBar(); pv.classList.toggle('zk-finger', zkPref().finger);
+  function ratio() {
+    if (media.tagName === 'IMG') return media.naturalWidth && media.naturalHeight ? media.naturalWidth / media.naturalHeight : 0;
+    var vb = media.viewBox && media.viewBox.baseVal; if (vb && vb.width && vb.height) return vb.width / vb.height;
+    var w = +media.getAttribute('width'), h = +media.getAttribute('height'); return w && h ? w / h : 0;
+  }
+  function fit() {
+    if (!ZK || ZK.c !== c) return; var ar = ratio(); if (!ar) return; ZK.ar = ar;
+    var aw = body.clientWidth || window.innerWidth - 24, ah = window.innerHeight * 0.78, w = Math.min(aw, ah * ar);
+    wrap.style.width = Math.round(w) + 'px'; wrap.style.height = Math.round(w / ar) + 'px';
+    var dpr = Math.min(window.devicePixelRatio || 1, 2); c.width = Math.round(w * dpr); c.height = Math.round(w / ar * dpr);
+    c.getContext('2d').setTransform(dpr * w / INK_W, 0, 0, dpr * w / INK_W, 0, 0); zkDraw();
+  }
+  ZK.fit = fit;
+  if (media.tagName === 'IMG' && !media.complete) media.addEventListener('load', fit); else fit();
+  zkHook(c);
+}
+function zkDraw() { if (!ZK || !ZK.c.width) return; var x = ZK.c.getContext('2d'); x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, ZK.c.width, ZK.c.height); x.restore(); ZK.s.forEach(function (st) { stroke(x, st); }); }
+function zkSave() {
+  if (!ZK) return; var Z = ZK; clearTimeout(Z.t);
+  Z.t = setTimeout(function () { if (Z.s.length) { var rec = { k: Z.k, s: Z.s, t: Date.now() }; XC[Z.k] = rec; dbPut('notes', rec); } else if (XC[Z.k]) { delete XC[Z.k]; dbDel('notes', Z.k); } }, 300);
+}
+function zkHook(c) { // the same pen handling as the book's pages: every pencil sample, in order, and only the newest step drawn
+  var cur = null, touch = null, rc = null;
+  function pt(cx, cy, f) { var r = rc || c.getBoundingClientRect(), k = r.width / INK_W; return [Math.round((cx - r.left) / k * 10) / 10, Math.round((cy - r.top) / k * 10) / 10, Math.max(0, Math.min(99, Math.round((f == null || !(f > 0) ? 0.5 : f) * 100)))]; }
+  function begin(q) { rc = c.getBoundingClientRect(); cur = ZK.er ? { er: true, gone: [] } : { c: PEN_C[zkPref().ink], w: 4, p: [] }; move(q); return true; }
+  function move(q) {
+    if (!cur || !ZK) return;
+    if (cur.er) { var hit = false; for (var i = ZK.s.length - 1; i >= 0; i--) { var p = ZK.s[i].p; for (var j = 0; j < p.length; j += 3) if (Math.abs(p[j] - q[0]) < 14 && Math.abs(p[j + 1] - q[1]) < 14) { cur.gone.push({ i: i, s: ZK.s[i] }); ZK.s.splice(i, 1); hit = true; break; } } if (hit) zkDraw(); return; }
+    var a = cur.p, n = a.length; if (n && Math.abs(a[n - 3] - q[0]) + Math.abs(a[n - 2] - q[1]) < 1.2) return;
+    a.push(q[0], q[1], q[2]); inkStep(c.getContext('2d'), cur, a.length / 3 - 1);
+  }
+  function end() {
+    var s = cur; cur = null; rc = null; if (!s || !ZK) return;
+    if (s.er) { if (s.gone.length) { ZK.undo.push({ a: 'del', items: s.gone.reverse() }); zkSave(); } return; }
+    if (!s.p.length) return; ZK.s.push(s); ZK.undo.push({ a: 'add' }); zkSave();
+  }
+  function wants(t) { return t.touchType === 'stylus' || zkPref().finger; }
+  c.addEventListener('touchstart', function (e) {
+    if (touch != null) { e.preventDefault(); return; }
+    if (e.touches.length > 1 && cur) { cur = null; touch = null; zkDraw(); return; }
+    var t = e.changedTouches[0]; if (!t || !wants(t) || e.touches.length > 1) return;
+    e.preventDefault(); touch = t.identifier; begin(pt(t.clientX, t.clientY, t.touchType === 'stylus' ? t.force : null));
+    if (t.touchType === 'stylus') { cur.pen = 1; cur.ts = e.timeStamp || 0; }
+  }, { passive: false });
+  c.addEventListener('touchmove', function (e) {
+    if (touch == null) return; e.preventDefault(); if (cur && cur.pe) return;
+    for (var k = 0; k < e.changedTouches.length; k++) { var t = e.changedTouches[k]; if (t.identifier === touch) move(pt(t.clientX, t.clientY, t.touchType === 'stylus' ? t.force : null)); }
+    if (cur && cur.pen) cur.ts = Math.max(cur.ts || 0, e.timeStamp || 0);
+  }, { passive: false });
+  function tend(e) { for (var k = 0; k < e.changedTouches.length; k++) if (e.changedTouches[k].identifier === touch) { touch = null; end(); } }
+  c.addEventListener('touchend', tend); c.addEventListener('touchcancel', tend);
+  c.addEventListener('pointerdown', function (e) {
+    if (e.pointerType === 'pen') { try { c.setPointerCapture(e.pointerId); } catch (x) {} return; }
+    if (e.pointerType !== 'mouse' || e.button !== 0) return; e.preventDefault(); begin(pt(e.clientX, e.clientY, 0.5)); try { c.setPointerCapture(e.pointerId); } catch (x) {}
+  });
+  c.addEventListener('pointermove', function (e) {
+    if (e.pointerType === 'pen') {
+      if (!cur || !cur.pen || touch == null) return; cur.pe = 1;
+      var L = e.getCoalescedEvents ? e.getCoalescedEvents() : null; if (!L || !L.length) L = [e];
+      for (var k = 0; k < L.length; k++) { var v = L[k], ts = v.timeStamp || 0; if (ts && ts <= cur.ts) continue; cur.ts = ts; move(pt(v.clientX, v.clientY, v.pressure)); }
+      return;
+    }
+    if (e.pointerType === 'mouse' && cur && touch == null) move(pt(e.clientX, e.clientY, 0.5));
+  });
+  c.addEventListener('pointerup', function (e) { if (e.pointerType === 'mouse' && touch == null) end(); });
+}
+function zkRefresh() { var b = document.getElementById('zbar'); if (b) b.innerHTML = zkBar(); var pv = document.getElementById('pv'); if (pv) pv.classList.toggle('zk-finger', zkPref().finger); }
+ACT['zk-ink'] = function (el) { zkSet('ink', +el.getAttribute('data-v')); if (ZK) ZK.er = false; zkRefresh(); };
+ACT['zk-er'] = function () { if (ZK) ZK.er = !ZK.er; zkRefresh(); };
+ACT['zk-finger'] = function () { zkSet('finger', !zkPref().finger); zkRefresh(); toast(zkPref().finger ? 'تكتب على الرسمة بالإصبع أيضًا' : 'الكتابة على الرسمة بقلم الآيباد فقط'); };
+ACT['zk-undo'] = function () {
+  if (!ZK) return; var u = ZK.undo.pop(); if (!u) { toast('لا شيء للتراجع عنه'); return; }
+  if (u.a === 'add') ZK.s.pop(); else if (u.a === 'del') u.items.slice().reverse().forEach(function (it) { ZK.s.splice(it.i, 0, it.s); }); else if (u.a === 'clear') ZK.s = u.s;
+  zkDraw(); zkSave();
+};
+ACT['zk-clear'] = function () { if (!ZK || !ZK.s.length) return; ZK.undo.push({ a: 'clear', s: ZK.s }); ZK.s = []; zkDraw(); zkSave(); toast('مُسحت الكتابة (تراجع يعيدها)'); };
+window.addEventListener('resize', function () { if (ZK && ZK.fit) setTimeout(ZK.fit, 120); });
+
 /* ---------- presenting a lesson to the class: one idea per screen ---------- */
 var PV = null;
 function pvSlides(x, a) {
@@ -1703,7 +1804,7 @@ ACT['pv-go'] = function (el) { if (!PV) return; PV.i = clamp(PV.i + +el.getAttri
 ACT['pv-show'] = function () { if (!PV) return; PV.sl[PV.i].shown = true; pvRender(); };
 ACT['pv-fs'] = function (el) { if (!PV) return; PV.fs = clamp(Math.round((PV.fs + 0.15 * +el.getAttribute('data-d')) * 100) / 100, 0.7, 2); P.pvfs = PV.fs; savePref(); pvRender(); };
 ACT['pv-close'] = function () {
-  var pv = document.getElementById('pv'); pv.hidden = true; pv.innerHTML = ''; pv.classList.remove('zoom');
+  var pv = document.getElementById('pv'); pv.hidden = true; pv.innerHTML = ''; pv.classList.remove('zoom'); ZK = null;
   if (PV) { PV = null; document.body.classList.remove('pv-on'); wake(false); try { if (document.fullscreenElement && route.v !== 'read') document.exitFullscreen().catch(function () {}); } catch (e) {} }
 };
 document.addEventListener('keydown', function (e) {
@@ -3639,7 +3740,7 @@ ACT['modal-close'] = closeModal;
 ACT['go-page'] = function (el) { var x = lessonByKey(route.k || ''); if (x) S.cur = x.b.id; go('read', { page: +el.getAttribute('data-p'), back: route.k }); };
 document.addEventListener('click', function (e) {
   var el = e.target.closest('[data-act]');
-  if (!el) { var m = document.getElementById('modal'); if (e.target === m) closeModal(); else if (e.target.id === 'pv' || (e.target.closest && e.target.closest('.zoom-in') && !e.target.closest('svg,img'))) { if (document.getElementById('pv').classList.contains('zoom')) ACT['pv-close'](); } return; }
+  if (!el) { var m = document.getElementById('modal'); if (e.target === m) closeModal(); else if (e.target.id === 'pv' || (e.target.closest && e.target.closest('.zoom-in') && !e.target.closest('svg,img,.zwrap,.zbar'))) { if (document.getElementById('pv').classList.contains('zoom')) ACT['pv-close'](); } return; }
   var a = el.getAttribute('data-act'); if (el.disabled || !ACT[a]) return;
   if (el.tagName === 'A') return;
   e.preventDefault();
