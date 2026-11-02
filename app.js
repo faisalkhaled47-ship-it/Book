@@ -1771,6 +1771,7 @@ var WS_SYS = [
   'شروط تقنية لازمة:',
   '- ممنوع JavaScript وممنوع أي مورد خارجي (خطوط أو صور أو روابط). الأيقونات والزخارف الصغيرة بـ SVG داخل الصفحة أو رموز تعبيرية.',
   '- المحتوى في عنصرين فقط: <section class="page"> هو ورقة الطالب، ثم <section class="page ws-key"> هو نموذج الإجابة للمعلم. كل CSS لأصناف (class) خاصة بك داخلهما؛ لا قواعد لـ html أو body أو * ولا @page ولا @import، ولا تغيّر عرض .page أو ارتفاعه أو حشوته (كل .page ورقة A4 بحشوة 11 مم).',
+  '- خانات الاسم والفصل والتاريخ وكل مربع فيه نص: بلا ارتفاع ثابت (height)، بحشوة padding فقط، فلا يخرج النص منها.',
   '- ورقة الطالب صفحة A4 واحدة فقط لا يفيض منها شيء: ترويسة مختصرة، ثم الأسئلة، مع break-inside:avoid لكل سؤال، ومساحات إجابة كافية تناسب خط طالب في المتوسط.',
   '- خط font-family: system-ui, "Geeza Pro", "Noto Naskh Arabic", sans-serif، النص 12pt تقريبًا، وأرقام غربية 0-9، واتجاه من اليمين إلى اليسار.',
   '- ألوان زاهية متناسقة (3 ألوان) مع خلفيات فاتحة للأقسام، وتباين واضح، ولا خلفيات داكنة كبيرة.',
@@ -1808,11 +1809,13 @@ function wsClean(html) { // from Claude's page: its styles and pages only, nothi
   return { css: css, html: body };
 }
 function wsCss(css) { // see-through colours inside gradients turn black in the iPad's PDF: they become see-through white
-  return String(css || '').replace(/\btransparent\b/gi, 'rgba(255,255,255,0)').replace(/rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)/gi, 'rgba(255,255,255,0)');
+  return String(css || '').replace(/\btransparent\b/gi, 'rgba(255,255,255,0)').replace(/rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)/gi, 'rgba(255,255,255,0)')
+    .replace(/(^|[;{\s])height\s*:/g, '$1min-height:'); // a box never smaller than its words (the name, class and date fields spilled out of theirs)
 }
+function wsHtml(html) { return String(html || '').replace(/(\sstyle="[^"]*")/g, function (m) { return m.replace(/(["\s;])height\s*:/g, '$1min-height:'); }); }
 function wsDoc(w, mode, screen) { // the sheet as one page of its own (for the preview and the shared file)
   return '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:; font-src data:"><title>' + esc(w.title) + '</title>' +
-    '<style>@page{size:A4;margin:0}html,body{margin:0;background:' + (screen ? '#e9ecea' : '#fff') + '}body{padding:' + (screen ? '10px 0' : '0') + '}' + WS_BASE + '@media screen{.ws-root .page{height:297mm;margin-bottom:6mm}}' + (true ? '@media screen and (max-width:860px){.ws-root{zoom:.9}}@media screen and (max-width:760px){.ws-root{zoom:.8}}@media screen and (max-width:660px){.ws-root{zoom:.7}}@media screen and (max-width:560px){.ws-root{zoom:.6}}@media screen and (max-width:470px){.ws-root{zoom:.5}}@media screen and (max-width:400px){.ws-root{zoom:.44}}' : '') + '</style><style>' + wsCss(w.css) + '</style></head><body><div class="ws-root ' + (mode || 'all') + '">' + w.html + '</div></body></html>';
+    '<style>@page{size:A4;margin:0}html,body{margin:0;background:' + (screen ? '#e9ecea' : '#fff') + '}body{padding:' + (screen ? '10px 0' : '0') + '}' + WS_BASE + '@media screen{.ws-root .page{height:297mm;margin-bottom:6mm}}' + (true ? '@media screen and (max-width:860px){.ws-root{zoom:.9}}@media screen and (max-width:760px){.ws-root{zoom:.8}}@media screen and (max-width:660px){.ws-root{zoom:.7}}@media screen and (max-width:560px){.ws-root{zoom:.6}}@media screen and (max-width:470px){.ws-root{zoom:.5}}@media screen and (max-width:400px){.ws-root{zoom:.44}}' : '') + '</style><style>' + wsCss(w.css) + '</style></head><body><div class="ws-root ' + (mode || 'all') + '">' + wsHtml(w.html) + '</div></body></html>';
 }
 L_TAB.ws = function (a, b, l) {
   var list = wsOf(b, l), k = lk(b, l), ai = !!P.ai.key, z = a.quiz, nq = qLive(k, z.mcq).length + qLive(k, z.tf).length + qLive(k, z.short).length, open = route.ws;
@@ -1868,7 +1871,7 @@ function wsWrite(ask, prog) {
 function wsFit(css, html) {
   var host = document.createElement('div'); host.style.cssText = 'position:absolute;left:-12000px;top:0;width:230mm;visibility:hidden;pointer-events:none';
   document.body.appendChild(host); var root = host.attachShadow ? host.attachShadow({ mode: 'open' }) : host;
-  root.innerHTML = '<style>' + WS_BASE + '</style><style>' + css + '</style><div class="ws-root all">' + html + '</div>';
+  root.innerHTML = '<style>' + WS_BASE + '</style><style>' + wsCss(css) + '</style><div class="ws-root all">' + wsHtml(html) + '</div>';
   try {
     var pages = Array.prototype.slice.call(root.querySelectorAll('.page')), st = pages.filter(function (p) { return !p.classList.contains('ws-key'); });
     st.slice(1).forEach(function (p) { while (p.firstChild) st[0].appendChild(p.firstChild); p.remove(); }); // one page for the student
@@ -1954,10 +1957,15 @@ ACT['ws-bulk'] = function (el) { // two sheets, in two different looks, for ever
 var WS_JOBS = null;
 ACT['ws-bulk-go'] = function () { var jobs = WS_JOBS; WS_JOBS = null; if (!jobs) return; closeModal(); wsRun(jobs, 'Claude يصمّم أوراق العمل', function (d) { var ls = {}; d.forEach(function (r) { ls[r.j.x.l.title] = 1; }); return 'في ' + cnt(Object.keys(ls).length, WORDS.lesson) + '؛ تجدها في تبويب «ورقة العمل» لكل درس.'; }); };
 ACT['ws-stop'] = function () { if (WSGEN) { WSGEN.stopped = true; if (WSGEN.abort) WSGEN.abort(); (WSGEN.ctls || []).forEach(function (c) { if (c.abort) c.abort(); }); } };
+function wsName(f, mode) { return (f.x.l.title + ' - ' + f.w.title + (mode === 'key' ? ' - نموذج الإجابة' : '')).replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 90) + '.html'; }
 function wsB64(str) { var b = new TextEncoder().encode(str), bin = ''; for (var i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
 ACT['ws-print'] = function (el) { // the sheet goes in the address itself (after #, so it never reaches a server), to a print page that opens in Safari
   var f = wsFind(el); if (!f) return; var mode = el.getAttribute('data-m') === 'key' ? 'key' : 'student';
-  var data = { t: f.x.l.title + ' - ' + f.w.title + (mode === 'key' ? ' - نموذج الإجابة' : ''), css: WS_BASE + wsCss(f.w.css), html: '<div class="ws-root ' + mode + '">' + f.w.html + '</div>' };
+  var data = { t: f.x.l.title + ' - ' + f.w.title + (mode === 'key' ? ' - نموذج الإجابة' : ''), css: WS_BASE + wsCss(f.w.css), html: '<div class="ws-root ' + mode + '">' + wsHtml(f.w.html) + '</div>' };
+  if (window.navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches)) { // the app on the home screen cannot print (iOS)
+    saveFile(wsName(f, mode), wsDoc(f.w, mode, false), 'text/html').then(function (r) { if (r !== 'cancel') doneModal('<h2>للطباعة أو PDF</h2><ol class="steps small"><li>من قائمة المشاركة اختر «طباعة» إن ظهرت؛ وإلا فاختر «حفظ في الملفات» ثم افتح الملف من «الملفات» واضغط زر المشاركة ← «طباعة».</li><li>في نافذة الطباعة اختر الطابعة الملونة، أو اضغط زر المشاركة أعلاها ← «حفظ في الملفات» فتحفظها PDF.</li></ol>'); });
+    return;
+  }
   var url = new URL('ws.html', location.href).href + '#' + wsB64(JSON.stringify(data));
   var win = null; try { win = window.open(url, '_blank'); } catch (e) {}
   if (!win) { location.href = url; }
@@ -1965,7 +1973,7 @@ ACT['ws-print'] = function (el) { // the sheet goes in the address itself (after
 ACT['ws-share'] = function (el) {
   var f = wsFind(el); if (!f) return;
   var mode = el.getAttribute('data-m') === 'key' ? 'key' : 'student';
-  saveFile((f.x.l.title + ' - ' + f.w.title + (mode === 'key' ? ' - نموذج الإجابة' : '')).replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 90) + '.html', wsDoc(f.w, mode, false), 'text/html').then(function (r) { if (r === 'download') toast('حُفظ الملف: افتحه واطبعه أو احفظه PDF'); });
+  saveFile(wsName(f, mode), wsDoc(f.w, mode, false), 'text/html').then(function (r) { if (r === 'download') toast('حُفظ الملف: افتحه واطبعه أو احفظه PDF'); });
 };
 ACT['ws-del'] = function (el) {
   if (!el.classList.contains('arm')) { el.classList.add('arm'); el.textContent = 'اضغط مرة ثانية للحذف'; setTimeout(function () { el.classList.remove('arm'); el.textContent = 'احذف'; }, 3000); return; }
