@@ -1332,7 +1332,8 @@ function labTab(b, l, kind) {
       (kind === 'game' ? '<label class="field"><span>ما لم يُشرح بعد (اختياري): تتجنبه اللعبة</span><textarea id="lab-skip" rows="2" placeholder="مثال: محطات توليد الكهرباء، والطاقة النووية"></textarea></label>' +
         '<label class="field lab-n"><span>عدد الألعاب</span><select id="lab-n"><option value="1">لعبة واحدة</option><option value="2">لعبتان مختلفتان</option><option value="3">ثلاث ألعاب مختلفة</option></select></label>' : '') +
       '<div class="actions"><button class="btn" data-act="lab-gen" data-k="' + esc(k) + '"' + kd + '>' + svgI('spark') + K.btn + '</button><button class="btn ghost" data-act="lab-ideas" data-k="' + esc(k) + '"' + kd + '>اقترح عليّ أفكارًا</button></div>' +
-      '<p class="small muted">' + labCost(kind) + '</p>'
+      '<p class="small muted">' + labCost(kind) + '</p>' +
+      (kind === 'lab' ? '<div class="ws-bulk"><b>تجربتان لكل درس دفعة واحدة</b><p class="small muted">تجربتان مختلفتان مبتكرتان لكل درس جُهّز مساعده ولم تكتمل له تجربتان.</p><div class="actions"><button class="btn ghost sm" data-act="lab-bulk" data-k="' + esc(k) + '" data-s="unit">دروس هذه الوحدة</button><button class="btn ghost sm" data-act="lab-bulk" data-k="' + esc(k) + '" data-s="all">كل دروس الكتاب</button></div></div>' : '')
       : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
   return h;
 }
@@ -1375,11 +1376,11 @@ function labJoin(a, b) { // the continuation, glued to what came before without 
   for (var k = Math.min(400, a.length, b.length); k >= 12; k--) if (a.slice(-k) === b.slice(0, k)) return a + b.slice(k);
   return a + b;
 }
-function labWrite(ask, prog, verb, sys) { // the page, with one continuation if the answer hit the length limit
+function labWrite(ask, prog, verb, sys, ctl) { // the page, with one continuation if the answer hit the length limit
   var acc = '', round = 0, outT = 0;
   function run() {
     var msgs = round ? [{ role: 'user', content: [{ type: 'text', text: ask }] }, { role: 'assistant', content: acc }, { role: 'user', content: LAB_CONT }] : [{ type: 'text', text: ask }];
-    return claude(sys || LAB_SYS, msgs, 32000, function (n) { prog(verb + ' ' + num(acc.length * (round ? 1 : 0) + n) + ' حرفًا' + (round ? ' (تكملة)' : '')); }, LABGEN).then(function (res) {
+    return claude(sys || LAB_SYS, msgs, 32000, function (n) { prog(verb + ' ' + num(acc.length * (round ? 1 : 0) + n) + ' حرفًا' + (round ? ' (تكملة)' : '')); }, ctl || LABGEN).then(function (res) {
       outT += (res.usage && res.usage.out) || 0;
       acc = round ? labJoin(acc, res.text) : res.text;
       if (/<\/html>/i.test(acc)) return acc;
@@ -1424,7 +1425,7 @@ ACT['lab-gen'] = function (el) {
     doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم تكتمل ' + K.the) + '</h2><p class="muted">' + (e.code === 'stop' ? '' : e.code === 'cut' ? labCutMsg(e) : esc(aiMsg(e))) + esc(kept) + '</p>');
   });
 };
-ACT['lab-stop'] = function () { if (LABGEN) { LABGEN.stopped = true; if (LABGEN.abort) LABGEN.abort(); } };
+ACT['lab-stop'] = function () { if (LABGEN) { LABGEN.stopped = true; if (LABGEN.abort) LABGEN.abort(); (LABGEN.ctls || []).forEach(function (c) { if (c.abort) c.abort(); }); } };
 
 /* errors reported from inside a running experiment, kept for the fix request */
 var LAB_ERR = {};
@@ -1471,6 +1472,58 @@ ACT['lab-undo'] = function (el) {
   if (!lab || !lab.prev) return;
   var cur = { html: lab.html, title: lab.title, at: lab.at }; lab.html = lab.prev.html; lab.title = lab.prev.title; lab.at = lab.prev.at; lab.prev = cur;
   labsSave(x.b, x.l, labs, kind); delete LAB_ERR[id]; render(true); toast('رجعت للنسخة السابقة (والمعدّلة محفوظة: اضغط مرة أخرى للتبديل)');
+};
+
+/* two experiments for every lesson of the unit or the book, three written at a time; what is finished stays even if the rest stops */
+var LAB_JOBS = null;
+ACT['lab-bulk'] = function (el) {
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return;
+  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  var scope = el.getAttribute('data-s'), jobs = [];
+  x.b.lessons.forEach(function (l) {
+    if (scope === 'unit' && (l.unit || '') !== (x.l.unit || '')) return;
+    if (!aidOf(x.b, l)) return;
+    var have = labsOf(x.b, l, 'lab').length; for (var i = have; i < 2; i++) jobs.push({ b: x.b, l: l, i: i });
+  });
+  if (!jobs.length) { toast('كل الدروس الجاهزة فيها تجربتان من قبل'); return; }
+  var ls = jobs.filter(function (j, i) { return !i || jobs[i - 1].l !== j.l; }).length;
+  LAB_JOBS = jobs;
+  openModal(card('<h2>' + cnt(jobs.length, ['تجربة واحدة', 'تجربتان', 'تجارب', 'تجربة']) + ' · ' + cnt(ls, WORDS.lesson) + '</h2><p class="muted">تُصمَّم 3 تجارب معًا، فتستغرق نحو ' + Math.max(2, Math.round(jobs.length / 3 * 2.5)) + ' دقيقة. أبقِ التطبيق مفتوحًا والآيباد يعمل؛ وتستطيع الإيقاف في أي وقت، وما اكتمل يبقى. جرّب كل تجربة قبل الحصة.</p>' +
+    '<div class="actions"><button class="btn" data-act="lab-bulk-go">ابدأ</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
+};
+ACT['lab-bulk-go'] = function () {
+  var jobs = LAB_JOBS; LAB_JOBS = null; if (!jobs) return; closeModal();
+  LABGEN = { stopped: false, ctls: [] }; wake(true);
+  var total = jobs.length, done = [], failed = [], next = 0, live = {}, prog = progModal('Claude يصمّم التجارب', 'lab-stop');
+  function show() { var n = 0; Object.keys(live).forEach(function (k) { n += live[k]; }); prog('جاهز ' + done.length + ' من ' + total + (Object.keys(live).length ? ' · يكتب ' + Object.keys(live).length + ' الآن (' + num(n) + ' حرفًا)' : ''), (done.length + failed.length) / total * 100); }
+  function one(j, id) {
+    var ctl = {}; LABGEN.ctls.push(ctl);
+    var have = labsOf(j.b, j.l, 'lab').map(function (y) { return y.title; });
+    var ask = labCtx(j.b, j.l) + '\n\n' + LKIND.lab.pick + (j.i ? ' هذه التجربة الثانية لهذا الدرس: اجعلها مختلفة تمامًا عن الأولى في الفكرة ونوع التفاعل (مثلًا: إن كانت الأولى محاكاة بمتغير وقياس، فلتكن هذه تحديًا يصمم فيه الطالب أو يقارن أو يستقصي).' : ' هذه التجربة الأولى لهذا الدرس: محاكاة مبدعة مشوقة يغيّر فيها الطالب متغيرًا ويقيس أثره.') +
+      (have.length ? '\n\nموجود من قبل لهذا الدرس (اجعل الجديدة مختلفة عنه): ' + have.join('؛ ') : '') +
+      '\n\nاكتب صفحة HTML الآن، مختصرة (أقل من 28 ألف حرف) ومكتملة حتى </html>.';
+    return labWrite(ask, function (m) { var n = +String(m).replace(/[^0-9]/g, ''); if (n) live[id] = n; show(); }, '', LAB_SYS, ctl).then(function (html) {
+      var tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html), hm = /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
+      var title = ((tm && tm[1]) || (hm && hm[1].replace(/<[^>]+>/g, '')) || LKIND.lab.fallback).trim().slice(0, 90);
+      var lab = { id: 'x' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), title: title, html: html, idea: '', at: Date.now(), model: aiModel() };
+      labsSave(j.b, j.l, labsOf(j.b, j.l, 'lab').concat([lab]), 'lab'); done.push({ j: j, lab: lab });
+    }, function (e) { if (e.code !== 'stop') failed.push({ j: j, e: e }); });
+  }
+  function worker() {
+    if (LABGEN.stopped || next >= total) return Promise.resolve();
+    var j = jobs[next], id = next++; live[id] = 0; show();
+    return one(j, id).then(function () { delete live[id]; show(); return worker(); });
+  }
+  show();
+  Promise.all([worker(), worker(), worker()]).then(function () {
+    wake(false); var md = document.getElementById('modal'); md.__busy = false;
+    var ls = {}; done.forEach(function (r) { ls[r.j.l.title] = 1; });
+    var stopped = LABGEN.stopped && done.length + failed.length < total;
+    doneModal('<h2>' + (stopped ? 'أُوقف' : done.length ? 'جاهزة ' + cnt(done.length, ['تجربة واحدة', 'تجربتان', 'تجارب', 'تجربة']) : 'لم تكتمل التجارب') + '</h2>' +
+      (done.length ? '<p class="muted">عدد الدروس: ' + cnt(Object.keys(ls).length, WORDS.lesson) + '. تجدها في تبويب «المختبر» لكل درس. جرّب كل تجربة قبل الحصة.</p>' : '') +
+      (failed.length ? '<p class="small bad">تعذّرت ' + cnt(failed.length, ['تجربة واحدة', 'تجربتان', 'تجارب', 'تجربة']) + ': ' + esc(failed[0].e.code === 'cut' ? labCutMsg(failed[0].e) : aiMsg(failed[0].e)) + ' أعد الضغط على الزر نفسه لتكمل الناقص.</p>' : ''));
+    if (done.length) render(true);
+  });
 };
 
 /* ---------- «الرسوم»: more drawings by Claude, from a description, a photo, or a page of the book ----------
@@ -1955,7 +2008,7 @@ ACT['ws-bulk'] = function (el) { // two sheets, in two different looks, for ever
   WS_JOBS = jobs;
 };
 var WS_JOBS = null;
-ACT['ws-bulk-go'] = function () { var jobs = WS_JOBS; WS_JOBS = null; if (!jobs) return; closeModal(); wsRun(jobs, 'Claude يصمّم أوراق العمل', function (d) { var ls = {}; d.forEach(function (r) { ls[r.j.x.l.title] = 1; }); return 'في ' + cnt(Object.keys(ls).length, WORDS.lesson) + '؛ تجدها في تبويب «ورقة العمل» لكل درس.'; }); };
+ACT['ws-bulk-go'] = function () { var jobs = WS_JOBS; WS_JOBS = null; if (!jobs) return; closeModal(); wsRun(jobs, 'Claude يصمّم أوراق العمل', function (d) { var ls = {}; d.forEach(function (r) { ls[r.j.x.l.title] = 1; }); return 'عدد الدروس: ' + cnt(Object.keys(ls).length, WORDS.lesson) + '. تجدها في تبويب «ورقة العمل» لكل درس.'; }); };
 ACT['ws-stop'] = function () { if (WSGEN) { WSGEN.stopped = true; if (WSGEN.abort) WSGEN.abort(); (WSGEN.ctls || []).forEach(function (c) { if (c.abort) c.abort(); }); } };
 function wsName(f, mode) { return (f.x.l.title + ' - ' + f.w.title + (mode === 'key' ? ' - نموذج الإجابة' : '')).replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 90) + '.html'; }
 function wsB64(str) { var b = new TextEncoder().encode(str), bin = ''; for (var i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
