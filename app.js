@@ -580,7 +580,7 @@ function hookInk(R, pg) {
     var o = rt(); if (o.tool === 'off') return false;
     inkOf(R, pg.n); rc = pg.el.getBoundingClientRect(); R.inking = true; // the page does not move while writing, so where it sits is read once
     cur = o.tool === 'er' ? { er: true, gone: [] } : o.tool === 'hl' ? { k: 'hl', hc: o.hlc, w: 18, p: [] } : { c: PEN_C[o.ink], w: PEN_W[o.pw] || 3.2, p: [] };
-    if (!cur.er) pg.live = cur;
+    if (!cur.er) lvOn(pg, rc);
     move(q); return true;
   }
   function move(q) {
@@ -596,25 +596,25 @@ function hookInk(R, pg) {
     a.push(q[0], q[1], q[2]);
     // only the newest step is drawn, like the writing on the lesson cards. Redrawing the whole page on every move grew slower with every
     // stroke already on it (a page full of writing and highlights halved the frame rate), so the pen fell behind and its line broke into dashes
-    var m = a.length / 3 - 1, out = pg.mc && pg.mc.width && (a[m * 3] < 10 || a[m * 3] > INK_W - 10 || (m > 0 && (a[m * 3 - 3] < 10 || a[m * 3 - 3] > INK_W - 10)));
-    if (out) cur.out = 1;
-    [pg.ic, out ? pg.mc : null].forEach(function (cv) { if (cv && cv.width) inkStep(cv.getContext('2d'), cur, m); });
+    // and it goes on the writing layer (as on an opened drawing), not on the page's own canvas, which is blended into the printed page
+    inkStep(LV.getContext('2d'), cur, a.length / 3 - 1);
   }
   function end() {
-    var s = cur; cur = null; pg.live = null; rc = null; R.inking = false; R.penT = Date.now(); if (!s) return;
-    var d = R.ink[pg.n]; if (!d) { drawInk(pg); return; }
+    var s = cur; cur = null; rc = null; R.inking = false; R.penT = Date.now(); if (!s) return;
+    var d = R.ink[pg.n]; if (!d) { lvOff(); return; }
     if (s.er) { if (s.gone.length) { R.undo.push({ n: pg.n, a: 'del', items: s.gone.reverse() }); saveInk(R, pg.n); } return; }
-    if (!s.p.length) { drawInk(pg, 'i'); return; }
+    if (!s.p.length) { lvOff(); return; }
     d.s.push(s); R.undo.push({ n: pg.n, a: 'add' }); saveInk(R, pg.n);
-    var out = s.out; delete s.out;
-    if (s.k === 'hl') drawInk(pg, out ? null : 'i'); // a highlighter is redrawn once as one see-through band (its steps overlap while it is drawn)
+    // the finished line moves onto the page once (a highlighter as one see-through band), and the writing layer is cleared in the same frame
+    if (s.k === 'hl') drawInk(pg, 'i'); else if (pg.ic.width) stroke(pg.ic.getContext('2d'), s);
+    lvOff();
   }
   function wants(t) { return t.touchType === 'stylus' || rt().finger; }
   [pg.ic, pg.mc].forEach(function (c) {
     if (!c) return;
     c.addEventListener('touchstart', function (e) {
       if (touch != null) { e.preventDefault(); return; }
-      if (e.touches.length > 1 && cur) { cur = null; pg.live = null; touch = null; rc = null; R.inking = false; drawInk(pg); return; }
+      if (e.touches.length > 1 && cur) { cur = null; touch = null; rc = null; R.inking = false; lvOff(); return; }
       for (var k = 0; k < e.changedTouches.length; k++) {
         var t = e.changedTouches[k]; if (!wants(t) || e.touches.length > 1) continue;
         if (begin(pt(t.clientX, t.clientY, t.touchType === 'stylus' ? t.force : null))) { e.preventDefault(); touch = t.identifier; if (t.touchType === 'stylus') { cur.pen = 1; cur.ts = e.timeStamp || 0; } }
@@ -645,6 +645,19 @@ function hookInk(R, pg) {
     c.addEventListener('pointerup', function (e) { if (e.pointerType === 'mouse' && touch == null) end(); });
   });
 }
+/* the writing layer: one canvas over just the part of the page on screen, with nothing over it and nothing blended, so a pen step
+   costs the same as on an opened drawing (where the writing was smooth while the page lagged) */
+var LV = null;
+function lvOn(pg, r) {
+  if (!LV) { LV = document.createElement('canvas'); LV.className = 'pg-lv'; LV.setAttribute('aria-hidden', 'true'); }
+  if (LV.parentNode !== pg.el) pg.el.appendChild(LV);
+  var x0 = Math.round(Math.max(0, -r.left)), y0 = Math.round(Math.max(0, -r.top)), x1 = Math.min(r.width, window.innerWidth - r.left), y1 = Math.min(r.height, window.innerHeight - r.top);
+  var w = Math.max(1, Math.round(x1 - x0)), h = Math.max(1, Math.round(y1 - y0)), dpr = Math.min(window.devicePixelRatio || 1, 2), W = Math.round(w * dpr), H = Math.round(h * dpr), x = LV.getContext('2d');
+  if (LV.width !== W || LV.height !== H) { LV.width = W; LV.height = H; } else { x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, W, H); }
+  LV.style.left = x0 + 'px'; LV.style.top = y0 + 'px'; LV.style.width = w + 'px'; LV.style.height = h + 'px';
+  var k = r.width / INK_W; x.setTransform(dpr * k, 0, 0, dpr * k, -dpr * x0, -dpr * y0);
+}
+function lvOff() { if (!LV || !LV.width) return; var x = LV.getContext('2d'); x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, LV.width, LV.height); x.restore(); }
 function rafInk(pg) { if (!pg.raf) pg.raf = requestAnimationFrame(function () { pg.raf = 0; drawInk(pg); }); }
 /* sliding the page sideways over its board (one finger across, when not writing with the finger) */
 function shiftMax(R) { var pg = R.pages[0]; if (!pg || rt().spread || !rt().board) return 0; return Math.max(0, (R.wrap.clientWidth - pg.el.offsetWidth) / 2); }
