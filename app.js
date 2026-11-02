@@ -348,9 +348,10 @@ function pLabel(b, n) { var p = printedOf(b, n); return p >= 1 ? String(p) : '';
 var INK_W = 1000;               // a page is 1000 units wide; strokes are kept in those units
 var RD = null;                  // the open reader
 var PEN_W = [1.9, 3.2, 5.6, 10], PEN_WN = ['رفيع', 'متوسط', 'سميك', 'سميك جدًا'];
-function rt() { var o = P.rt || {}; return { tool: o.tool || 'pen', ink: +o.ink || 0, pw: o.pw == null ? 1 : +o.pw, hlc: +o.hlc || 0, finger: !!o.finger, zoom: +o.zoom || 1, spread: !!o.spread, solo: o.solo !== false }; }
+function rt() { var o = P.rt || {}; return { board: !!o.board, tool: o.tool || 'pen', ink: +o.ink || 0, pw: o.pw == null ? 1 : +o.pw, hlc: +o.hlc || 0, finger: !!o.finger, zoom: +o.zoom || 1, spread: !!o.spread, solo: o.solo !== false }; }
 function setRt(k, v) { P.rt = P.rt || {}; P.rt[k] = v; savePref(); }
 var RSVG = {
+  board: '<rect x="2" y="4.5" width="20" height="15" rx="2"/><rect x="8.5" y="7" width="7" height="10" rx="1"/><path d="M4.5 15.5l2-2M17.5 9.5l2-2"/>',
   spread: '<rect x="2.5" y="5" width="8.5" height="14" rx="1.5"/><rect x="13" y="5" width="8.5" height="14" rx="1.5"/>',
   stk: '<path d="M5 4h14v10l-5 6H5z"/><path d="M14 20v-6h5"/><path d="M8.5 9h7M8.5 12.5h4"/>',
   spark: '<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
@@ -395,6 +396,7 @@ function rdBar() {
     b('rd-undo', null, 'undo', 'تراجع') + b('rd-clear', null, 'clear', 'امسح كتابة هذه الصفحة') +
     b('rd-stk', null, 'stk', 'لاصقة على هذه الصفحة') +
     b('rd-finger', null, 'finger', o.finger ? 'الكتابة بالإصبع مفعّلة' : 'الكتابة بالإصبع', o.finger) + '<i class="rb-sep"></i>' +
+    b('rd-board', null, 'board', o.board ? 'إخفاء السبورة الجانبية' : 'السبورة الجانبية: اكتب في الفراغ بجانب الصفحة', o.board) +
     b('rd-spread', null, 'spread', o.spread ? 'صفحة واحدة' : 'صفحتان متجاورتان', o.spread) + '<i class="rb-sep rb-sp"></i>' +
     b('rd-zoom', '-1', 'minus', 'تصغير') + '<span class="rb-z" id="rb-z">' + Math.round(o.zoom * 100) + '%</span>' + b('rd-zoom', '1', 'plus', 'تكبير');
 }
@@ -423,7 +425,9 @@ function readerMount() {
     return doc.getPage(Math.min(start, doc.numPages)).then(function (pg) {
       if (R.dead) return;
       var v = pg.getViewport({ scale: 1 }), ratio = v.width / v.height, h = '';
-      for (var n = 1; n <= doc.numPages; n++) h += '<div class="pgr"><canvas class="pg-m" aria-hidden="true"></canvas><div class="pg" data-n="' + n + '" style="aspect-ratio:' + v.width.toFixed(1) + ' / ' + v.height.toFixed(1) + '"><canvas class="pg-c"></canvas><canvas class="pg-i"></canvas><div class="pg-a"></div><div class="stk-l"></div><span class="pg-no">' + pLabel(b, n) + '</span></div></div>';
+      var bd = rt().board && !rt().spread; // the board beside the page is switched on from the bar; off, the pages are exactly as they were
+      for (var n = 1; n <= doc.numPages; n++) { var pgh = '<div class="pg" data-n="' + n + '" style="aspect-ratio:' + v.width.toFixed(1) + ' / ' + v.height.toFixed(1) + '"><canvas class="pg-c"></canvas><canvas class="pg-i"></canvas><div class="pg-a"></div><div class="stk-l"></div><span class="pg-no">' + pLabel(b, n) + '</span></div>'; h += bd ? '<div class="pgr"><canvas class="pg-m" aria-hidden="true"></canvas>' + pgh + '</div>' : pgh; }
+      R.x.classList.toggle('board', bd);
       if (rt().spread) h = (rt().solo ? '<div class="pg-sp" aria-hidden="true"></div>' : '') + h; // two pages side by side; the first one alone, like a book's cover
       wrap.classList.toggle('spread', rt().spread);
       wrap.innerHTML = h;
@@ -540,33 +544,25 @@ function drawInk(pg, only) { // only: 'm' the board beside the page, 'i' the pag
     if (pg.live) stroke(x, pg.live);
   });
 }
-/* a stroke is drawn as smooth curves through the middles of its points, so handwriting reads as one flowing line, not a chain of straight dashes */
-function inkW(st, p, i) { var n = p.length / 3, a = p[Math.max(0, i - 1) * 3 + 2], b = p[i * 3 + 2], c = p[Math.min(n - 1, i + 1) * 3 + 2]; return (st.w || 3.2) * (0.45 + (a + 2 * b + c) / 360); }
-function inkPiece(ctx, st, i, tail) { // the piece that point i completes (i ≥ 1); tail: the last half-step up to the final point
-  var p = st.p, n = p.length / 3;
-  if (tail) { if (n < 2) return; var j = n - 1; ctx.lineWidth = inkW(st, p, j); ctx.beginPath(); ctx.moveTo((p[j * 3 - 3] + p[j * 3]) / 2, (p[j * 3 - 2] + p[j * 3 + 1]) / 2); ctx.lineTo(p[j * 3], p[j * 3 + 1]); ctx.stroke(); return; }
-  if (i === 1) { ctx.lineWidth = inkW(st, p, 0); ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo((p[0] + p[3]) / 2, (p[1] + p[4]) / 2); ctx.stroke(); return; }
-  var c = i - 1; ctx.lineWidth = inkW(st, p, c); ctx.beginPath();
-  ctx.moveTo((p[c * 3 - 3] + p[c * 3]) / 2, (p[c * 3 - 2] + p[c * 3 + 1]) / 2);
-  ctx.quadraticCurveTo(p[c * 3], p[c * 3 + 1], (p[c * 3] + p[i * 3]) / 2, (p[c * 3 + 1] + p[i * 3 + 1]) / 2); ctx.stroke();
-}
-function stroke(ctx, st) {
+function stroke(ctx, st) { // exactly as on the morning of 1 Nov: straight steps through the pen's own points, so the line is the hand's line
   var p = st.p, n = p.length / 3; if (!n) return;
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   if (st.k === 'hl') {
     ctx.save(); ctx.globalAlpha = 0.42; ctx.strokeStyle = HL_C[st.hc || 0]; ctx.lineWidth = st.w || 18; ctx.beginPath(); ctx.moveTo(p[0], p[1]);
-    if (n === 1) ctx.lineTo(p[0] + 0.1, p[1]);
-    else { ctx.lineTo((p[0] + p[3]) / 2, (p[1] + p[4]) / 2); for (var i = 1; i < n - 1; i++) ctx.quadraticCurveTo(p[i * 3], p[i * 3 + 1], (p[i * 3] + p[i * 3 + 3]) / 2, (p[i * 3 + 1] + p[i * 3 + 4]) / 2); ctx.lineTo(p[n * 3 - 3], p[n * 3 - 2]); }
+    for (var i = 1; i < n; i++) ctx.lineTo(p[i * 3], p[i * 3 + 1]); if (n === 1) ctx.lineTo(p[0] + 0.1, p[1]);
     ctx.stroke(); ctx.restore(); return;
   }
   ctx.strokeStyle = ctx.fillStyle = st.c || PEN_C[0];
-  if (n === 1) { ctx.beginPath(); ctx.arc(p[0], p[1], inkW(st, p, 0) / 2, 0, 7); ctx.fill(); return; }
-  for (var j = 1; j < n; j++) inkPiece(ctx, st, j);
-  inkPiece(ctx, st, 0, true);
+  var base = st.w || 3.2;
+  if (n === 1) { ctx.beginPath(); ctx.arc(p[0], p[1], base * (0.45 + p[2] / 90) / 2, 0, 7); ctx.fill(); return; }
+  for (var j = 1; j < n; j++) {
+    ctx.lineWidth = base * (0.45 + (p[j * 3 + 2] + p[j * 3 - 1]) / 180);
+    ctx.beginPath(); ctx.moveTo(p[j * 3 - 3], p[j * 3 - 2]); ctx.lineTo(p[j * 3], p[j * 3 + 1]); ctx.stroke();
+  }
 }
 function hookInk(R, pg) {
   var cur = null, touch = null, rc = null;
-  function pt(cx, cy, f) { var r = rc || pg.el.getBoundingClientRect(), k = r.width / INK_W; return [Math.round((cx - r.left) / k * 10) / 10, Math.round((cy - r.top) / k * 10) / 10, Math.max(0, Math.min(99, Math.round((f == null || !(f > 0) ? 0.5 : Math.min(f, 1)) * 100)))]; }
+  function pt(cx, cy, f) { var r = rc || pg.el.getBoundingClientRect(), k = r.width / INK_W; return [Math.round((cx - r.left) / k * 10) / 10, Math.round((cy - r.top) / k * 10) / 10, Math.max(0, Math.min(99, Math.round((f == null ? 0.5 : f) * 100)))]; }
   function begin(q) {
     var o = rt(); if (o.tool === 'off') return false;
     inkOf(R, pg.n); rc = pg.el.getBoundingClientRect(); R.inking = true; // the page does not move while writing, so where it sits is read once
@@ -628,7 +624,7 @@ function hookInk(R, pg) {
 }
 function rafInk(pg) { if (!pg.raf) pg.raf = requestAnimationFrame(function () { pg.raf = 0; drawInk(pg); }); }
 /* sliding the page sideways over its board (one finger across, when not writing with the finger) */
-function shiftMax(R) { var pg = R.pages[0]; if (!pg || rt().spread) return 0; return Math.max(0, (R.wrap.clientWidth - pg.el.offsetWidth) / 2); }
+function shiftMax(R) { var pg = R.pages[0]; if (!pg || rt().spread || !rt().board) return 0; return Math.max(0, (R.wrap.clientWidth - pg.el.offsetWidth) / 2); }
 function shiftTo(R, v) {
   var m = shiftMax(R); v = m < 4 ? 0 : clamp(v, -m, m); if (v === R.sx) return;
   R.sx = v; R.wrap.style.setProperty('--sx', Math.round(v) + 'px');
@@ -766,6 +762,11 @@ document.addEventListener('keydown', function (e) {
 document.addEventListener('visibilitychange', function () { if (document.hidden) { flushInk(); saveState(true); } });
 window.addEventListener('pagehide', function () { flushInk(); saveState(true); });
 
+ACT['rd-board'] = function () {
+  var R = RD, at = R ? R.cur : null; setRt('board', !rt().board);
+  if (R) { route.at = at; S.last[R.b.id] = at; }
+  render(); toast(rt().board ? 'السبورة الجانبية: صغّر الصفحة واكتب في الفراغ بجانبها، واسحب بإصبع لتحريك الصفحة' : 'أُخفيت السبورة الجانبية (كتابتها محفوظة وتعود حين تفعّلها)', 4000);
+};
 ACT['rd-spread'] = function () { // two pages side by side (or back to one); the open page stays the same
   var R = RD, at = R ? R.cur : null; setRt('spread', !rt().spread);
   if (R) { route.at = at; S.last[R.b.id] = at; }
