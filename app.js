@@ -348,7 +348,7 @@ function pLabel(b, n) { var p = printedOf(b, n); return p >= 1 ? String(p) : '';
 var INK_W = 1000;               // a page is 1000 units wide; strokes are kept in those units
 var RD = null;                  // the open reader
 var PEN_W = [1.9, 3.2, 5.6, 10], PEN_WN = ['رفيع', 'متوسط', 'سميك', 'سميك جدًا'];
-function rt() { var o = P.rt || {}; return { board: !!o.board, tool: o.tool || 'pen', ink: +o.ink || 0, pw: o.pw == null ? 1 : +o.pw, hlc: +o.hlc || 0, finger: !!o.finger, zoom: +o.zoom || 1, spread: !!o.spread, solo: o.solo !== false }; }
+function rt() { var o = P.rt || {}; return { board: false, tool: o.tool || 'pen', ink: +o.ink || 0, pw: o.pw == null ? 1 : +o.pw, hlc: +o.hlc || 0, finger: !!o.finger, zoom: +o.zoom || 1, spread: !!o.spread, solo: o.solo !== false }; }
 function setRt(k, v) { P.rt = P.rt || {}; P.rt[k] = v; savePref(); }
 var RSVG = {
   board: '<rect x="2" y="4.5" width="20" height="15" rx="2"/><rect x="8.5" y="7" width="7" height="10" rx="1"/><path d="M4.5 15.5l2-2M17.5 9.5l2-2"/>',
@@ -396,7 +396,6 @@ function rdBar() {
     b('rd-undo', null, 'undo', 'تراجع') + b('rd-clear', null, 'clear', 'امسح كتابة هذه الصفحة') +
     b('rd-stk', null, 'stk', 'لاصقة على هذه الصفحة') +
     b('rd-finger', null, 'finger', o.finger ? 'الكتابة بالإصبع مفعّلة' : 'الكتابة بالإصبع', o.finger) + '<i class="rb-sep"></i>' +
-    b('rd-board', null, 'board', o.board ? 'إخفاء السبورة الجانبية' : 'السبورة الجانبية: اكتب في الفراغ بجانب الصفحة', o.board) +
     b('rd-spread', null, 'spread', o.spread ? 'صفحة واحدة' : 'صفحتان متجاورتان', o.spread) + '<i class="rb-sep rb-sp"></i>' +
     b('rd-zoom', '-1', 'minus', 'تصغير') + '<span class="rb-z" id="rb-z">' + Math.round(o.zoom * 100) + '%</span>' + b('rd-zoom', '1', 'plus', 'تكبير');
 }
@@ -570,7 +569,7 @@ function stroke(ctx, st) { // exactly as on the morning of 1 Nov: straight steps
 }
 function hookInk(R, pg) {
   var cur = null, touch = null, rc = null;
-  function pt(cx, cy, f) { var r = rc || pg.el.getBoundingClientRect(), k = r.width / INK_W; return [Math.round((cx - r.left) / k * 10) / 10, Math.round((cy - r.top) / k * 10) / 10, Math.max(0, Math.min(99, Math.round((f == null ? 0.5 : f) * 100)))]; }
+  function pt(cx, cy, f) { var r = rc || pg.el.getBoundingClientRect(), k = r.width / INK_W; return [Math.round((cx - r.left) / k * 10) / 10, Math.round((cy - r.top) / k * 10) / 10, Math.max(0, Math.min(99, Math.round((f == null || !(f > 0) ? 0.5 : f) * 100)))]; }
   function begin(q) {
     var o = rt(); if (o.tool === 'off') return false;
     inkOf(R, pg.n); rc = pg.el.getBoundingClientRect(); R.inking = true; // the page does not move while writing, so where it sits is read once
@@ -612,20 +611,29 @@ function hookInk(R, pg) {
       if (e.touches.length > 1 && cur) { cur = null; pg.live = null; touch = null; rc = null; R.inking = false; drawInk(pg); return; }
       for (var k = 0; k < e.changedTouches.length; k++) {
         var t = e.changedTouches[k]; if (!wants(t) || e.touches.length > 1) continue;
-        if (begin(pt(t.clientX, t.clientY, t.touchType === 'stylus' ? t.force : null))) { e.preventDefault(); touch = t.identifier; }
+        if (begin(pt(t.clientX, t.clientY, t.touchType === 'stylus' ? t.force : null))) { e.preventDefault(); touch = t.identifier; if (t.touchType === 'stylus') { cur.pen = 1; cur.ts = e.timeStamp || 0; } }
         return;
       }
     }, { passive: false });
     c.addEventListener('touchmove', function (e) {
       if (touch == null) return; e.preventDefault();
+      if (cur && cur.pe) return; // once the pencil's pointer events arrive, its points come from them (below)
       for (var k = 0; k < e.changedTouches.length; k++) { var t = e.changedTouches[k]; if (t.identifier === touch) move(pt(t.clientX, t.clientY, t.touchType === 'stylus' ? t.force : null)); }
+      if (cur && cur.pen) cur.ts = Math.max(cur.ts || 0, e.timeStamp || 0);
     }, { passive: false });
     function tend(e) { for (var k = 0; k < e.changedTouches.length; k++) if (e.changedTouches[k].identifier === touch) { touch = null; end(); } }
     c.addEventListener('touchend', tend); c.addEventListener('touchcancel', tend);
     c.addEventListener('pointerdown', function (e) {
+      if (e.pointerType === 'pen') { try { c.setPointerCapture(e.pointerId); } catch (x) {} return; } // the rest of the stroke keeps coming here
       if (e.pointerType !== 'mouse' || e.button !== 0) return; if (!begin(pt(e.clientX, e.clientY, 0.5))) return; e.preventDefault(); try { c.setPointerCapture(e.pointerId); } catch (x) {}
     });
     c.addEventListener('pointermove', function (e) {
+      if (e.pointerType === 'pen') { // every sample the pencil took since the last event, even when the screen could not keep up; never one already used
+        if (!cur || !cur.pen || touch == null) return; cur.pe = 1;
+        var L = e.getCoalescedEvents ? e.getCoalescedEvents() : null; if (!L || !L.length) L = [e];
+        for (var k = 0; k < L.length; k++) { var v = L[k], ts = v.timeStamp || 0; if (ts && ts <= cur.ts) continue; cur.ts = ts; move(pt(v.clientX, v.clientY, v.pressure)); }
+        return;
+      }
       if (e.pointerType === 'mouse' && cur && touch == null) move(pt(e.clientX, e.clientY, 0.5));
     });
     c.addEventListener('pointerup', function (e) { if (e.pointerType === 'mouse' && touch == null) end(); });
@@ -3369,10 +3377,11 @@ function clkTick() {
   var left = clkLeft(), run = !!CLK.end, on = clkOn();
   if (CLK.end && left <= 0) { var late = Date.now() - CLK.end > 90000; CLK.end = 0; CLK.left = 0; clkSave(); if (!late) clkAlarm(); else wake(false); on = false; run = false; } // ended long ago (app closed): no alarm now
   var D = clkDates(), t = clkTime();
+  function put(n, v) { if (n && n.textContent !== v) n.textContent = v; } // only what changed: the page is not touched while the teacher writes
   Array.prototype.forEach.call(document.querySelectorAll('.clk'), function (el) {
-    el.querySelector('.clk-d').textContent = D.day + ' ' + D.hm + ' ·';
-    el.querySelector('.clk-t').textContent = t;
-    var r = el.querySelector('.clk-r'); r.textContent = on ? clkFmt(left) : ''; r.hidden = !on;
+    put(el.querySelector('.clk-d'), D.day + ' ' + D.hm + ' ·');
+    put(el.querySelector('.clk-t'), t);
+    var r = el.querySelector('.clk-r'); put(r, on ? clkFmt(left) : ''); if (r.hidden !== !on) r.hidden = !on;
     el.classList.toggle('run', run); el.classList.toggle('pause', on && !run); el.classList.toggle('late', run && left <= 10000); el.classList.toggle('done', CLK_DONE);
   });
   var big = document.getElementById('clk-num'), dur = CLK.dur || left || 1;
