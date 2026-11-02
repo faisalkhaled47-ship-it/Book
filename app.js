@@ -45,6 +45,7 @@ var ICONS = {
   chart: '<path d="M4 20h16"/><path d="M7 16v-5M12 16V6M17 16v-8"/>',
   cal: '<rect x="3.6" y="5" width="16.8" height="15.2" rx="3"/><path d="M3.6 10h16.8M8 3v4M16 3v4"/>',
   q: '<circle cx="12" cy="12" r="8.6"/><path d="M9.5 9.4a2.6 2.6 0 1 1 3.6 2.4c-.7.3-1.1.8-1.1 1.5v.5"/><path d="M12 16.9v.1"/>',
+  game: '<rect x="2.5" y="7" width="19" height="11" rx="5.5"/><path d="M7.5 10.5v4M5.5 12.5h4"/><circle cx="15.5" cy="11.5" r=".9" fill="currentColor"/><circle cx="18" cy="14" r=".9" fill="currentColor"/>',
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><path d="m6 6 2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/>',
   pen: '<path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19z"/><path d="M14.5 6.5l3 3"/>',
   people: '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2c2.3.2 4.1 1.8 4.6 4.8"/>',
@@ -1042,7 +1043,7 @@ function destPage(doc, dest) {
 }
 
 /* ---------- one lesson ---------- */
-var LTABS = [['goals', 'الأهداف'], ['exp', 'الشرح'], ['figs', 'الرسوم'], ['map', 'خريطة المفاهيم'], ['eval', 'التقويم'], ['lab', 'المختبر'], ['sum', 'الملخص والأنشطة'], ['notes', 'ملاحظاتي']];
+var LTABS = [['goals', 'الأهداف'], ['exp', 'الشرح'], ['figs', 'الرسوم'], ['map', 'خريطة المفاهيم'], ['eval', 'التقويم'], ['lab', 'المختبر'], ['game', 'الألعاب'], ['sum', 'الملخص والأنشطة'], ['notes', 'ملاحظاتي']];
 VIEWS.lesson = function () {
   var x = lessonByKey(route.k || ''); if (!x) { route = { v: 'lessons' }; return VIEWS.lessons(); }
   var b = x.b, l = x.l, a = aidOf(b, l), k = lk(b, l), idx = b.lessons.indexOf(l);
@@ -1056,7 +1057,7 @@ VIEWS.lesson = function () {
   if (!a) h += genPanel(b, l);
   else {
     var tab = route.tab || 'goals';
-    h += '<div class="subtabs" role="tablist">' + LTABS.map(function (t) { return '<button role="tab" aria-selected="' + (tab === t[0]) + '" class="stab' + (tab === t[0] ? ' on' : '') + '" data-act="ltab" data-tab="' + t[0] + '">' + t[1] + (t[0] === 'eval' ? ' (' + aidCounts(a.d).q + ')' : t[0] === 'lab' && labsOf(b, l).length ? ' (' + labsOf(b, l).length + ')' : '') + '</button>'; }).join('') + '</div>';
+    h += '<div class="subtabs" role="tablist">' + LTABS.map(function (t) { return '<button role="tab" aria-selected="' + (tab === t[0]) + '" class="stab' + (tab === t[0] ? ' on' : '') + '" data-act="ltab" data-tab="' + t[0] + '">' + t[1] + (t[0] === 'eval' ? ' (' + aidCounts(a.d).q + ')' : (t[0] === 'lab' || t[0] === 'game') && labsOf(b, l, t[0]).length ? ' (' + labsOf(b, l, t[0]).length + ')' : '') + '</button>'; }).join('') + '</div>';
     h += '<div class="l-body">' + (L_TAB[tab] || L_TAB.goals)(a.d, b, l) + '</div>';
   }
   h += '<div class="l-nav">' + (prev ? '<button class="btn ghost sm" data-act="lesson" data-k="' + esc(lk(b, prev)) + '">→ ' + esc(prev.title) + '</button>' : '<span></span>') + (next ? '<button class="btn ghost sm" data-act="lesson" data-k="' + esc(lk(b, next)) + '">' + esc(next.title) + ' ←</button>' : '<span></span>') + '</div>';
@@ -1180,7 +1181,8 @@ var FOLD = {};
 function foldOpen(key, dflt) { return key in FOLD ? FOLD[key] : !!dflt; }
 document.addEventListener('toggle', function (e) { var d = e.target; if (d && d.matches && d.matches('details[data-fold]')) FOLD[d.getAttribute('data-fold')] = d.open; }, true);
 
-/* ---------- «المختبر»: interactive virtual experiments for a lesson, designed by Claude ----------
+/* ---------- «المختبر» and «الألعاب»: interactive virtual experiments and educational games for a lesson, designed by Claude ----------
+   Games are kept the same way under g:<bookId>:<lessonId>.
    Each experiment is one self-contained HTML page, kept in the notes store as l:<bookId>:<lessonId> {labs:[{id, title, html, idea, at, model}], t}
    (so it goes into the backup and the sync). It runs inside a sandboxed frame with no access to the app, its storage or the network. */
 var LAB_SYS = [
@@ -1208,9 +1210,45 @@ var LAB_SYS = [
   '- المشهد يتسع لكامل الحركة (الكرة لا تخرج من الإطار) مهما كانت قيم المنزلقات، وأبعاده تُحسب من القيم القصوى.',
   '- النص لا يتداخل مع الرسم، وكل التسميات مقروءة على شاشة الجوال.'
 ].join('\n');
-function labKey(b, l) { return 'l:' + lk(b, l); }
-function labsOf(b, l) { var r = XC[labKey(b, l)]; return r && Array.isArray(r.labs) ? r.labs : []; }
-function labsSave(b, l, labs) { var k = labKey(b, l); if (!labs.length) { delete XC[k]; dbDel('notes', k); return; } var rec = { k: k, labs: labs, t: Date.now() }; XC[k] = rec; dbPut('notes', rec); }
+var GAME_SYS = [
+  'أنت مصمم ألعاب تعليمية إلكترونية مبدع ومعلم علوم خبير في المرحلة المتوسطة في المملكة العربية السعودية.',
+  'صمّم لعبة تعليمية تفاعلية واحدة ممتعة عن الدرس المعطى، يلعبها الطلاب على الآيباد أو على جهاز العرض في الفصل (فرديًا أو فريقين).',
+  'أعد صفحة HTML كاملة واحدة فقط، تبدأ بـ <!DOCTYPE html> وتنتهي بـ </html>، دون أي شرح أو علامات ``` قبلها أو بعدها.',
+  'شروط تقنية لازمة:',
+  '- <html lang="ar" dir="rtl">، وكل CSS وJavaScript داخل الصفحة. ممنوع أي مورد خارجي: لا خطوط ولا صور ولا مكتبات ولا روابط ولا fetch. الأشكال بـ SVG أو canvas أو CSS أو رموز تعبيرية.',
+  '- ممنوع localStorage وsessionStorage وcookies وalert وconfirm وprompt وwindow.open (الصفحة تعمل في إطار معزول). الأصوات اختيارية بـ Web Audio (نغمات قصيرة مولدة)، مع زر لكتمها.',
+  '- التحكم باللمس والقلم والفأرة عبر Pointer Events، وأزرار كبيرة (48 بكسل على الأقل). السحب والإفلات: touch-action:none على كل عنصر يُسحب وعلى منطقة اللعب، مع setPointerCapture وتحويل الإحداثيات بـ getBoundingClientRect، ومنطقة لمس واسعة.',
+  '- تتكيف مع الحجم من عرض 360 إلى 1400 بكسل، وتبدو واضحة على جهاز العرض: خط system-ui كبير، وأرقام غربية 0-9، وألوان زاهية مريحة على خلفية فاتحة، وحركات قصيرة سلسة.',
+  '- الحجم مهم: الصفحة كلها أقل من 28 ألف حرف. اكتب CSS وJavaScript مختصرين دون تعليقات ودون تكرار. الكود سليم بلا أخطاء، وأنهِ الصفحة دائمًا بـ </html>.',
+  'بناء اللعبة:',
+  '- شاشة بداية فيها اسم اللعبة وطريقة اللعب في سطرين وزر «ابدأ»، واختيار «لاعب واحد» أو «فريقان» إن ناسب نوع اللعبة (في الفريقين يتناوب الدور وتظهر نقاط كل فريق).',
+  '- نقاط ومستويات أو جولات، ومؤقت اختياري يمكن إيقافه، وتغذية راجعة فورية لكل إجابة: تأثير بصري للصح والخطأ وجملة قصيرة تشرح السبب.',
+  '- شاشة نهاية فيها النتيجة ومراجعة سريعة لما أخطأ فيه الطالب مع الإجابة الصحيحة، وزر «العب مرة أخرى» يخلط الترتيب.',
+  '- 10 إلى 16 عنصرًا (سؤالًا أو بطاقة أو مفهومًا) مأخوذة من محتوى الدرس نفسه ومصطلحاته، دقيقة علميًا، وبعربية فصيحة قصيرة الجمل، تتدرج من السهل إلى الأصعب.',
+  '- اللعب ينبغي أن يُعلّم: يفكر الطالب في المفهوم ليفوز، لا يخمّن. لا عنف ولا محتوى غير لائق، ومناسبة لطلاب بنين في المرحلة المتوسطة.',
+  'قبل أن تكتب، تجنب الأخطاء الشائعة: عناصر تخرج من حدود الشاشة على الجوال، نص يتداخل مع غيره، سحب لا يعمل باللمس، زر «ابدأ» لا يعيد كل شيء، إجابة صحيحة تُحسب خطأً بسبب مقارنة نصوص (قارن بالمعرّفات لا بالنص).'
+].join('\n');
+var LKIND = {
+  lab: { pre: 'l:', sys: LAB_SYS, the: 'التجربة', a: 'تجربة', run: 'شغّل التجربة', close: 'أغلق التجربة', fold: 'lab', fallback: 'تجربة افتراضية',
+    intro: 'تجارب افتراضية تفاعلية لهذا الدرس: يغيّر الطالب المتغيرات بإصبعه ويلاحظ ويسجّل ويستنتج. اعرضها على جهاز العرض أو أعطِ الآيباد لطالب.',
+    first: 'صمّم تجربة افتراضية لهذا الدرس', more: 'صمّم تجربة أخرى', label: 'فكرة التجربة (اختياري)', btn: 'صمّم التجربة', made: 'يصمّم التجربة', writing: 'يكتب Claude التجربة…',
+    ph: 'مثال: كرة على مسار متعرج تتحول طاقتها بين الوضع والحركة، مع منزلق للارتفاع والكتلة', pick: 'اختر أنت فكرة التجربة الأنسب والأكثر إبداعًا لهذا الدرس.', ask: 'فكرة المعلم للتجربة: ',
+    ideas: 'أنت مصمم مختبرات علوم افتراضية للمرحلة المتوسطة في السعودية. اقترح 4 أفكار متنوعة ومبدعة لتجارب افتراضية تفاعلية عن الدرس المعطى، يغيّر فيها الطالب متغيرًا ويلاحظ أثره.',
+    fixes: ['لا أقدر أحرّك الجسم باللمس', 'الأعمدة أو الرسوم تخرج من حدودها', 'الرسم البياني لا يُرسم أثناء الحركة', 'الأرقام لا تتطابق مع الحركة', 'كبّر الخط والأزرار للعرض', 'اجعلها أبسط وأوضح للطلاب', 'أضف مقارنة بين محاولتين'],
+    fixPh: 'مثال: عمودا الحركية والكلية يخرجان من أعلى الرسم، والرسم البياني فارغ، وزر «ارمِ الكرة» يبدو معطلًا' },
+  game: { pre: 'g:', sys: GAME_SYS, the: 'اللعبة', a: 'لعبة', run: 'العب', close: 'أغلق اللعبة', fold: 'game', fallback: 'لعبة تعليمية',
+    intro: 'ألعاب تعليمية تفاعلية عن هذا الدرس، من محتواه ومصطلحاته: لطالب واحد على الآيباد، أو لفريقين على جهاز العرض. تستطيع تصميم أكثر من لعبة بأنواع مختلفة.',
+    first: 'صمّم لعبة لهذا الدرس', more: 'صمّم لعبة أخرى', label: 'نوع اللعبة أو فكرتها (اختياري)', btn: 'صمّم اللعبة', made: 'يصمّم اللعبة', writing: 'يكتب Claude اللعبة…',
+    ph: 'مثال: سباق بين فريقين، كل إجابة صحيحة تقدّم سيارة الفريق خطوة، عن أشكال الطاقة وتحولاتها', pick: 'اختر أنت نوع اللعبة الأنسب والأمتع لهذا الدرس.', ask: 'نوع اللعبة أو فكرتها كما طلبها المعلم: ',
+    types: ['مسابقة فريقين على جهاز العرض', 'اسحب كل مصطلح إلى تعريفه', 'بطاقات الذاكرة: طابق المفهوم بمثاله', 'صنّف العناصر في مجموعات', 'سباق مع الزمن: صح أو خطأ', 'رتّب الخطوات أو السلسلة', 'لغز الكلمات من مفردات الدرس', 'من سيربح المليون'],
+    ideas: 'أنت مصمم ألعاب تعليمية للمرحلة المتوسطة في السعودية. اقترح 4 أفكار متنوعة ومبتكرة لألعاب تعليمية إلكترونية عن الدرس المعطى، بأنواع لعب مختلفة، يتعلم فيها الطالب المفاهيم وهو يلعب.',
+    fixes: ['سهلة جدًا، اجعلها أصعب', 'صعبة، اجعلها أسهل', 'أضف وضع فريقين', 'السحب لا يعمل باللمس', 'كبّر الخط والأزرار للعرض', 'أضف أسئلة أكثر وأنوع', 'أضف مؤقتًا وأصواتًا'],
+    fixPh: 'مثال: البطاقات تخرج من الشاشة على الآيفون، وأريد مؤقتًا لكل سؤال وأسئلة أصعب في الجولة الأخيرة' }
+};
+function lkind(el) { var v = el && el.getAttribute && el.getAttribute('data-kind'); return LKIND[v] ? v : 'lab'; }
+function labKey(b, l, kind) { return LKIND[kind || 'lab'].pre + lk(b, l); }
+function labsOf(b, l, kind) { var r = XC[labKey(b, l, kind)]; return r && Array.isArray(r.labs) ? r.labs : []; }
+function labsSave(b, l, labs, kind) { var k = labKey(b, l, kind); if (!labs.length) { delete XC[k]; dbDel('notes', k); return; } var rec = { k: k, labs: labs, t: Date.now() }; XC[k] = rec; dbPut('notes', rec); }
 function labDoc(html) { // a strict content policy inside the frame: nothing leaves it, nothing is loaded into it
   var csp = '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\'; style-src \'unsafe-inline\'; img-src data: blob:; media-src data: blob:; font-src data:">';
   var rep = '<script>(function(){function s(m){try{parent.postMessage({labErr:String(m).slice(0,300)},"*")}catch(e){}}window.addEventListener("error",function(e){s((e.message||"خطأ")+(e.lineno?" (سطر "+e.lineno+")":""))});window.addEventListener("unhandledrejection",function(e){s(e.reason&&e.reason.message||e.reason)})})()<\/script>';
@@ -1229,32 +1267,37 @@ function aidText(d) { // the lesson helper as plain text, for Claude
   if (d.acts && d.acts.length) L.push('أنشطة الكتاب والمساعد: ' + d.acts.map(function (x) { return x.t; }).join('؛ '));
   return L.join('\n').replace(/\*\*|`/g, '').slice(0, 14000);
 }
-L_TAB.lab = function (a, b, l) {
-  var labs = labsOf(b, l), k = lk(b, l), ai = !!P.ai.key, open = route.lab;
-  var h = '<p class="muted small" style="margin-bottom:12px">تجارب افتراضية تفاعلية لهذا الدرس: يغيّر الطالب المتغيرات بإصبعه ويلاحظ ويسجّل ويستنتج. اعرضها على جهاز العرض أو أعطِ الآيباد لطالب.</p>';
+function labTab(b, l, kind) {
+  var K = LKIND[kind], labs = labsOf(b, l, kind), k = lk(b, l), ai = !!P.ai.key, open = route.lab, kd = ' data-kind="' + kind + '"';
+  var h = '<p class="muted small" style="margin-bottom:12px">' + K.intro + '</p>';
   h += labs.map(function (lab) {
-    var on = open === lab.id;
-    return '<article class="xcard lab-card hue-violet"><header class="x-head"><span class="i-num">' + svgI('spark') + '</span><p class="x-ind">' + esc(lab.title) + '</p></header>' +
+    var on = open === lab.id, q = ' data-k="' + esc(k) + '" data-id="' + lab.id + '"' + kd;
+    return '<article class="xcard lab-card hue-' + (kind === 'game' ? 'amber' : 'violet') + '"><header class="x-head"><span class="i-num">' + svgI(kind === 'game' ? 'game' : 'spark') + '</span><p class="x-ind">' + esc(lab.title) + '</p></header>' +
       (lab.idea ? '<p class="small muted" style="margin:0 0 8px">الفكرة: ' + esc(lab.idea) + '</p>' : '') +
       (on ? labFrame(lab) : '') +
-      '<div class="actions" style="margin-top:8px"><button class="btn' + (on ? ' ghost' : '') + ' sm" data-act="lab-open" data-k="' + esc(k) + '" data-id="' + lab.id + '">' + (on ? 'أغلق التجربة' : 'شغّل التجربة') + '</button>' +
-      '<button class="btn ghost sm tint hue-violet" data-act="lab-full" data-k="' + esc(k) + '" data-id="' + lab.id + '">' + rIcon('present') + 'ملء الشاشة</button>' +
-      '<button class="btn ghost sm" data-act="lab-edit" data-k="' + esc(k) + '" data-id="' + lab.id + '">' + svgI('spark') + 'عدّلها أو أصلحها</button>' +
-      (lab.prev ? '<button class="btn ghost sm" data-act="lab-undo" data-k="' + esc(k) + '" data-id="' + lab.id + '">ارجع للنسخة السابقة</button>' : '') +
-      '<button class="btn ghost sm danger" data-act="lab-del" data-k="' + esc(k) + '" data-id="' + lab.id + '">احذف</button></div>' +
-      '<p class="small bad lab-err" data-id="' + lab.id + '"' + ((LAB_ERR[lab.id] || []).length ? '' : ' hidden') + '>ظهرت أخطاء برمجية في هذه التجربة؛ اضغط «عدّلها أو أصلحها» ليصلحها Claude.</p>' +
+      '<div class="actions" style="margin-top:8px"><button class="btn' + (on ? ' ghost' : '') + ' sm" data-act="lab-open"' + q + '>' + (on ? K.close : K.run) + '</button>' +
+      '<button class="btn ghost sm tint hue-violet" data-act="lab-full"' + q + '>' + rIcon('present') + 'ملء الشاشة</button>' +
+      '<button class="btn ghost sm" data-act="lab-edit"' + q + '>' + svgI('spark') + 'عدّلها أو أصلحها</button>' +
+      (lab.prev ? '<button class="btn ghost sm" data-act="lab-undo"' + q + '>ارجع للنسخة السابقة</button>' : '') +
+      '<button class="btn ghost sm danger" data-act="lab-del"' + q + '>احذف</button></div>' +
+      '<p class="small bad lab-err" data-id="' + lab.id + '"' + ((LAB_ERR[lab.id] || []).length ? '' : ' hidden') + '>ظهرت أخطاء برمجية في ' + (kind === 'game' ? 'هذه اللعبة' : 'هذه التجربة') + '؛ اضغط «عدّلها أو أصلحها» ليصلحها Claude.</p>' +
       '</article>';
   }).join('');
-  h += '<details class="panel gen ai-fold" data-fold="lab"' + (foldOpen('lab', !labs.length) ? ' open' : '') + '><summary class="hh">' + ico('spark', 'violet') + (labs.length ? 'صمّم تجربة أخرى' : 'صمّم تجربة افتراضية لهذا الدرس') + '</summary>' +
-    (ai ? '<label class="field"><span>فكرة التجربة (اختياري)</span><textarea id="lab-idea" rows="2" placeholder="مثال: كرة على مسار متعرج تتحول طاقتها بين الوضع والحركة، مع منزلق للارتفاع والكتلة"></textarea></label>' +
+  h += '<details class="panel gen ai-fold" data-fold="' + K.fold + '"' + (foldOpen(K.fold, !labs.length) ? ' open' : '') + '><summary class="hh">' + ico(kind === 'game' ? 'game' : 'spark', 'violet') + (labs.length ? K.more : K.first) + '</summary>' +
+    (ai ? (K.types ? '<div class="lab-types">' + K.types.map(function (t) { return '<button type="button" class="chip" data-act="lab-type" data-v="' + esc(t) + '">' + esc(t) + '</button>'; }).join('') + '</div>' : '') +
+      '<label class="field"><span>' + K.label + '</span><textarea id="lab-idea" rows="2" placeholder="' + esc(K.ph) + '"></textarea></label>' +
       '<div id="lab-ideas" class="lab-ideas"></div>' +
-      '<div class="actions"><button class="btn" data-act="lab-gen" data-k="' + esc(k) + '">' + svgI('spark') + 'صمّم التجربة</button><button class="btn ghost" data-act="lab-ideas" data-k="' + esc(k) + '">اقترح عليّ أفكارًا</button></div>' +
-      '<p class="small muted">' + labCost() + '</p>'
+      (kind === 'game' ? '<label class="field lab-n"><span>عدد الألعاب</span><select id="lab-n"><option value="1">لعبة واحدة</option><option value="2">لعبتان مختلفتان</option><option value="3">ثلاث ألعاب مختلفة</option></select></label>' : '') +
+      '<div class="actions"><button class="btn" data-act="lab-gen" data-k="' + esc(k) + '"' + kd + '>' + svgI('spark') + K.btn + '</button><button class="btn ghost" data-act="lab-ideas" data-k="' + esc(k) + '"' + kd + '>اقترح عليّ أفكارًا</button></div>' +
+      '<p class="small muted">' + labCost(kind) + '</p>'
       : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
   return h;
-};
-function labCost() {
-  return 'يستغرق التصميم دقيقة إلى ثلاث.';
+}
+L_TAB.lab = function (a, b, l) { return labTab(b, l, 'lab'); };
+L_TAB.game = function (a, b, l) { return labTab(b, l, 'game'); };
+ACT['lab-type'] = function (el) { var t = document.getElementById('lab-idea'); if (t) { t.value = el.getAttribute('data-v'); } Array.prototype.forEach.call(document.querySelectorAll('.lab-types .chip'), function (c) { c.classList.toggle('on', c === el); }); };
+function labCost(kind) {
+  return kind === 'game' ? 'تستغرق كل لعبة دقيقة إلى ثلاث، وتُحفظ كلها في هذا التبويب.' : 'يستغرق التصميم دقيقة إلى ثلاث.';
 }
 function labCtx(b, l) {
   var a = aidOf(b, l);
@@ -1262,19 +1305,19 @@ function labCtx(b, l) {
 }
 ACT['lab-open'] = function (el) { var id = el.getAttribute('data-id'); route.lab = route.lab === id ? null : id; render(true); };
 ACT['lab-full'] = function (el) {
-  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var lab = labsOf(x.b, x.l).filter(function (y) { return y.id === el.getAttribute('data-id'); })[0]; if (!lab) return;
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var lab = labsOf(x.b, x.l, lkind(el)).filter(function (y) { return y.id === el.getAttribute('data-id'); })[0]; if (!lab) return;
   var ov = document.createElement('div'); ov.className = 'lab-full'; ov.innerHTML = '<div class="lab-fh"><b>' + esc(lab.title) + '</b><button class="btn sm" type="button">إغلاق</button></div>' + labFrame(lab, 'lab-ff');
   document.body.appendChild(ov); document.documentElement.classList.add('lab-on'); wake(true);
   ov.querySelector('button').addEventListener('click', function () { ov.remove(); document.documentElement.classList.remove('lab-on'); wake(false); });
 };
 ACT['lab-del'] = function (el) {
   if (!el.classList.contains('arm')) { el.classList.add('arm'); el.textContent = 'اضغط مرة ثانية للحذف'; setTimeout(function () { el.classList.remove('arm'); el.textContent = 'احذف'; }, 3000); return; }
-  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var id = el.getAttribute('data-id');
-  labsSave(x.b, x.l, labsOf(x.b, x.l).filter(function (y) { return y.id !== id; })); render(true); toast('حُذفت التجربة');
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var id = el.getAttribute('data-id'), kind = lkind(el);
+  labsSave(x.b, x.l, labsOf(x.b, x.l, kind).filter(function (y) { return y.id !== id; }), kind); render(true); toast(kind === 'game' ? 'حُذفت اللعبة' : 'حُذفت التجربة');
 };
 ACT['lab-ideas'] = function (el) {
   var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var box = document.getElementById('lab-ideas'); if (box) box.innerHTML = '<p class="small muted">يفكّر Claude…</p>';
-  claude('أنت مصمم مختبرات علوم افتراضية للمرحلة المتوسطة في السعودية. اقترح 4 أفكار متنوعة ومبدعة لتجارب افتراضية تفاعلية عن الدرس المعطى، يغيّر فيها الطالب متغيرًا ويلاحظ أثره. أعد JSON فقط: {"ideas":[{"t":"عنوان قصير","d":"وصف في جملة: ماذا يغيّر الطالب وماذا يلاحظ"}]}', [{ type: 'text', text: labCtx(x.b, x.l) }], 1200, null)
+  claude(LKIND[lkind(el)].ideas + ' أعد JSON فقط: {"ideas":[{"t":"عنوان قصير","d":"وصف في جملة: ماذا يغيّر الطالب وماذا يلاحظ"}]}', [{ type: 'text', text: labCtx(x.b, x.l) }], 1200, null)
     .then(function (res) {
       var o = parseJSON(res), ideas = (o.ideas || []).filter(function (i) { return i && i.t; }).slice(0, 6);
       if (box) box.innerHTML = ideas.map(function (i) { return '<button type="button" class="lab-idea" data-act="lab-pick" data-v="' + esc(i.t + ': ' + (i.d || '')) + '"><b>' + esc(i.t) + '</b><span>' + esc(i.d || '') + '</span></button>'; }).join('');
@@ -1289,11 +1332,11 @@ function labJoin(a, b) { // the continuation, glued to what came before without 
   for (var k = Math.min(400, a.length, b.length); k >= 12; k--) if (a.slice(-k) === b.slice(0, k)) return a + b.slice(k);
   return a + b;
 }
-function labWrite(ask, prog, verb) { // the page, with one continuation if the answer hit the length limit
+function labWrite(ask, prog, verb, sys) { // the page, with one continuation if the answer hit the length limit
   var acc = '', round = 0, outT = 0;
   function run() {
     var msgs = round ? [{ role: 'user', content: [{ type: 'text', text: ask }] }, { role: 'assistant', content: acc }, { role: 'user', content: LAB_CONT }] : [{ type: 'text', text: ask }];
-    return claude(LAB_SYS, msgs, 32000, function (n) { prog(verb + ' ' + num(acc.length * (round ? 1 : 0) + n) + ' حرفًا' + (round ? ' (تكملة)' : '')); }, LABGEN).then(function (res) {
+    return claude(sys || LAB_SYS, msgs, 32000, function (n) { prog(verb + ' ' + num(acc.length * (round ? 1 : 0) + n) + ' حرفًا' + (round ? ' (تكملة)' : '')); }, LABGEN).then(function (res) {
       outT += (res.usage && res.usage.out) || 0;
       acc = round ? labJoin(acc, res.text) : res.text;
       if (/<\/html>/i.test(acc)) return acc;
@@ -1305,22 +1348,37 @@ function labWrite(ask, prog, verb) { // the page, with one continuation if the a
 }
 function labCutMsg(e) { return 'طالت صفحة التجربة أكثر من الحد المسموح للرد حتى مع التكملة، فلم تُحفظ' + (e.chars ? ' (وصل ' + num(e.chars) + ' حرفًا' + (e.toks ? ' في ' + num(e.toks) + ' وحدة' : '') + ')' : '') + '. أعد المحاولة بفكرة أبسط تركّز على متغير واحد.'; }
 ACT['lab-gen'] = function (el) {
-  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return;
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var kind = lkind(el), K = LKIND[kind];
   if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
-  var t = document.getElementById('lab-idea'), idea = t ? t.value.trim() : '';
+  var t = document.getElementById('lab-idea'), idea = t ? t.value.trim() : '', ns = document.getElementById('lab-n'), total = kind === 'game' && ns ? clamp(+ns.value || 1, 1, 3) : 1;
   LABGEN = { stopped: false }; wake(true);
-  var t0 = Date.now(), prog = progModal('Claude يصمّم التجربة', 'lab-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 1600, 4, 95) + '%'; }, 500);
-  prog('يقرأ الدرس ويصمّم التجربة…');
-  labWrite(labCtx(x.b, x.l) + '\n\n' + (idea ? 'فكرة المعلم للتجربة: ' + idea : 'اختر أنت فكرة التجربة الأنسب والأكثر إبداعًا لهذا الدرس.') + '\n\nاكتب صفحة HTML الآن، مختصرة (أقل من 28 ألف حرف) ومكتملة حتى </html>.', prog, 'يكتب Claude التجربة…')
-    .then(function (html) {
-      clearInterval(tick); wake(false);
+  var t0 = Date.now(), made = [], i = 0, prog = progModal('Claude ' + K.made, 'lab-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / (1600 * total), 4, 95) + '%'; }, 500);
+  function one() {
+    var tag = total > 1 ? ' (' + (i + 1) + ' من ' + total + ')' : '', have = labsOf(x.b, x.l, kind).map(function (y) { return y.title; });
+    prog('يقرأ الدرس و' + K.made + tag + '…');
+    var ask = labCtx(x.b, x.l) + '\n\n' + (idea ? K.ask + idea : K.pick) +
+      (have.length ? '\n\nموجود من قبل لهذا الدرس (اجعل الجديدة مختلفة عنها في نوع اللعب والفكرة): ' + have.join('؛ ') : '') +
+      (total > 1 ? '\n\nهذه ' + K.a + ' رقم ' + (i + 1) + ' من ' + total + ' مختلفة النوع، فاختر نوعًا لم يُستعمل.' : '') +
+      '\n\nاكتب صفحة HTML الآن، مختصرة (أقل من 28 ألف حرف) ومكتملة حتى </html>.';
+    return labWrite(ask, function (m) { prog(m + tag); }, K.writing, K.sys).then(function (html) {
       var tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html), hm = /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
-      var title = ((tm && tm[1]) || (hm && hm[1].replace(/<[^>]+>/g, '')) || 'تجربة افتراضية').trim().slice(0, 90);
+      var title = ((tm && tm[1]) || (hm && hm[1].replace(/<[^>]+>/g, '')) || K.fallback).trim().slice(0, 90);
       var lab = { id: 'x' + Date.now().toString(36), title: title, html: html, idea: idea.slice(0, 300), at: Date.now(), model: aiModel() };
-      labsSave(x.b, x.l, labsOf(x.b, x.l).concat([lab]));
-      var m = document.getElementById('modal'); m.__busy = false; closeModal();
-      route.tab = 'lab'; route.lab = lab.id; render(true); toast('جاهزة: «' + title + '». جرّبها قبل الحصة', 4000);
-    })['catch'](function (e) { clearInterval(tick); wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم تكتمل التجربة') + '</h2><p class="muted">' + (e.code === 'stop' ? '' : e.code === 'cut' ? labCutMsg(e) : esc(aiMsg(e))) + '</p>'); });
+      labsSave(x.b, x.l, labsOf(x.b, x.l, kind).concat([lab]), kind); made.push(lab); i++;
+      if (i < total && !LABGEN.stopped) return one();
+    });
+  }
+  one().then(function () {
+    clearInterval(tick); wake(false);
+    var m = document.getElementById('modal'); m.__busy = false; closeModal();
+    route.tab = kind; route.lab = made[made.length - 1].id; render(true);
+    toast(made.length > 1 ? 'جاهزة: ' + made.map(function (y) { return '«' + y.title + '»'; }).join('، ') : 'جاهزة: «' + made[0].title + '». جرّبها قبل الحصة', 4500);
+  })['catch'](function (e) {
+    clearInterval(tick); wake(false);
+    var kept = made.length ? ' حُفظ ما اكتمل: ' + made.map(function (y) { return '«' + y.title + '»'; }).join('، ') + '.' : '';
+    if (made.length) { route.tab = kind; render(true); }
+    doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم تكتمل ' + K.the) + '</h2><p class="muted">' + (e.code === 'stop' ? '' : e.code === 'cut' ? labCutMsg(e) : esc(aiMsg(e))) + esc(kept) + '</p>');
+  });
 };
 ACT['lab-stop'] = function () { if (LABGEN) { LABGEN.stopped = true; if (LABGEN.abort) LABGEN.abort(); } };
 
@@ -1333,43 +1391,42 @@ window.addEventListener('message', function (e) {
   if (l.indexOf(e.data.labErr) < 0 && l.length < 8) l.push(e.data.labErr);
   Array.prototype.forEach.call(document.querySelectorAll('.lab-err[data-id="' + id + '"]'), function (p) { p.hidden = false; });
 });
-var LAB_FIXES = ['لا أقدر أحرّك الجسم باللمس', 'الأعمدة أو الرسوم تخرج من حدودها', 'الرسم البياني لا يُرسم أثناء الحركة', 'الأرقام لا تتطابق مع الحركة', 'كبّر الخط والأزرار للعرض', 'اجعلها أبسط وأوضح للطلاب', 'أضف مقارنة بين محاولتين'];
 ACT['lab-edit'] = function (el) {
-  var k = el.getAttribute('data-k'), id = el.getAttribute('data-id'), x = lessonByKey(k); if (!x) return;
+  var k = el.getAttribute('data-k'), id = el.getAttribute('data-id'), x = lessonByKey(k), kind = lkind(el), K = LKIND[kind]; if (!x) return;
   if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
   var errs = LAB_ERR[id] || [];
-  openModal(card('<h2>عدّل التجربة أو أصلحها</h2><p class="small muted">صف ما رأيته أو ما تريد تغييره، ويعيد Claude كتابة التجربة. تبقى النسخة الحالية فتستطيع الرجوع إليها.</p>' +
+  openModal(card('<h2>عدّل ' + K.the + ' أو أصلحها</h2><p class="small muted">صف ما رأيته أو ما تريد تغييره، ويعيد Claude كتابة ' + K.the + '. تبقى النسخة الحالية فتستطيع الرجوع إليها.</p>' +
     (errs.length ? '<p class="small bad">سيُرسل معها ' + cnt(errs.length, ['خطأ برمجي واحد', 'خطآن برمجيان', 'أخطاء برمجية', 'خطأً برمجيًا']) + ' ظهر أثناء تشغيلها.</p>' : '') +
-    '<div class="lab-ideas">' + LAB_FIXES.map(function (f) { return '<button type="button" class="lab-idea lab-fix" data-act="lab-fix-pick" data-v="' + esc(f) + '"><span>' + esc(f) + '</span></button>'; }).join('') + '</div>' +
-    '<label class="field"><span>ملاحظاتك</span><textarea id="lab-note" rows="3" placeholder="مثال: عمودا الحركية والكلية يخرجان من أعلى الرسم، والرسم البياني فارغ، وزر «ارمِ الكرة» يبدو معطلًا"></textarea></label>' +
-    '<div class="actions"><button class="btn" data-act="lab-fix" data-k="' + esc(k) + '" data-id="' + id + '">' + svgI('spark') + 'عدّلها</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
+    '<div class="lab-ideas">' + K.fixes.map(function (f) { return '<button type="button" class="lab-idea lab-fix" data-act="lab-fix-pick" data-v="' + esc(f) + '"><span>' + esc(f) + '</span></button>'; }).join('') + '</div>' +
+    '<label class="field"><span>ملاحظاتك</span><textarea id="lab-note" rows="3" placeholder="' + esc(K.fixPh) + '"></textarea></label>' +
+    '<div class="actions"><button class="btn" data-act="lab-fix" data-k="' + esc(k) + '" data-id="' + id + '" data-kind="' + kind + '">' + svgI('spark') + 'عدّلها</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
 };
 ACT['lab-fix-pick'] = function (el) { var t = document.getElementById('lab-note'), v = el.getAttribute('data-v'); if (!t) return; el.classList.toggle('on'); var parts = t.value.split('\n').filter(Boolean); if (el.classList.contains('on')) parts.push(v); else parts = parts.filter(function (p) { return p !== v; }); t.value = parts.join('\n'); };
 ACT['lab-fix'] = function (el) {
-  var k = el.getAttribute('data-k'), id = el.getAttribute('data-id'), x = lessonByKey(k); if (!x) return;
-  var labs = labsOf(x.b, x.l), lab = labs.filter(function (y) { return y.id === id; })[0]; if (!lab) return;
+  var k = el.getAttribute('data-k'), id = el.getAttribute('data-id'), x = lessonByKey(k), kind = lkind(el), K = LKIND[kind]; if (!x) return;
+  var labs = labsOf(x.b, x.l, kind), lab = labs.filter(function (y) { return y.id === id; })[0]; if (!lab) return;
   var t = document.getElementById('lab-note'), note = t ? t.value.trim() : '', errs = LAB_ERR[id] || [];
   if (!note && !errs.length) { toast('اكتب ما تريد تغييره، أو اختر من الاقتراحات'); return; }
   LABGEN = { stopped: false }; wake(true);
-  var t0 = Date.now(), prog = progModal('Claude يعدّل التجربة', 'lab-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 1800, 4, 95) + '%'; }, 500);
-  prog('يقرأ التجربة الحالية…');
-  var ask = labCtx(x.b, x.l) + '\n\nهذه صفحة التجربة الحالية:\n' + lab.html + '\n\n' + (note ? 'ملاحظات المعلم بعد تجربتها:\n' + note + '\n\n' : '') + (errs.length ? 'أخطاء برمجية ظهرت أثناء تشغيلها:\n' + errs.join('\n') + '\n\n' : '') +
+  var t0 = Date.now(), prog = progModal('Claude يعدّل ' + K.the, 'lab-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 1800, 4, 95) + '%'; }, 500);
+  prog('يقرأ ' + K.the + ' الحالية…');
+  var ask = labCtx(x.b, x.l) + '\n\nهذه صفحة ' + K.the + ' الحالية:\n' + lab.html + '\n\n' + (note ? 'ملاحظات المعلم بعد تجربتها:\n' + note + '\n\n' : '') + (errs.length ? 'أخطاء برمجية ظهرت أثناء تشغيلها:\n' + errs.join('\n') + '\n\n' : '') +
     'أعد كتابة الصفحة كاملة بعد إصلاح كل ما سبق، مع الإبقاء على فكرتها وما يعمل فيها، ومراجعة الأخطاء الشائعة المذكورة في التعليمات. أعد صفحة HTML كاملة فقط (أقل من 28 ألف حرف) ومكتملة حتى </html>.';
-  labWrite(ask, prog, 'يكتب Claude النسخة المعدّلة…').then(function (html) {
+  labWrite(ask, prog, 'يكتب Claude النسخة المعدّلة…', K.sys).then(function (html) {
     clearInterval(tick); wake(false);
     var tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
     lab.prev = { html: lab.html, title: lab.title, at: lab.at };
     lab.html = html; lab.title = ((tm && tm[1]) || lab.title).trim().slice(0, 90); lab.at = Date.now(); lab.model = aiModel();
-    labsSave(x.b, x.l, labs); delete LAB_ERR[id];
+    labsSave(x.b, x.l, labs, kind); delete LAB_ERR[id];
     var m = document.getElementById('modal'); m.__busy = false; closeModal();
-    route.tab = 'lab'; route.lab = id; render(true); toast('عُدّلت التجربة. جرّبها، وإن لم تعجبك فارجع للنسخة السابقة', 4500);
-  })['catch'](function (e) { clearInterval(tick); wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم يكتمل التعديل') + '</h2><p class="muted">' + (e.code === 'stop' ? '' : e.code === 'cut' ? labCutMsg(e) + ' ولم تتغير التجربة الحالية.' : esc(aiMsg(e))) + '</p>'); });
+    route.tab = kind; route.lab = id; render(true); toast('عُدّلت ' + K.the + '. جرّبها، وإن لم تعجبك فارجع للنسخة السابقة', 4500);
+  })['catch'](function (e) { clearInterval(tick); wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم يكتمل التعديل') + '</h2><p class="muted">' + (e.code === 'stop' ? '' : e.code === 'cut' ? labCutMsg(e) + ' ولم تتغير ' + K.the + ' الحالية.' : esc(aiMsg(e))) + '</p>'); });
 };
 ACT['lab-undo'] = function (el) {
-  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var id = el.getAttribute('data-id'), labs = labsOf(x.b, x.l), lab = labs.filter(function (y) { return y.id === id; })[0];
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var id = el.getAttribute('data-id'), kind = lkind(el), labs = labsOf(x.b, x.l, kind), lab = labs.filter(function (y) { return y.id === id; })[0];
   if (!lab || !lab.prev) return;
   var cur = { html: lab.html, title: lab.title, at: lab.at }; lab.html = lab.prev.html; lab.title = lab.prev.title; lab.at = lab.prev.at; lab.prev = cur;
-  labsSave(x.b, x.l, labs); delete LAB_ERR[id]; render(true); toast('رجعت للنسخة السابقة (والمعدّلة محفوظة: اضغط مرة أخرى للتبديل)');
+  labsSave(x.b, x.l, labs, kind); delete LAB_ERR[id]; render(true); toast('رجعت للنسخة السابقة (والمعدّلة محفوظة: اضغط مرة أخرى للتبديل)');
 };
 
 /* ---------- «الرسوم»: more drawings by Claude, from a description, a photo, or a page of the book ----------
@@ -3047,7 +3104,7 @@ function rekeyBook(oldId, nu) { // move everything of a book to the id the other
     });
   }
   var pre = oldId + ':', pk = function (key) { return key.indexOf(pre) === 0; }, mk = function (key) { return nu + key.slice(oldId.length); };
-  var npk = function (key) { return /^[bxpalnf]:/.test(key) && key.indexOf(pre, 2) === 2; }, nmk = function (key) { return key.slice(0, 2) + nu + key.slice(2 + oldId.length); };
+  var npk = function (key) { return /^[bxpalnfg]:/.test(key) && key.indexOf(pre, 2) === 2; }, nmk = function (key) { return key.slice(0, 2) + nu + key.slice(2 + oldId.length); };
   return Promise.all([
     dbGet('books', oldId).then(function (b) { if (!b) return; b.id = nu; return tx('books', 'readwrite', function (s) { s.put(b); s['delete'](oldId); }); }),
     dbGet('files', oldId).then(function (f) { if (!f) return; f.id = nu; return tx('files', 'readwrite', function (s) { s.put(f); s['delete'](oldId); }); }),
