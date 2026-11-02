@@ -1060,7 +1060,7 @@ VIEWS.lesson = function () {
     h += '<div class="l-body">' + (L_TAB[tab] || L_TAB.goals)(a.d, b, l) + '</div>';
   }
   h += '<div class="l-nav">' + (prev ? '<button class="btn ghost sm" data-act="lesson" data-k="' + esc(lk(b, prev)) + '">→ ' + esc(prev.title) + '</button>' : '<span></span>') + (next ? '<button class="btn ghost sm" data-act="lesson" data-k="' + esc(lk(b, next)) + '">' + esc(next.title) + ' ←</button>' : '<span></span>') + '</div>';
-  if (a) h += '<details class="l-more"><summary class="small muted">عن مساعد هذا الدرس</summary><p class="small muted">' + (a.src === 'ai' ? 'أعدّه ' + esc(a.model || 'الذكاء الاصطناعي') + ' من صفحات الدرس ' + relDay(a.at) + '. راجع دقته قبل عرضه على الطلاب.' : 'من ملف دروس أُضيف ' + relDay(a.at) + '.') + '</p>' +
+  if (a) h += '<details class="l-more"><summary class="small muted">عن مساعد هذا الدرس</summary><p class="small muted">' + (a.src === 'ai' ? 'أُعدّ من صفحات الدرس ' + relDay(a.at) + '. راجع دقته قبل عرضه على الطلاب.' : 'من ملف دروس أُضيف ' + relDay(a.at) + '.') + '</p>' +
     '<div class="actions"><button class="btn ghost sm" data-act="gen-one" data-k="' + esc(k) + '">' + svgI('spark') + 'أعد تجهيزه بالذكاء</button><button class="btn ghost sm danger" data-act="aid-del" data-k="' + esc(k) + '">احذف المساعد</button></div></details>';
   return h + '</div>';
 };
@@ -1231,7 +1231,7 @@ function aidText(d) { // the lesson helper as plain text, for Claude
 }
 L_TAB.lab = function (a, b, l) {
   var labs = labsOf(b, l), k = lk(b, l), ai = !!P.ai.key, open = route.lab;
-  var h = '<p class="muted small" style="margin-bottom:12px">تجارب افتراضية تفاعلية يصممها Claude لهذا الدرس: يغيّر الطالب المتغيرات بإصبعه ويلاحظ ويسجّل ويستنتج. اعرضها على جهاز العرض أو أعطِ الآيباد لطالب.</p>';
+  var h = '<p class="muted small" style="margin-bottom:12px">تجارب افتراضية تفاعلية لهذا الدرس: يغيّر الطالب المتغيرات بإصبعه ويلاحظ ويسجّل ويستنتج. اعرضها على جهاز العرض أو أعطِ الآيباد لطالب.</p>';
   h += labs.map(function (lab) {
     var on = open === lab.id;
     return '<article class="xcard lab-card hue-violet"><header class="x-head"><span class="i-num">' + svgI('spark') + '</span><p class="x-ind">' + esc(lab.title) + '</p></header>' +
@@ -1243,10 +1243,10 @@ L_TAB.lab = function (a, b, l) {
       (lab.prev ? '<button class="btn ghost sm" data-act="lab-undo" data-k="' + esc(k) + '" data-id="' + lab.id + '">ارجع للنسخة السابقة</button>' : '') +
       '<button class="btn ghost sm danger" data-act="lab-del" data-k="' + esc(k) + '" data-id="' + lab.id + '">احذف</button></div>' +
       '<p class="small bad lab-err" data-id="' + lab.id + '"' + ((LAB_ERR[lab.id] || []).length ? '' : ' hidden') + '>ظهرت أخطاء برمجية في هذه التجربة؛ اضغط «عدّلها أو أصلحها» ليصلحها Claude.</p>' +
-      '<p class="small muted" style="margin:6px 0 0">صمّمها ' + esc(lab.model || 'Claude') + ' ' + relDay(lab.at) + '. جرّبها قبل الحصة وتأكد من دقتها.</p></article>';
+      '</article>';
   }).join('');
   h += '<details class="panel gen ai-fold" data-fold="lab"' + (foldOpen('lab', !labs.length) ? ' open' : '') + '><summary class="hh">' + ico('spark', 'violet') + (labs.length ? 'صمّم تجربة أخرى' : 'صمّم تجربة افتراضية لهذا الدرس') + '</summary>' +
-    (ai ? '<label class="field"><span>فكرة التجربة (اختياري، أو اترك Claude يختار)</span><textarea id="lab-idea" rows="2" placeholder="مثال: كرة على مسار متعرج تتحول طاقتها بين الوضع والحركة، مع منزلق للارتفاع والكتلة"></textarea></label>' +
+    (ai ? '<label class="field"><span>فكرة التجربة (اختياري)</span><textarea id="lab-idea" rows="2" placeholder="مثال: كرة على مسار متعرج تتحول طاقتها بين الوضع والحركة، مع منزلق للارتفاع والكتلة"></textarea></label>' +
       '<div id="lab-ideas" class="lab-ideas"></div>' +
       '<div class="actions"><button class="btn" data-act="lab-gen" data-k="' + esc(k) + '">' + svgI('spark') + 'صمّم التجربة</button><button class="btn ghost" data-act="lab-ideas" data-k="' + esc(k) + '">اقترح عليّ أفكارًا</button></div>' +
       '<p class="small muted">' + labCost() + '</p>'
@@ -1254,9 +1254,7 @@ L_TAB.lab = function (a, b, l) {
   return h;
 };
 function labCost() {
-  var m = MODELS.filter(function (x) { return x[0] === aiModel(); })[0]; if (!m) return 'التكلفة بحسب النموذج الذي اخترته.';
-  var usd = (5000 * m[2] + 14000 * m[3]) / 1e6;
-  return 'التكلفة التقريبية من رصيد حسابك: نحو ' + (usd < 0.01 ? 'أقل من سنت' : usd.toFixed(2) + ' دولار') + ' للتجربة، ويستغرق التصميم دقيقة إلى ثلاث.';
+  return 'يستغرق التصميم دقيقة إلى ثلاث.';
 }
 function labCtx(b, l) {
   var a = aidOf(b, l);
@@ -1344,7 +1342,7 @@ ACT['lab-edit'] = function (el) {
     (errs.length ? '<p class="small bad">سيُرسل معها ' + cnt(errs.length, ['خطأ برمجي واحد', 'خطآن برمجيان', 'أخطاء برمجية', 'خطأً برمجيًا']) + ' ظهر أثناء تشغيلها.</p>' : '') +
     '<div class="lab-ideas">' + LAB_FIXES.map(function (f) { return '<button type="button" class="lab-idea lab-fix" data-act="lab-fix-pick" data-v="' + esc(f) + '"><span>' + esc(f) + '</span></button>'; }).join('') + '</div>' +
     '<label class="field"><span>ملاحظاتك</span><textarea id="lab-note" rows="3" placeholder="مثال: عمودا الحركية والكلية يخرجان من أعلى الرسم، والرسم البياني فارغ، وزر «ارمِ الكرة» يبدو معطلًا"></textarea></label>' +
-    '<div class="actions"><button class="btn" data-act="lab-fix" data-k="' + esc(k) + '" data-id="' + id + '">' + svgI('spark') + 'عدّلها</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div><p class="small muted">التكلفة نحو ضعف تصميمها أول مرة، لأن Claude يقرأ الصفحة الحالية ثم يكتبها كاملة.</p>'));
+    '<div class="actions"><button class="btn" data-act="lab-fix" data-k="' + esc(k) + '" data-id="' + id + '">' + svgI('spark') + 'عدّلها</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
 };
 ACT['lab-fix-pick'] = function (el) { var t = document.getElementById('lab-note'), v = el.getAttribute('data-v'); if (!t) return; el.classList.toggle('on'); var parts = t.value.split('\n').filter(Boolean); if (el.classList.contains('on')) parts.push(v); else parts = parts.filter(function (p) { return p !== v; }); t.value = parts.join('\n'); };
 ACT['lab-fix'] = function (el) {
@@ -1405,7 +1403,7 @@ L_TAB.figs = function (a, b, l) {
       '<div class="fig-ref">' + (ref ? '<img src="' + ref.src + '" alt="الصورة المرفقة"><span class="small">' + (ref.page ? 'صفحة ' + esc(ref.page) + ' من الكتاب' : 'صورة مرفقة') + '</span><button class="link small" data-act="fig-ref-x">أزلها</button>'
         : '<button class="btn ghost sm" data-act="fig-ref-img" data-k="' + esc(k) + '">' + svgI('image') + 'أرفق صورة يحاكيها</button><span class="small muted">أو</span><label class="fig-pg"><span class="small">صفحة الكتاب</span><input type="number" inputmode="numeric" id="fig-pg" placeholder="' + l.from + '"></label><button class="btn ghost sm" data-act="fig-ref-page" data-k="' + esc(k) + '">أرفقها</button>') + '</div>' +
       '<div class="actions"><label class="fig-n"><span class="small">عدد الرسوم</span><select id="fig-n"><option>1</option><option selected>2</option><option>3</option></select></label><button class="btn" data-act="fig-gen" data-k="' + esc(k) + '">' + svgI('spark') + 'ارسم</button></div>' +
-      '<p class="small muted">التكلفة نحو 3 إلى 8 سنتات للرسم مع Sonnet. الرسوم توضيحية مبسطة (SVG)، لا صور واقعية.</p>'
+      '<p class="small muted">الرسوم توضيحية مبسطة (SVG)، لا صور واقعية.</p>'
       : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
   return h + photoPanel(b, l);
 };
@@ -1470,7 +1468,7 @@ L_TAB.eval = function (a, b, l) {
       '<label><span class="small">المستوى</span><select id="qg-lv"><option value="">متدرج</option><option>تذكر</option><option>فهم</option><option>تطبيق</option><option>تحليل</option></select></label></div>' +
       '<div class="actions"><button class="btn" data-act="qg-run" data-k="' + esc(k) + '">' + svgI('spark') + 'أنشئ الأسئلة</button>' +
       (nAdd ? '<button class="btn ghost sm danger" data-act="qg-undo" data-k="' + esc(k) + '">احذف آخر ما أضافه (' + nAdd + ')</button>' : '') + '</div>' +
-      '<p class="small muted">تُضاف في آخر الأسئلة أعلاه، وتدخل في «اعرض الأسئلة على الطلاب» و«انسخ الأسئلة». التكلفة نحو سنتين إلى خمسة سنتات مع Sonnet.</p>'
+      '<p class="small muted">تُضاف في آخر الأسئلة أعلاه، وتدخل في «اعرض الأسئلة على الطلاب» و«انسخ الأسئلة».</p>'
       : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
 };
 ACT['qg-run'] = function (el) {
@@ -2079,10 +2077,7 @@ var MODELS = [['claude-sonnet-5-5', 'Sonnet 5.5 · متوازن (مستحسن)',
 var MAX_PAGES = 16;
 function aiModel() { return P.ai.model || MODELS[0][0]; }
 function costLine(np) {
-  var m = MODELS.filter(function (x) { return x[0] === aiModel(); })[0];
-  if (!m) return 'التكلفة بحسب النموذج الذي اخترته في الإعدادات.';
-  var inT = 3500 + np * 1600, outT = 16000, usd = (inT * m[2] + outT * m[3]) / 1e6;
-  return 'التكلفة التقريبية من رصيد حسابك: نحو ' + (usd < 0.01 ? 'أقل من سنت' : usd.toFixed(2) + ' دولار') + ' لهذا الدرس، ويستغرق دقيقة إلى ثلاث.';
+  return 'يستغرق دقيقة إلى ثلاث.';
 }
 var LESSON_SYS = [
   'أنت معلم علوم خبير في المرحلة المتوسطة في المملكة العربية السعودية، ومؤلف أدلة معلم. أمامك صور صفحات درس واحد من كتاب العلوم المقرر.',
@@ -2208,7 +2203,7 @@ ACT['gen-all'] = function () {
   if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
   var todo = b.lessons.filter(function (l) { return !aidOf(b, l); }), pages = todo.reduce(function (s, l) { return s + Math.min(l.to - l.from + 1, MAX_PAGES); }, 0);
   var m = MODELS.filter(function (x) { return x[0] === aiModel(); })[0], usd = m ? ((3500 * todo.length + pages * 1600) * m[2] + 16000 * todo.length * m[3]) / 1e6 : 0;
-  openModal(card('<h2>تجهيز ' + cnt(todo.length, WORDS.lesson) + '</h2><p class="muted">يُجهَّز درس بعد درس، ونحو دقيقتين لكل درس. ' + (m ? 'التكلفة التقريبية نحو ' + usd.toFixed(2) + ' دولار من رصيد حسابك.' : '') + ' تستطيع الإيقاف في أي وقت، وما اكتمل يبقى.</p><div class="actions"><button class="btn" data-act="gen-all-yes">ابدأ</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
+  openModal(card('<h2>تجهيز ' + cnt(todo.length, WORDS.lesson) + '</h2><p class="muted">يُجهَّز درس بعد درس، ونحو دقيقتين لكل درس. تستطيع الإيقاف في أي وقت، وما اكتمل يبقى.</p><div class="actions"><button class="btn" data-act="gen-all-yes">ابدأ</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
 };
 ACT['gen-all-yes'] = function () {
   var b = curBook(), todo = b.lessons.filter(function (l) { return !aidOf(b, l); }), ok = 0, bad = [];
@@ -2237,7 +2232,7 @@ ACT['toc-ai'] = function () {
   if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
   openModal(card('<h2>قراءة فهرس الكتاب</h2><p class="muted">اكتب أرقام صفحات الفهرس كما تظهر في عارض الكتاب (ترتيبها في الملف، من 1 إلى ' + (b.pages || '…') + '). تجدها في «الكتاب»: الرقم الثاني أعلى الصفحة.</p>' +
     '<div class="row2"><label class="field"><span>من صفحة</span><input type="number" inputmode="numeric" id="toc-a" value="' + (P.tocA || 3) + '" data-focus></label><label class="field"><span>إلى صفحة</span><input type="number" inputmode="numeric" id="toc-b" value="' + (P.tocB || 6) + '"></label></div>' +
-    '<div class="actions"><button class="btn" data-act="toc-ai-yes">اقرأ الفهرس</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div><p class="small muted">تكلفته أقل من سنتين في الغالب.</p>'));
+    '<div class="actions"><button class="btn" data-act="toc-ai-yes">اقرأ الفهرس</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
 };
 ACT['toc-ai-yes'] = function () {
   var b = curBook(), a = +document.getElementById('toc-a').value, z = +document.getElementById('toc-b').value;
@@ -2358,7 +2353,7 @@ ACT['rd-solve'] = function () {
     (rec ? (rec.items.length ? '<p class="small muted">حلّ Claude ' + cnt(rec.items.length, WORDS.q) + ' في هذه الصفحة. الإجابات مكتوبة على الصفحة: اضغط إجابة لتطويها إلى رقمها (فتكشفها للطلاب لاحقًا)، واسحبها لتنقلها إن غطّت شيئًا.</p>' + list : '<p class="small muted">لم يجد Claude أسئلة في هذه الصفحة.</p>') : '<p class="small muted">يقرأ Claude صورة الصفحة ويحل كل سؤال فيها، ثم تظهر الإجابة على الصفحة نفسها بجانب السؤال.</p>') +
     '<div class="actions" style="margin-top:0"><button class="btn" data-act="solve-run" data-from="' + pr + '" data-to="' + pr + '" data-redo="1">' + (rec ? 'أعد حلّ هذه الصفحة' : 'حلّ أسئلة هذه الصفحة') + '</button>' +
     (rec && rec.items.length ? '<button class="btn ghost sm danger" data-act="solve-del">احذف حلولها</button>' : '') + '</div></section>' +
-    '<section class="set-sec"><h3>صفحات أكثر</h3><p class="small muted">للدرس كله ومراجعة الفصل والاختبار المقنن. تُتخطى الصفحات المحلولة من قبل، والصفحات التي لا أسئلة فيها لا يظهر عليها شيء. التكلفة نحو سنتين لكل صفحة مع Sonnet.</p>' +
+    '<section class="set-sec"><h3>صفحات أكثر</h3><p class="small muted">للدرس كله ومراجعة الفصل والاختبار المقنن. تُتخطى الصفحات المحلولة من قبل، والصفحات التي لا أسئلة فيها لا يظهر عليها شيء.</p>' +
     '<div class="actions" style="margin-top:0;align-items:end"><label class="field" style="margin:0;flex:1"><span>من صفحة</span><input type="number" inputmode="numeric" id="sv-from" value="' + from + '"></label><label class="field" style="margin:0;flex:1"><span>إلى صفحة</span><input type="number" inputmode="numeric" id="sv-to" value="' + to + '"></label></div>' +
     '<div class="actions"><button class="btn ghost" data-act="solve-run">حلّ أسئلة هذه الصفحات</button></div></section>' +
     '<section class="set-sec"><h3>العرض</h3>' + segBtns('solve-show', ansOn() ? 'on' : 'off', [['on', 'أظهر الإجابات على الصفحات'], ['off', 'أخفِها']]) + '</section>'), true);
