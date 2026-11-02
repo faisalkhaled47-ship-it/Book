@@ -1078,7 +1078,7 @@ function destPage(doc, dest) {
 }
 
 /* ---------- one lesson ---------- */
-var LTABS = [['goals', 'الأهداف'], ['exp', 'الشرح'], ['figs', 'الرسوم'], ['map', 'خريطة المفاهيم'], ['eval', 'التقويم'], ['ws', 'ورقة العمل'], ['lab', 'المختبر'], ['game', 'الألعاب'], ['sum', 'الملخص والأنشطة'], ['notes', 'ملاحظاتي']];
+var LTABS = [['goals', 'الأهداف'], ['exp', 'الشرح'], ['film', 'مقطع الدرس'], ['figs', 'الرسوم'], ['map', 'خريطة المفاهيم'], ['eval', 'التقويم'], ['ws', 'ورقة العمل'], ['lab', 'المختبر'], ['game', 'الألعاب'], ['sum', 'الملخص والأنشطة'], ['notes', 'ملاحظاتي']];
 VIEWS.lesson = function () {
   var x = lessonByKey(route.k || ''); if (!x) { route = { v: 'lessons' }; return VIEWS.lessons(); }
   var b = x.b, l = x.l, a = aidOf(b, l), k = lk(b, l), idx = b.lessons.indexOf(l);
@@ -2075,6 +2075,347 @@ ACT['ws-undo'] = function (el) {
   var f = wsFind(el); if (!f || !f.w.prev) return; var cur = { css: f.w.css, html: f.w.html, title: f.w.title, at: f.w.at };
   f.w.css = f.w.prev.css; f.w.html = f.w.prev.html; f.w.title = f.w.prev.title; f.w.at = f.w.prev.at; f.w.prev = cur; wsSave(f.x.b, f.x.l, f.list); render(true); toast('رجعت للنسخة السابقة (اضغط مرة أخرى للتبديل)');
 };
+
+/* ---------- «مقطع الدرس»: an animated lesson film that plays by itself, scene after scene, on the projector ----------
+   The look is fixed here (the same as the lesson films made in the chat): a 16:9 stage, the stations bar, cards, countdowns, the reveal,
+   soft sound effects. Claude writes only the content of the scenes as JSON from the lesson helper; the questions of «اختبر نفسك»
+   are the lesson's own. Kept in the notes store as v:<bookId>:<lessonId> {films:[{id, title, d, at}], t}. */
+var FILM_C = { blue: '#2f7fe0', orange: '#f28c28', red: '#e0463c', purple: '#8a4fd6', green: '#22a06b', yellow: '#eaa50c', navy: '#1d2b4c', teal: '#0f8f8a', pink: '#e0559a' };
+var FILM_IC = {
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/>',
+  fire: '<path d="M12 21c-4 0-6.5-2.7-6.5-6.2 0-3.6 3-5.6 3.7-9.3 2.6 1.6 3.4 3.8 3.3 5.6 1-.7 1.8-2 2-3.3 2.3 2 3.9 4.4 3.9 7.1 0 3.5-2.6 6.1-6.4 6.1z"/>',
+  sound: '<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
+  run: '<circle cx="14.5" cy="4.5" r="2"/><path d="M10 21l2.5-6 3 2.5V21M7 11.5l3-3.5 4 1.5 2 3 3 .5M12.5 15l-1.5-4"/>',
+  drop: '<path d="M12 3.5c3.5 4.6 6 7.8 6 10.8a6 6 0 0 1-12 0c0-3 2.5-6.2 6-10.8z"/>',
+  wind: '<path d="M3 8.5h11a2.5 2.5 0 1 0-2.5-2.5M3 12.5h15a2.5 2.5 0 1 1-2.5 2.5M3 16.5h8"/>',
+  atom: '<circle cx="12" cy="12" r="1.6"/><ellipse cx="12" cy="12" rx="9" ry="3.6"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(120 12 12)"/>',
+  magnet: '<path d="M6 4v8a6 6 0 0 0 12 0V4h-4v8a2 2 0 0 1-4 0V4z"/><path d="M6 7.5h4M14 7.5h4"/>',
+  heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.4a4.2 4.2 0 0 1 7.5 2.4C19.5 15.4 12 20 12 20z"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M5.5 18.5l2.1-2.1M16.4 7.6l2.1-2.1"/>',
+  car: '<path d="M4 16v-3.5l2-5h12l2 5V16z"/><circle cx="8" cy="16.5" r="1.8"/><circle cx="16" cy="16.5" r="1.8"/><path d="M4 12.5h16"/>',
+  house: '<path d="M4 11 12 4.5 20 11M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/>',
+  thermo: '<path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0z"/><path d="M12 9v7"/>',
+  battery: '<rect x="3" y="7.5" width="16" height="9" rx="2"/><path d="M21 10.5v3M7 10.5v3M10.5 10.5v3"/>',
+  wave: '<path d="M2.5 12c2.4-4 4.8-4 7.1 0s4.8 4 7.2 0 3.5-2.7 4.7-2"/>',
+  eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
+  bike: '<circle cx="6" cy="16" r="3.5"/><circle cx="18" cy="16" r="3.5"/><path d="M6 16l4-7h5l3 7M10 9 8.5 6H7M12 16l3-7"/>',
+  ball: '<circle cx="12" cy="12" r="8.5"/><path d="M4.5 8c3.5 1.2 6 4.2 6.5 12.4M19.5 16c-3.5-1.2-6-4.2-6.5-12.4"/>',
+  cell: '<ellipse cx="12" cy="12" rx="9" ry="7"/><circle cx="11" cy="11.5" r="2.6"/><circle cx="16.5" cy="14" r=".8"/><circle cx="7" cy="15" r=".8"/>',
+  plant: '<path d="M12 21v-8M12 13c0-4 2.5-6.5 7-7 0 4.5-2.5 7-7 7zM12 15c0-3.2-2-5.4-6-5.8 0 3.8 2.2 5.8 6 5.8z"/>',
+  food: '<path d="M4 11h16a8 8 0 0 1-16 0zM8 7.5c0-1.5 1-2 1-3.5M12 7.5c0-1.5 1-2 1-3.5M16 7.5c0-1.5 1-2 1-3.5"/>',
+  rock: '<path d="M3 18l3.5-8 4-3 4.5 1.5L21 18z"/><path d="M10.5 7l1 5 3.5-3.5"/>',
+  light: '<path d="M9 17.5h6M10 20.5h4"/><path d="M8.2 14.6a6 6 0 1 1 7.6 0c-.8.6-1.3 1.5-1.3 2.4h-5c0-.9-.5-1.8-1.3-2.4z"/>',
+  factory: '<path d="M3 20V10l5 3V10l5 3V10l5 3V5h3v15z"/><path d="M7 16.5h2M12 16.5h2"/>',
+  scale: '<path d="M12 4v16M7 20h10M5 7h14M5 7l-2.5 6a3 3 0 0 0 5 0zM19 7l-2.5 6a3 3 0 0 0 5 0z"/>',
+  lungs: '<path d="M12 4v8M12 9c-1 1-2 1.5-3 1.5M12 9c1 1 2 1.5 3 1.5"/><path d="M9 7c-3 0-5 5-5 9 0 2.2 1.6 3 3.2 3 1.6 0 2.8-1 2.8-3V9M15 7c3 0 5 5 5 9 0 2.2-1.6 3-3.2 3-1.6 0-2.8-1-2.8-3V9"/>',
+  bacteria: '<rect x="4" y="8" width="16" height="8" rx="4"/><path d="M4 12H2M22 12h-2M8 8V6M16 16v2M12 8V5.5M12 16v2.5"/>',
+  check: '<circle cx="12" cy="12" r="8.6"/><path d="m8 12.3 2.7 2.7L16 9.6"/>',
+  repeat: '<path d="M4 12a8 8 0 0 1 13.7-5.7L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.7L4 15.5M4 20v-4.5h4.5"/>',
+  up: '<circle cx="12" cy="12" r="8.6"/><path d="M12 16.5v-9M8 11l4-4 4 4"/>'
+};
+function filmIc(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (FILM_IC[n] || ICONS[n] || ICONS.spark) + '</svg>'; }
+function filmCol(c) { return FILM_C[c] || FILM_C.blue; }
+var FILM_SYS = [
+  'أنت مخرج مقاطع دروس متحركة ومعلم علوم خبير في المرحلة المتوسطة (بنين) في المملكة العربية السعودية.',
+  'اكتب محتوى مقطع درس متحرك يُعرض على جهاز العرض في الفصل، يشرح الدرس المعطى بالتفصيل بشكل جذاب يشد انتباه الطلاب، بالرسوم المتحركة وأمثلة من الحياة اليومية، ويحقق أهداف الدرس. التطبيق يرسم التصميم والحركة والأصوات؛ أنت تكتب المحتوى فقط.',
+  'أعد JSON فقط بلا أي نص قبله أو بعده، بهذا الشكل:',
+  '{"title":"عنوان المقطع (اسم الدرس غالبًا)","sub":"سطر فرعي مشوق في صورة سؤال","icons":[6 أسماء أيقونات تدور حول العنوان],',
+  ' "hook":[3 عناصر {"i":"أيقونة","q":"سؤال قصير من الحياة اليومية يثير الفضول"}],',
+  ' "poll":{"q":"سؤال تصويت محوري عن فكرة الدرس","o":["خيار","خيار","خيار"],"a":رقم الخيار الصحيح من 0,"e":"شرح الإجابة في جملتين"},',
+  ' "scenes":[9 إلى 12 مشهدًا بالترتيب من الأنواع الآتية],',
+  ' "sum":[4 إلى 6 عناصر {"i":"أيقونة","x":"جملة خلاصة"}]}',
+  'أنواع المشاهد:',
+  '- {"t":"cards","sec":"اسم المحطة","h":"عنوان","items":[3 إلى 6 {"i":"أيقونة","l":"اسم قصير","d":"وصف في جملة قصيرة","c":"لون"}]} لتعريف مجموعة مفاهيم (مثل أشكال الطاقة أو أنواع شيء).',
+  '- {"t":"explain","sec":"اسم المحطة","h":"عنوان المشهد","pts":[2 إلى 4 نقاط، كل نقطة 14 كلمة على الأكثر],"flow":[اختياري: سلسلة تحول أو خطوات {"i":"أيقونة","l":"تسمية قصيرة","c":"لون"} من 2 إلى 4],"svg":"رسم توضيحي","note":"اختياري: ربط بالحياة أو تنبيه في جملة"}.',
+  '- {"t":"q","sec":"اسم المحطة","i":"أيقونة","q":"سؤال مفتوح يفكر فيه الطلاب","a":"الإجابة في جملة أو جملتين"} ضع 2 أو 3 منها بين مشاهد الشرح.',
+  'قواعد svg (لمشاهد explain، وفي أغلبها رسم):',
+  '- <svg viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg"> فقط، رسم مسطح واضح بخطوط عريضة (stroke-width 3 إلى 6) وألوان من اللوحة، يشرح الفكرة نفسها (جهاز، جسم، عملية، تجربة، مقارنة) لا زخرفة.',
+  '- قسّمه إلى 3 إلى 6 مجموعات <g> مباشرة تحت svg بترتيب الشرح: التطبيق يُظهرها واحدة بعد أخرى فيصير الرسم متحركًا، والمسارات المرسومة بلا تعبئة (fill="none") تُرسم أمام الطلاب كأنها تُخط. ضع الأسهم والتسميات في المجموعة التي تشرحها.',
+  '- التسميات <text> عربية قصيرة بحجم font-size 24 على الأقل، direction="rtl"، بلون داكن، لا تتداخل مع الرسم. لا صور ولا روابط ولا script ولا style ولا foreignObject. الرسم كله أقل من 2500 حرف.',
+  'الأيقونات المتاحة فقط: ' + Object.keys(FILM_IC).join('، ') + '، leaf، planet، globe، flask، bolt، bulb، star، book، clock، warn، target، chart، people.',
+  'الألوان المتاحة فقط: ' + Object.keys(FILM_C).join('، ') + '. اجعل لكل مفهوم لونًا وأيقونة ثابتين في المقطع كله.',
+  'المحطات (sec): 3 إلى 5 أسماء قصيرة (كلمتان على الأكثر) تقسم الدرس، تتكرر في مشاهدها بالترتيب.',
+  'المحتوى: يغطي كل أفكار الدرس وأمثلته وأشكاله كما في الكتاب وبمصطلحاته، بدقة علمية تامة، وعربية فصيحة قصيرة الجمل، وأمثلة من حياة طالب سعودي. لا تذكر الذكاء الاصطناعي أو Claude. JSON صالح: علامات الاقتباس داخل النصوص تُكتب \\" ، ولا تعليقات.'
+].join('\n');
+function filmKey(b, l) { return 'v:' + lk(b, l); }
+function filmsOf(b, l) { var r = XC[filmKey(b, l)]; return r && Array.isArray(r.films) ? r.films : []; }
+function filmsSave(b, l, list) { var k = filmKey(b, l); if (!list.length) { delete XC[k]; dbDel('notes', k); return; } var rec = { k: k, films: list, t: Date.now() }; XC[k] = rec; dbPut('notes', rec); }
+function filmSvg(src) { // Claude's drawing, cleaned: shapes and text only
+  if (!src || typeof src !== 'string' || !/<svg[\s>]/i.test(src)) return '';
+  var d; try { d = new DOMParser().parseFromString(src.slice(src.search(/<svg[\s>]/i)), 'image/svg+xml'); } catch (e) { return ''; }
+  var svg = d.documentElement; if (!svg || svg.nodeName.toLowerCase() !== 'svg' || d.getElementsByTagName('parsererror').length) return '';
+  Array.prototype.forEach.call(svg.querySelectorAll('script,style,foreignObject,iframe,image,a,use[href^="http"]'), function (n) { n.remove(); });
+  Array.prototype.forEach.call(svg.querySelectorAll('*'), function (n) { Array.prototype.slice.call(n.attributes).forEach(function (a) { if (/^on/i.test(a.name) || (/href$/i.test(a.name) && !/^#/.test(a.value))) n.removeAttribute(a.name); }); });
+  Array.prototype.slice.call(svg.attributes).forEach(function (a) { if (/^on/i.test(a.name)) svg.removeAttribute(a.name); });
+  if (!svg.getAttribute('viewBox')) svg.setAttribute('viewBox', '0 0 800 500');
+  svg.removeAttribute('width'); svg.removeAttribute('height');
+  return new XMLSerializer().serializeToString(svg).slice(0, 12000);
+}
+function filmClean(o) { // what Claude sent, made safe and complete enough to play
+  function s(v, n) { return String(v == null ? '' : v).replace(/<[^>]*>/g, '').trim().slice(0, n || 200); }
+  function ic(v) { v = s(v, 20); return FILM_IC[v] || ICONS[v] ? v : 'spark'; }
+  function col(v) { v = s(v, 10); return FILM_C[v] ? v : 'blue'; }
+  var f = { title: s(o.title, 80), sub: s(o.sub, 140), icons: (Array.isArray(o.icons) ? o.icons : []).slice(0, 6).map(ic), hook: [], poll: null, scenes: [], sum: [] };
+  (Array.isArray(o.hook) ? o.hook : []).slice(0, 4).forEach(function (h) { if (h && h.q) f.hook.push({ i: ic(h.i), q: s(h.q, 140) }); });
+  if (o.poll && o.poll.q && Array.isArray(o.poll.o) && o.poll.o.length >= 2) f.poll = { q: s(o.poll.q, 160), o: o.poll.o.slice(0, 4).map(function (x) { return s(x, 60); }), a: Math.max(0, Math.min(3, +o.poll.a || 0)), e: s(o.poll.e, 260) };
+  (Array.isArray(o.scenes) ? o.scenes : []).slice(0, 16).forEach(function (c) {
+    if (!c || !c.t) return; var sec = s(c.sec, 24);
+    if (c.t === 'cards' && Array.isArray(c.items)) f.scenes.push({ t: 'cards', sec: sec, h: s(c.h, 80), items: c.items.slice(0, 6).filter(Boolean).map(function (x) { return { i: ic(x.i), l: s(x.l, 30), d: s(x.d, 110), c: col(x.c) }; }) });
+    else if (c.t === 'explain') f.scenes.push({ t: 'explain', sec: sec, h: s(c.h, 80), pts: (Array.isArray(c.pts) ? c.pts : []).slice(0, 4).map(function (x) { return s(x, 130); }).filter(Boolean), flow: (Array.isArray(c.flow) ? c.flow : []).slice(0, 4).filter(Boolean).map(function (x) { return { i: ic(x.i), l: s(x.l, 30), c: col(x.c) }; }), svg: filmSvg(c.svg), note: s(c.note, 200) });
+    else if (c.t === 'q' && c.q) f.scenes.push({ t: 'q', sec: sec, i: ic(c.i), q: s(c.q, 200), a: s(c.a, 300) });
+  });
+  (Array.isArray(o.sum) ? o.sum : []).slice(0, 6).forEach(function (x) { if (x && x.x) f.sum.push({ i: ic(x.i), x: s(x.x, 160) }); });
+  if (f.scenes.length < 3) throw aiErr('json');
+  return f;
+}
+
+/* ---------- the film as scenes, each with its own length and timed steps ---------- */
+function filmPlan(x, f) {
+  var a = aidOf(x.b, x.l), d = a ? a.d : { goals: [], vocab: [], quiz: { mcq: [], tf: [] } }, k = lk(x.b, x.l), sc = [];
+  sc.push({ t: 'title' });
+  if (f.hook.length) sc.push({ t: 'hook' });
+  if (f.poll) sc.push({ t: 'poll' });
+  if (d.goals.length || d.vocab.length) sc.push({ t: 'goals' });
+  var mid = Math.ceil(f.scenes.length / 2);
+  f.scenes.forEach(function (s, i) { sc.push(s); if (f.poll && i === mid - 1) sc.push({ t: 'reveal', sec: s.sec }); });
+  var qs = qLive(k, d.quiz.mcq).slice(0, 3).map(function (q) { return { t: 'mcq', q: q }; }).concat(qLive(k, d.quiz.tf).slice(0, 2).map(function (q) { return { t: 'tf', q: q }; }));
+  qs.forEach(function (q, i) { q.n = i + 1; q.of = qs.length; sc.push(q); });
+  if (f.sum.length) sc.push({ t: 'sum' });
+  sc.push({ t: 'end' });
+  var secs = []; sc.forEach(function (s) { if (s.sec && secs.indexOf(s.sec) < 0) secs.push(s.sec); });
+  sc.forEach(function (s) { if (/^(mcq|tf|sum|end)$/.test(s.t)) s.sec = 'مراجعة'; });
+  if (sc.some(function (s) { return s.sec === 'مراجعة'; })) secs.push('مراجعة');
+  return { sc: sc, secs: secs, d: d };
+}
+function filmDur(s, f, P) {
+  var CD = 12;
+  switch (s.t) {
+    case 'title': return 7;
+    case 'hook': return 3 + 3.5 * f.hook.length;
+    case 'poll': return 4 + CD + 2;
+    case 'goals': return Math.min(22, 4 + 2.2 * P.d.goals.length + 1.4 * P.d.vocab.length);
+    case 'cards': return 4 + 3 * s.items.length;
+    case 'explain': return Math.min(34, 5 + 3.2 * s.pts.length + 1.6 * s.flow.length + (s.svg ? 6 : 0) + (s.note ? 3 : 0));
+    case 'q': return 5 + CD + 8;
+    case 'reveal': return 12;
+    case 'mcq': case 'tf': return 5 + CD + 8;
+    case 'sum': return 4 + 2.4 * f.sum.length;
+    default: return 8;
+  }
+}
+var FP = null; // the film playing: {x, f, P, i, el (seconds into the scene), playing, muted}
+function filmChrome(f, P, s) {
+  var cur = P.secs.indexOf(s.sec);
+  return '<div class="fp-top"><span class="fp-brand">' + esc(f.title) + filmIc('bolt') + '</span>' + (s.t === 'title' || s.t === 'end' ? '' : '<span class="fp-secs">' + P.secs.map(function (n, i) { return '<button type="button" class="fp-sec' + (i === cur ? ' on' : i < cur ? ' done' : '') + '" data-act="fp-sec" data-v="' + i + '">' + (i < cur ? '✓ ' : '') + esc(n) + '</button>'; }).join('') + '</span>') + '</div>';
+}
+function filmH(t) { return '<h2 class="fp-h" data-at="0.3">' + esc(t) + '</h2>'; }
+function filmSvgSteps(svg, from, span) { // its groups appear one after another; strokes are drawn
+  if (!svg) return '';
+  var box = document.createElement('div'); box.innerHTML = svg; var el = box.firstElementChild; if (!el) return '';
+  var gs = Array.prototype.filter.call(el.children, function (n) { return !/^(defs|title|desc)$/i.test(n.nodeName); }), step = gs.length > 1 ? span / (gs.length - 1) : 0;
+  gs.forEach(function (g, k) { g.setAttribute('class', ((g.getAttribute('class') || '') + ' fp-g').trim()); g.setAttribute('data-at', (from + k * step).toFixed(1)); });
+  Array.prototype.forEach.call(el.querySelectorAll('path,line,polyline'), function (p) { var fl = p.getAttribute('fill'); if ((fl === 'none' || p.nodeName !== 'path') && p.getAttribute('stroke')) { p.setAttribute('pathLength', '1'); p.setAttribute('class', ((p.getAttribute('class') || '') + ' fp-draw').trim()); } });
+  return box.innerHTML;
+}
+function filmScene(s, f, P, dur) {
+  var CD = 12, h = '', x = FP.x, d = P.d;
+  function at(t) { return ' data-at="' + t.toFixed(1) + '"'; }
+  function cd(from) { return '<div class="fp-cd" data-from="' + from + '" data-dur="' + CD + '"' + at(from) + '><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="fp-cd-bg"/><circle cx="60" cy="60" r="52" class="fp-cd-ring" pathLength="1"/></svg><b>' + CD + '</b></div>'; }
+  switch (s.t) {
+    case 'title':
+      h = '<div class="fp-title">' + f.icons.map(function (n, k) { var ang = k / Math.max(1, f.icons.length) * Math.PI * 2 - 1.2, cols = ['red', 'purple', 'blue', 'orange', 'yellow', 'teal']; return '<span class="fp-orb" style="--x:' + Math.round(50 + 40 * Math.cos(ang)) + '%;--y:' + Math.round(50 + 38 * Math.sin(ang)) + '%;--c:' + FILM_C[cols[k % 6]] + '"' + at(0.4 + k * 0.25) + '>' + filmIc(n) + '</span>'; }).join('') +
+        '<div class="fp-tc"><span class="fp-pill"' + at(0.3) + '>' + filmIc('book') + 'العلوم · ' + esc(x.l.title.replace(/^.*?:\s*/, '') === x.l.title ? x.l.unit || x.b.title : x.l.title.split(':')[0]) + '</span><h1' + at(0.6) + '>' + esc(f.title) + '</h1>' + (f.sub ? '<p class="fp-sub"' + at(1.2) + '>' + esc(f.sub) + '</p>' : '') + '<p class="fp-by"' + at(1.8) + '>إعداد المعلم: <b>' + esc(wsTeacher()) + '</b></p></div></div>';
+      break;
+    case 'hook':
+      h = filmH('قبل أن نبدأ… فكّر') + '<div class="fp-hook">' + f.hook.map(function (q, k) { return '<div class="fp-card fp-hq"' + at(1.5 + k * 3.5) + '><span class="fp-ic" style="--c:' + FILM_C[['orange', 'blue', 'green', 'purple'][k % 4]] + '">' + filmIc(q.i) + '</span><p>' + esc(q.q) + '</p></div>'; }).join('') + '</div>';
+      break;
+    case 'poll':
+      h = '<div class="fp-mid"><span class="fp-tag"' + at(0.3) + '>' + filmIc('q') + 'صوّت</span><div class="fp-card fp-bigq"' + at(0.8) + '><p>' + esc(f.poll.q) + '</p></div><div class="fp-opts">' + f.poll.o.map(function (o, k) { return '<div class="fp-opt"' + at(1.6 + k * 0.5) + '><b>' + LET[k] + '</b>' + esc(o) + '</div>'; }).join('') + '</div>' + cd(4) + '<p class="fp-keep"' + at(4 + CD) + '>احتفظ بإجابتك… سنكشفها في منتصف الدرس!</p></div>';
+      break;
+    case 'goals':
+      h = filmH('في هذا الدرس') + '<div class="fp-goals"><div class="fp-gl"><h3' + at(0.8) + '>' + filmIc('target') + 'الأهداف</h3>' + d.goals.slice(0, 4).map(function (g, k) { return '<div class="fp-card fp-goal"' + at(1.6 + k * 2.2) + '><b style="--c:' + FILM_C[['blue', 'orange', 'red', 'green'][k % 4]] + '">' + (k + 1) + '</b><span>' + fx(g) + '</span></div>'; }).join('') + '</div>' +
+        (d.vocab.length ? '<div class="fp-card fp-vocab"' + at(1.6 + d.goals.length * 2.2) + '><h3>' + filmIc('book') + 'المفردات الجديدة</h3>' + d.vocab.slice(0, 5).map(function (v) { return '<span class="fp-chip">' + filmIc('spark') + esc(plain(v.t)) + '</span>'; }).join('') + '</div>' : '') + '</div>';
+      break;
+    case 'cards':
+      h = filmH(s.h) + '<div class="fp-cards n' + s.items.length + '">' + s.items.map(function (it, k) { return '<div class="fp-card fp-ci" style="--c:' + filmCol(it.c) + '"' + at(1.4 + k * 3) + '><span class="fp-ic">' + filmIc(it.i) + '</span><b>' + esc(it.l) + '</b><p>' + esc(it.d) + '</p></div>'; }).join('') + '</div>';
+      break;
+    case 'explain':
+      var t = 1.2, pts = s.pts.map(function (p, k) { var r = '<div class="fp-card fp-pt"' + at(t) + '><b>' + (k + 1) + '</b><span>' + esc(p) + '</span></div>'; t += 3.2; return r; }).join('');
+      var flow = s.flow.length ? '<div class="fp-flow">' + s.flow.map(function (n, k) { var r = (k ? '<i class="fp-arr"' + at(t - 0.3) + '>←</i>' : '') + '<span class="fp-fl" style="--c:' + filmCol(n.c) + '"' + at(t) + '>' + filmIc(n.i) + esc(n.l) + '</span>'; t += 1.6; return r; }).join('') + '</div>' : '';
+      var note = s.note ? '<div class="fp-note"' + at(Math.min(dur - 3, t + 0.5)) + '>' + filmIc('bulb') + esc(s.note) + '</div>' : '';
+      h = filmH(s.h) + '<div class="fp-ex' + (s.svg ? '' : ' nosvg') + '"><div class="fp-exl">' + pts + flow + note + '</div>' + (s.svg ? '<div class="fp-art">' + filmSvgSteps(s.svg, 1, Math.max(4, dur * 0.55)) + '</div>' : '') + '</div>';
+      break;
+    case 'q':
+      h = '<div class="fp-mid"><span class="fp-tag"' + at(0.3) + '>' + filmIc('q') + 'سؤال</span><div class="fp-card fp-bigq fp-wi"' + at(0.8) + '><span class="fp-ic big" style="--c:' + FILM_C.blue + '">' + filmIc(s.i) + '</span><p>' + esc(s.q) + '</p></div>' + cd(4) + '<div class="fp-card fp-ans"' + at(4 + CD) + '><small>' + filmIc('check') + 'الإجابة</small><p>' + esc(s.a) + '</p></div></div>';
+      break;
+    case 'reveal':
+      h = '<div class="fp-mid"><span class="fp-tag"' + at(0.3) + '>' + filmIc('star') + 'تذكرون سؤال التصويت؟</span><div class="fp-card fp-bigq"' + at(0.8) + '><p>' + esc(f.poll.q) + '</p></div><div class="fp-opts">' + f.poll.o.map(function (o, k) { return '<div class="fp-opt' + (k === f.poll.a ? ' right' : ' dim') + '"' + at(2.5) + '><b>' + LET[k] + '</b>' + esc(o) + '</div>'; }).join('') + '</div><div class="fp-card fp-ans"' + at(4) + ' data-snd="chime"><small>' + filmIc('check') + 'الإجابة</small><p>' + esc(f.poll.e) + '</p></div></div>';
+      break;
+    case 'mcq': case 'tf':
+      var q = s.q, mc = s.t === 'mcq', opts = mc ? q.o : ['صح', 'خطأ'], right = mc ? q.a : (q.a ? 0 : 1);
+      h = '<div class="fp-mid"><span class="fp-tag"' + at(0.3) + '>' + filmIc('check') + 'اختبر نفسك ' + s.n + ' / ' + s.of + '</span><div class="fp-card fp-bigq"' + at(0.8) + '><p>' + fx(q.q) + '</p></div><div class="fp-opts' + (mc ? '' : ' tf') + '">' + opts.map(function (o, k) { return '<div class="fp-opt" data-right="' + (k === right ? 1 : 0) + '"' + at(1.6 + k * 0.4) + '><b>' + (mc ? LET[k] : k ? '✗' : '✓') + '</b>' + (mc ? fx(o) : o) + '</div>'; }).join('') + '</div>' + cd(4) +
+        (q.e ? '<div class="fp-card fp-ans"' + at(4 + CD) + '><small>' + filmIc('check') + 'الإجابة: ' + (mc ? LET[right] : opts[right]) + '</small><p>' + fx(q.e) + '</p></div>' : '') + '</div>';
+      break;
+    case 'sum':
+      h = filmH('الخلاصة') + '<div class="fp-sum">' + f.sum.map(function (it, k) { return '<div class="fp-card fp-si"' + at(1.2 + k * 2.4) + '><span class="fp-ic" style="--c:' + FILM_C[['blue', 'green', 'orange', 'purple', 'red', 'teal'][k % 6]] + '">' + filmIc(it.i) + '</span><p>' + esc(it.x) + '</p></div>'; }).join('') + '</div>';
+      break;
+    default:
+      h = '<div class="fp-title"><div class="fp-tc"><span class="fp-pill"' + at(0.3) + '>' + filmIc('star') + 'أحسنتم</span><h1' + at(0.6) + '>' + esc(f.title) + '</h1><p class="fp-sub"' + at(1.2) + '>راجع الدرس في كتابك، وأجب عن أسئلة التقويم.</p><p class="fp-by"' + at(1.8) + '>إعداد المعلم: <b>' + esc(wsTeacher()) + '</b></p></div></div>';
+  }
+  return filmChrome(f, P, s) + '<div class="fp-body t-' + s.t + '">' + h + '</div>';
+}
+
+/* ---------- the player ---------- */
+var FP_AC = null;
+function fpSnd(kind) {
+  if (!FP || FP.muted) return;
+  try {
+    var C = window.AudioContext || window.webkitAudioContext; if (!C) return; if (!FP_AC) FP_AC = new C(); var ac = FP_AC; if (ac.state === 'suspended') ac.resume();
+    var t = ac.currentTime, g = ac.createGain(); g.connect(ac.destination);
+    if (kind === 'whoosh') { var n = ac.createBufferSource(), b = ac.createBuffer(1, ac.sampleRate * 0.35, ac.sampleRate), ch = b.getChannelData(0); for (var i = 0; i < ch.length; i++) ch[i] = (Math.random() * 2 - 1) * Math.sin(Math.PI * i / ch.length); n.buffer = b; var f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.setValueAtTime(400, t); f.frequency.linearRampToValueAtTime(2400, t + 0.3); n.connect(f); f.connect(g); g.gain.value = 0.16; n.start(t); return; }
+    var o = ac.createOscillator(); o.connect(g);
+    if (kind === 'pop') { o.type = 'sine'; o.frequency.setValueAtTime(620, t); o.frequency.exponentialRampToValueAtTime(940, t + 0.06); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.12, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12); o.start(t); o.stop(t + 0.13); }
+    else if (kind === 'tick') { o.type = 'square'; o.frequency.value = 1800; g.gain.setValueAtTime(0.05, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.03); o.start(t); o.stop(t + 0.04); }
+    else if (kind === 'chime') { [880, 1318.5].forEach(function (fq, k) { var o2 = ac.createOscillator(), g2 = ac.createGain(); o2.type = 'sine'; o2.frequency.value = fq; o2.connect(g2); g2.connect(ac.destination); g2.gain.setValueAtTime(0.0001, t + k * 0.12); g2.gain.exponentialRampToValueAtTime(0.18, t + k * 0.12 + 0.02); g2.gain.exponentialRampToValueAtTime(0.0001, t + k * 0.12 + 0.8); o2.start(t + k * 0.12); o2.stop(t + k * 0.12 + 0.85); }); }
+  } catch (e) {}
+}
+function fpFit() { if (!FP) return; var st = FP.ov.querySelector('.fp-stage'); if (!st) return; var k = Math.min(window.innerWidth / 1600, window.innerHeight / 900); st.style.transform = 'translate(-50%,-50%) scale(' + k.toFixed(4) + ')'; }
+function fpShow(i) {
+  var F = FP; if (!F) return; i = clamp(i, 0, F.P.sc.length - 1); F.i = i; F.el = 0; F.last = performance.now();
+  var s = F.P.sc[i]; F.dur = filmDur(s, F.f, F.P);
+  var st = F.ov.querySelector('.fp-stage'); st.innerHTML = filmScene(s, F.f, F.P, F.dur);
+  F.steps = Array.prototype.map.call(st.querySelectorAll('[data-at]'), function (n) { return { n: n, at: +n.getAttribute('data-at'), on: false }; });
+  F.cds = Array.prototype.map.call(st.querySelectorAll('.fp-cd'), function (n) { return { n: n, from: +n.getAttribute('data-from'), dur: +n.getAttribute('data-dur'), sec: -1 }; });
+  if (i) fpSnd('whoosh');
+  var bar = F.ov.querySelector('.fp-prog i'); if (bar) bar.style.width = ((i + 1) / F.P.sc.length * 100) + '%';
+  fpTick(true);
+}
+function fpTick(first) {
+  var F = FP; if (!F) return; var now = performance.now();
+  if (F.playing && !first) F.el += (now - F.last) / 1000; F.last = now;
+  F.steps.forEach(function (s) { if (!s.on && F.el >= s.at) { s.on = true; s.n.classList.add('on'); if (s.n.getAttribute('data-snd') === 'chime') fpSnd('chime'); else if (!first && s.at > 0.5 && /fp-card|fp-opt|fp-fl|fp-orb|fp-ci/.test(s.n.className)) fpSnd('pop'); if (s.n.classList.contains('fp-ans')) { fpSnd('chime'); Array.prototype.forEach.call(F.ov.querySelectorAll('.fp-opt[data-right]'), function (o) { o.classList.add(o.getAttribute('data-right') === '1' ? 'right' : 'dim'); }); } } });
+  F.cds.forEach(function (c) {
+    var left = c.dur - (F.el - c.from); if (F.el < c.from) return;
+    var sec = Math.max(0, Math.ceil(left)); if (sec !== c.sec) { c.sec = sec; c.n.querySelector('b').textContent = sec; if (sec > 0 && !first) fpSnd('tick'); c.n.classList.toggle('late', sec <= 3); }
+    c.n.querySelector('.fp-cd-ring').style.strokeDashoffset = (1 - Math.max(0, left) / c.dur).toFixed(3); c.n.classList.toggle('over', left <= 0);
+  });
+  if (F.playing && F.el >= F.dur) { if (F.i < F.P.sc.length - 1) fpShow(F.i + 1); else { F.playing = false; fpBar(); } }
+}
+function fpBar() { var F = FP; if (!F) return; var b = F.ov.querySelector('[data-act="fp-play"]'); if (b) b.innerHTML = F.playing ? '❚❚' : '▶'; var m = F.ov.querySelector('[data-act="fp-mute"]'); if (m) m.textContent = F.muted ? '🔇' : '🔊'; }
+function fpOpen(x, film) {
+  fpClose();
+  var P = filmPlan(x, film.d), ov = document.createElement('div'); ov.className = 'fp'; ov.id = 'fp';
+  ov.innerHTML = '<div class="fp-stage"></div><div class="fp-ctl"><button type="button" data-act="fp-x" aria-label="إغلاق">✕</button><button type="button" data-act="fp-prev" aria-label="السابق">→</button><button type="button" data-act="fp-play" aria-label="تشغيل أو إيقاف">❚❚</button><button type="button" data-act="fp-next" aria-label="التالي">←</button><span class="fp-prog"><i></i></span><button type="button" data-act="fp-mute" aria-label="الصوت">🔊</button></div>';
+  document.body.appendChild(ov); document.documentElement.classList.add('lab-on'); wake(true);
+  FP = { x: x, f: film.d, P: P, i: 0, el: 0, playing: true, muted: !!P_FILM_MUTE(), ov: ov, timer: setInterval(function () { fpTick(); }, 100), hide: null };
+  fpFit(); fpShow(0); fpBar(); fpCtl();
+  ov.addEventListener('pointerdown', function (e) { if (!e.target.closest('.fp-ctl,.fp-sec')) fpCtl(); });
+}
+function P_FILM_MUTE() { return P.filmMute; }
+function fpCtl() { var F = FP; if (!F) return; var c = F.ov.querySelector('.fp-ctl'); c.classList.add('on'); clearTimeout(F.hide); F.hide = setTimeout(function () { if (FP && FP.playing) c.classList.remove('on'); }, 3500); }
+function fpClose() { if (!FP) return; clearInterval(FP.timer); clearTimeout(FP.hide); FP.ov.remove(); FP = null; document.documentElement.classList.remove('lab-on'); wake(false); }
+ACT['fp-x'] = fpClose;
+ACT['fp-play'] = function () { if (!FP) return; FP.playing = !FP.playing; FP.last = performance.now(); if (FP.playing && FP.el >= FP.dur) fpShow(FP.i + 1); fpBar(); fpCtl(); };
+ACT['fp-next'] = function () { if (FP) { fpShow(FP.i + 1); fpCtl(); } };
+ACT['fp-prev'] = function () { if (FP) { fpShow(FP.el > 2 ? FP.i : FP.i - 1); fpCtl(); } };
+ACT['fp-mute'] = function () { if (!FP) return; FP.muted = !FP.muted; P.filmMute = FP.muted; savePref(); fpBar(); fpCtl(); };
+ACT['fp-sec'] = function (el) { if (!FP) return; var n = FP.P.secs[+el.getAttribute('data-v')], i = -1; FP.P.sc.forEach(function (s, k) { if (i < 0 && s.sec === n) i = k; }); if (i >= 0) fpShow(i); fpCtl(); };
+document.addEventListener('keydown', function (e) {
+  if (!FP) return;
+  if (e.key === 'Escape') fpClose(); else if (e.key === ' ') { e.preventDefault(); ACT['fp-play'](); } else if (e.key === 'ArrowLeft') ACT['fp-next'](); else if (e.key === 'ArrowRight') ACT['fp-prev']();
+});
+window.addEventListener('resize', fpFit);
+
+/* ---------- the lesson's tab ---------- */
+function filmLen(x, film) { var P = filmPlan(x, film.d), t = 0; P.sc.forEach(function (s) { t += filmDur(s, film.d, P); }); return { n: P.sc.length, m: Math.round(t / 60) }; }
+L_TAB.film = function (a, b, l) {
+  var list = filmsOf(b, l), k = lk(b, l), ai = !!P.ai.key, x = { b: b, l: l };
+  var h = '<p class="muted small" style="margin-bottom:12px">مقطع متحرك يشرح الدرس مشهدًا بعد مشهد: أسئلة من الحياة، والأهداف، والشرح بالرسوم، وأسئلة بعدّ تنازلي، والخلاصة، مع مؤثرات صوتية خفيفة. يعمل وحده على جهاز العرض، وتوقفه أو تقفز إلى أي محطة. لتحويله إلى فيديو: سجّل الشاشة وهو يعمل.</p>';
+  h += list.map(function (fm) {
+    var q = ' data-k="' + esc(k) + '" data-id="' + fm.id + '"', L = filmLen(x, fm);
+    return '<article class="xcard lab-card hue-blue"><header class="x-head"><span class="i-num">' + rIcon('present') + '</span><p class="x-ind">' + esc(fm.title) + '</p></header>' +
+      '<p class="small muted" style="margin:0 0 8px">' + cnt(L.n, ['مشهد واحد', 'مشهدان', 'مشاهد', 'مشهدًا']) + ' · نحو ' + cnt(Math.max(1, L.m), ['دقيقة واحدة', 'دقيقتان', 'دقائق', 'دقيقة']) + '</p>' +
+      '<div class="actions" style="margin-top:0"><button class="btn sm" data-act="film-play"' + q + '>▶ شغّل المقطع</button>' +
+      '<button class="btn ghost sm" data-act="film-edit"' + q + '>' + svgI('spark') + 'عدّله</button>' +
+      (fm.prev ? '<button class="btn ghost sm" data-act="film-undo"' + q + '>ارجع للنسخة السابقة</button>' : '') +
+      '<button class="btn ghost sm danger" data-act="film-del"' + q + '>احذف</button></div></article>';
+  }).join('');
+  h += '<details class="panel gen ai-fold" data-fold="film"' + (foldOpen('film', !list.length) ? ' open' : '') + '><summary class="hh">' + ico('spark', 'blue') + (list.length ? 'صمّم مقطعًا آخر' : 'صمّم مقطع الدرس') + '</summary>' +
+    (ai ? '<label class="field"><span>ملاحظاتك (اختياري)</span><textarea id="film-idea" rows="2" placeholder="مثال: ركّز على محطة توليد الكهرباء، وأمثلة من المطبخ"></textarea></label>' +
+      '<div class="actions"><button class="btn" data-act="film-gen" data-k="' + esc(k) + '">' + svgI('spark') + 'صمّم المقطع</button></div><p class="small muted">يستغرق دقيقة إلى ثلاث. شاهده قبل الحصة.</p>' +
+      '<div class="ws-bulk"><b>مقطع لكل درس دفعة واحدة</b><p class="small muted">للدروس التي جُهّز مساعدها وليس لها مقطع.</p><div class="actions"><button class="btn ghost sm" data-act="film-bulk" data-k="' + esc(k) + '" data-s="unit">دروس هذه الوحدة</button><button class="btn ghost sm" data-act="film-bulk" data-k="' + esc(k) + '" data-s="all">كل دروس الكتاب</button></div></div>'
+      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
+  return h;
+};
+function filmFind(el) { var x = lessonByKey(el.getAttribute('data-k')); if (!x) return null; var list = filmsOf(x.b, x.l), fm = list.filter(function (y) { return y.id === el.getAttribute('data-id'); })[0]; return fm ? { x: x, list: list, fm: fm } : null; }
+ACT['film-play'] = function (el) { var f = filmFind(el); if (f) fpOpen(f.x, f.fm); };
+ACT['film-del'] = function (el) {
+  if (!el.classList.contains('arm')) { el.classList.add('arm'); el.textContent = 'اضغط مرة ثانية للحذف'; setTimeout(function () { el.classList.remove('arm'); el.textContent = 'احذف'; }, 3000); return; }
+  var f = filmFind(el); if (!f) return; filmsSave(f.x.b, f.x.l, f.list.filter(function (y) { return y !== f.fm; })); render(true); toast('حُذف المقطع');
+};
+ACT['film-undo'] = function (el) { var f = filmFind(el); if (!f || !f.fm.prev) return; var cur = { d: f.fm.d, title: f.fm.title, at: f.fm.at }; f.fm.d = f.fm.prev.d; f.fm.title = f.fm.prev.title; f.fm.at = f.fm.prev.at; f.fm.prev = cur; filmsSave(f.x.b, f.x.l, f.list); render(true); toast('رجعت للنسخة السابقة (اضغط مرة أخرى للتبديل)'); };
+var FILMGEN = null;
+function filmWrite(x, extra, ctl, onText) {
+  var ask = labCtx(x.b, x.l) + (extra ? '\n\n' + extra : '') + labNotYet(x, '') + '\n\nاكتب JSON المقطع الآن.';
+  return claude(FILM_SYS, [{ type: 'text', text: ask }], 24000, onText, ctl).then(function (res) {
+    var o = parseJSON(res); if (!o || !o.scenes) throw aiErr(res.stop === 'max_tokens' ? 'cut' : 'json');
+    return filmClean(o);
+  });
+}
+function filmRun(jobs, title) { // one or many films, three at a time
+  FILMGEN = { stopped: false, ctls: [] }; wake(true);
+  var total = jobs.length, done = [], failed = [], next = 0, live = {}, prog = progModal(title, 'film-stop');
+  function show() { var n = 0; Object.keys(live).forEach(function (k) { n += live[k]; }); prog(total > 1 ? 'جاهز ' + done.length + ' من ' + total + (Object.keys(live).length ? ' · يكتب ' + Object.keys(live).length + ' الآن (' + num(n) + ' حرفًا)' : '') : 'يكتب Claude المقطع… ' + num(n) + ' حرفًا', total > 1 ? (done.length + failed.length) / total * 100 : null); }
+  function worker() {
+    if (FILMGEN.stopped || next >= total) return Promise.resolve();
+    var j = jobs[next], id = next++, ctl = {}; FILMGEN.ctls.push(ctl); live[id] = 0; show();
+    return filmWrite(j.x, j.extra, ctl, function (c) { live[id] = c; show(); }).then(function (d) {
+      if (j.fm) { j.fm.prev = { d: j.fm.d, title: j.fm.title, at: j.fm.at }; j.fm.d = d; j.fm.title = d.title || j.fm.title; j.fm.at = Date.now(); filmsSave(j.x.b, j.x.l, filmsOf(j.x.b, j.x.l)); }
+      else filmsSave(j.x.b, j.x.l, filmsOf(j.x.b, j.x.l).concat([{ id: 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), title: d.title || j.x.l.title, d: d, at: Date.now() }]));
+      done.push(j);
+    }, function (e) { if (e.code !== 'stop') { failed.push({ j: j, e: e }); try { console.warn(e); } catch (x) {} } }).then(function () { delete live[id]; show(); return worker(); });
+  }
+  show();
+  return Promise.all([worker(), worker(), worker()]).then(function () {
+    wake(false); var md = document.getElementById('modal'); md.__busy = false;
+    var stopped = FILMGEN.stopped && done.length + failed.length < total;
+    if (total === 1 && done.length) { closeModal(); route.tab = 'film'; render(true); toast('جاهز. شاهده قبل الحصة', 3500); return; }
+    doneModal('<h2>' + (stopped ? 'أُوقف' : done.length ? 'جاهز ' + cnt(done.length, ['مقطع واحد', 'مقطعان', 'مقاطع', 'مقطعًا']) : 'لم يكتمل المقطع') + '</h2>' +
+      (done.length && total > 1 ? '<p class="muted">تجدها في تبويب «مقطع الدرس» لكل درس. شاهد كل مقطع قبل الحصة.</p>' : '') +
+      (failed.length ? '<p class="small bad">' + (total > 1 ? 'تعذّر ' + cnt(failed.length, ['مقطع واحد', 'مقطعان', 'مقاطع', 'مقطعًا']) + ': ' : '') + esc(failed[0].e.code === 'json' ? 'وصل رد غير مكتمل؛ أعد المحاولة.' : aiMsg(failed[0].e)) + '</p>' : ''));
+    if (done.length) render(true);
+  });
+}
+ACT['film-stop'] = function () { if (FILMGEN) { FILMGEN.stopped = true; (FILMGEN.ctls || []).forEach(function (c) { if (c.abort) c.abort(); }); } };
+ACT['film-gen'] = function (el) {
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  var t = document.getElementById('film-idea'), idea = t ? t.value.trim() : '', have = filmsOf(x.b, x.l).map(function (y) { return y.title; });
+  filmRun([{ x: x, extra: (idea ? 'ملاحظات المعلم: ' + idea : '') + (have.length ? '\nمقاطع موجودة لهذا الدرس (اجعل هذا مختلفًا في الأمثلة والرسوم): ' + have.join('؛ ') : '') }], 'Claude يصمّم مقطع الدرس');
+};
+ACT['film-edit'] = function (el) {
+  var f = filmFind(el); if (!f) return; if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  var fixes = ['رسم لا يوضح الفكرة', 'رسوم أكثر', 'أمثلة أكثر من الحياة', 'أسئلة أكثر بين الشرح', 'أبسط للطلاب', 'نص يتداخل مع الرسم'];
+  openModal(card('<h2>عدّل المقطع</h2><p class="small muted">صف ما تريد تغييره، ويعيد Claude كتابة المقطع. تبقى النسخة الحالية فتستطيع الرجوع إليها.</p>' +
+    '<div class="lab-ideas">' + fixes.map(function (t) { return '<button type="button" class="lab-idea lab-fix" data-act="lab-fix-pick" data-v="' + esc(t) + '"><span>' + esc(t) + '</span></button>'; }).join('') + '</div>' +
+    '<label class="field"><span>ملاحظاتك</span><textarea id="lab-note" rows="3" placeholder="مثال: رسم محطة التوليد غير واضح، وأريد مثالًا عن السيارة الكهربائية"></textarea></label>' +
+    '<div class="actions"><button class="btn" data-act="film-fix" data-k="' + esc(el.getAttribute('data-k')) + '" data-id="' + f.fm.id + '">' + svgI('spark') + 'عدّله</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
+};
+ACT['film-fix'] = function (el) {
+  var f = filmFind(el); if (!f) return; var t = document.getElementById('lab-note'), note = t ? t.value.trim() : '';
+  if (!note) { toast('اكتب ما تريد تغييره، أو اختر من الاقتراحات'); return; }
+  filmRun([{ x: f.x, fm: f.fm, extra: 'هذا JSON المقطع الحالي:\n' + JSON.stringify(f.fm.d) + '\n\nملاحظات المعلم بعد مشاهدته:\n' + note + '\n\nأعد JSON المقطع كاملًا بعد تنفيذ الملاحظات، مع الإبقاء على ما يعمل فيه.' }], 'Claude يعدّل المقطع');
+};
+var FILM_JOBS = null;
+ACT['film-bulk'] = function (el) {
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  var scope = el.getAttribute('data-s'), jobs = [];
+  x.b.lessons.forEach(function (l) { if (scope === 'unit' && (l.unit || '') !== (x.l.unit || '')) return; if (!aidOf(x.b, l) || filmsOf(x.b, l).length) return; jobs.push({ x: { b: x.b, l: l }, extra: '' }); });
+  if (!jobs.length) { toast('كل الدروس الجاهزة لها مقطع من قبل'); return; }
+  FILM_JOBS = jobs;
+  openModal(card('<h2>' + cnt(jobs.length, ['مقطع واحد', 'مقطعان', 'مقاطع', 'مقطعًا']) + '</h2><p class="muted">مقطع لكل درس، تُصمَّم 3 معًا، فتستغرق نحو ' + Math.max(2, Math.round(jobs.length / 3 * 2.5)) + ' دقيقة. أبقِ التطبيق مفتوحًا والآيباد يعمل؛ وتستطيع الإيقاف في أي وقت، وما اكتمل يبقى.</p>' +
+    '<div class="actions"><button class="btn" data-act="film-bulk-go">ابدأ</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
+};
+ACT['film-bulk-go'] = function () { var jobs = FILM_JOBS; FILM_JOBS = null; if (!jobs) return; closeModal(); filmRun(jobs, 'Claude يصمّم مقاطع الدروس'); };
 
 /* ---------- presenting a lesson to the class: one idea per screen ---------- */
 var PV = null;
@@ -3567,7 +3908,7 @@ function rekeyBook(oldId, nu) { // move everything of a book to the id the other
     });
   }
   var pre = oldId + ':', pk = function (key) { return key.indexOf(pre) === 0; }, mk = function (key) { return nu + key.slice(oldId.length); };
-  var npk = function (key) { return /^[bxpalnfgw]:/.test(key) && key.indexOf(pre, 2) === 2; }, nmk = function (key) { return key.slice(0, 2) + nu + key.slice(2 + oldId.length); };
+  var npk = function (key) { return /^[bxpalnfgwv]:/.test(key) && key.indexOf(pre, 2) === 2; }, nmk = function (key) { return key.slice(0, 2) + nu + key.slice(2 + oldId.length); };
   return Promise.all([
     dbGet('books', oldId).then(function (b) { if (!b) return; b.id = nu; return tx('books', 'readwrite', function (s) { s.put(b); s['delete'](oldId); }); }),
     dbGet('files', oldId).then(function (f) { if (!f) return; f.id = nu; return tx('files', 'readwrite', function (s) { s.put(f); s['delete'](oldId); }); }),
