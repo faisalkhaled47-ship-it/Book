@@ -1786,7 +1786,7 @@ var WS_SYS = [
 var WS_STYLES = ['مغامرة علمية', 'ملف محقق علمي', 'مجلة علمية', 'رحلة استكشاف', 'كلاسيكي ملون'];
 var WS_BASE = '.ws-root.ws-root{background:none!important;margin:0!important;padding:0!important;width:auto!important;min-height:0!important}.ws-root{direction:rtl;color:#1d2422;font-family:system-ui,"Geeza Pro","Noto Naskh Arabic",sans-serif;font-size:12pt;line-height:1.55}' +
   '.ws-root *,.ws-root *::before,.ws-root *::after{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
-  '.ws-root .page{width:210mm;min-height:297mm;padding:11mm;margin:0 auto 8mm;background:#fff;position:relative;overflow:hidden;break-after:page;page-break-after:always;box-shadow:0 2px 14px rgba(0,0,0,.14)}' +
+  '.ws-root .page{width:210mm;height:297mm;padding:11mm;margin:0 auto 8mm;background:#fff;position:relative;overflow:hidden;break-after:page;page-break-after:always;box-shadow:0 2px 14px rgba(0,0,0,.14)}' +
   '.ws-root .page:last-child{break-after:auto;page-break-after:auto}' +
   '.ws-root.student .ws-key{display:none!important}.ws-root.key .page:not(.ws-key){display:none!important}' +
   '@media print{.ws-root .page{margin:0;box-shadow:none;height:297mm}}';
@@ -1808,7 +1808,7 @@ function wsClean(html) { // from Claude's page: its styles and pages only, nothi
 }
 function wsDoc(w, mode, screen) { // the sheet as one page of its own (for the preview and the shared file)
   return '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:; font-src data:"><title>' + esc(w.title) + '</title>' +
-    '<style>@page{size:A4;margin:0}html,body{margin:0;background:' + (screen ? '#e9ecea' : '#fff') + '}body{padding:' + (screen ? '10px 0' : '0') + '}' + WS_BASE + (screen ? '@media screen and (max-width:860px){.ws-root{zoom:.9}}@media screen and (max-width:760px){.ws-root{zoom:.8}}@media screen and (max-width:660px){.ws-root{zoom:.7}}@media screen and (max-width:560px){.ws-root{zoom:.6}}@media screen and (max-width:470px){.ws-root{zoom:.5}}@media screen and (max-width:400px){.ws-root{zoom:.44}}' : '') + '</style><style>' + w.css + '</style></head><body><div class="ws-root ' + (mode || 'all') + '">' + w.html + '</div></body></html>';
+    '<style>@page{size:A4;margin:0}html,body{margin:0;background:' + (screen ? '#e9ecea' : '#fff') + '}body{padding:' + (screen ? '10px 0' : '0') + '}' + WS_BASE + '@media screen{.ws-root .page{height:297mm;margin-bottom:6mm}}' + (true ? '@media screen and (max-width:860px){.ws-root{zoom:.9}}@media screen and (max-width:760px){.ws-root{zoom:.8}}@media screen and (max-width:660px){.ws-root{zoom:.7}}@media screen and (max-width:560px){.ws-root{zoom:.6}}@media screen and (max-width:470px){.ws-root{zoom:.5}}@media screen and (max-width:400px){.ws-root{zoom:.44}}' : '') + '</style><style>' + w.css + '</style></head><body><div class="ws-root ' + (mode || 'all') + '">' + w.html + '</div></body></html>';
 }
 L_TAB.ws = function (a, b, l) {
   var list = wsOf(b, l), k = lk(b, l), ai = !!P.ai.key, z = a.quiz, nq = qLive(k, z.mcq).length + qLive(k, z.tf).length + qLive(k, z.short).length, open = route.ws;
@@ -1842,7 +1842,11 @@ L_TAB.ws = function (a, b, l) {
 };
 ACT['ws-style'] = function (el) { el.classList.toggle('on'); }; // several can be chosen: one sheet each
 ACT['ws-open'] = function (el) { var id = el.getAttribute('data-id'); route.ws = route.ws === id ? null : id; render(true); };
-function wsFind(el) { var x = lessonByKey(el.getAttribute('data-k')); if (!x) return null; var list = wsOf(x.b, x.l), w = list.filter(function (y) { return y.id === el.getAttribute('data-id'); })[0]; return w ? { x: x, list: list, w: w } : null; }
+function wsFind(el) {
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return null; var list = wsOf(x.b, x.l), w = list.filter(function (y) { return y.id === el.getAttribute('data-id'); })[0]; if (!w) return null;
+  if (!/class="ws-in"/.test(w.html)) { w.html = wsFit(w.css, w.html); wsSave(x.b, x.l, list); }
+  return { x: x, list: list, w: w };
+}
 function wsQuestions(x) { // the lesson's questions as the sheet must keep them, with their answers for the key
   var a = aidOf(x.b, x.l), k = lk(x.b, x.l), z = a.d.quiz, t = [];
   qLive(k, z.mcq).forEach(function (q, i) { t.push('اختيار من متعدد ' + (i + 1) + ': ' + plain(q.q) + '\n' + q.o.map(function (o, j) { return '  ' + LET[j] + ') ' + plain(o); }).join('\n') + '\n  الإجابة: ' + LET[q.a] + (q.e ? ' — ' + plain(q.e) : '')); });
@@ -1858,11 +1862,26 @@ function wsWrite(ask, prog) {
     return s.slice(i, j + 7);
   });
 }
+function wsFit(css, html) {
+  var host = document.createElement('div'); host.style.cssText = 'position:absolute;left:-12000px;top:0;width:230mm;visibility:hidden;pointer-events:none';
+  document.body.appendChild(host); var root = host.attachShadow ? host.attachShadow({ mode: 'open' }) : host;
+  root.innerHTML = '<style>' + WS_BASE + '</style><style>' + css + '</style><div class="ws-root all">' + html + '</div>';
+  try {
+    var pages = Array.prototype.slice.call(root.querySelectorAll('.page')), st = pages.filter(function (p) { return !p.classList.contains('ws-key'); });
+    st.slice(1).forEach(function (p) { while (p.firstChild) st[0].appendChild(p.firstChild); p.remove(); }); // one page for the student
+    Array.prototype.forEach.call(root.querySelectorAll('.page'), function (p) {
+      var inn = p.querySelector(':scope > .ws-in'); if (!inn) { inn = document.createElement('div'); inn.className = 'ws-in'; while (p.firstChild) inn.appendChild(p.firstChild); p.appendChild(inn); }
+      inn.style.zoom = ''; var mm = p.getBoundingClientRect().width / 210, room = (297 - 22) * mm - 4, h = inn.scrollHeight;
+      if (h > room) inn.style.zoom = Math.max(0.55, Math.floor(room / h * 97) / 100);
+    });
+    var div = root.querySelector('.ws-root'); return div.innerHTML;
+  } catch (e) { return html; } finally { host.remove(); }
+}
 function wsMake(raw, teacher) {
   var c = wsClean(raw), tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(raw);
   if (teacher && plain(c.html.replace(/<[^>]+>/g, ' ')).indexOf(teacher) < 0) // the teacher's name is always on the sheet
     c.html = c.html.replace(/<\/section>/i, '<p class="ws-by" style="position:absolute;bottom:6mm;left:11mm;right:11mm;text-align:center;font-size:10pt;color:#555">إعداد المعلم: ' + esc(teacher) + '</p></section>');
-  return { css: c.css, html: c.html, title: ((tm && tm[1]) || 'ورقة عمل').replace(/<[^>]+>/g, '').trim().slice(0, 90) };
+  return { css: c.css, html: wsFit(c.css, c.html), title: ((tm && tm[1]) || 'ورقة عمل').replace(/<[^>]+>/g, '').trim().slice(0, 90) };
 }
 function wsAsk(x, o) {
   return labCtx(x.b, x.l) + '\n\nأسئلة التقويم (اختر منها للورقة بنصها؛ والإجابات لنموذج الإجابة فقط):\n' + wsQuestions(x) +
