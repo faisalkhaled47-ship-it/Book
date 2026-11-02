@@ -377,3 +377,4 @@ details.ai-fold:not([open]){padding-top:14px;padding-bottom:14px}
 .q-skipped{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px dashed var(--rule);border-radius:12px;padding:8px 12px;margin:8px 0;color:var(--ink-3);background:transparent}
 .q-skipped span{overflow:hidden;text-overflow:ellipsis}
 .q-skipnote{margin:0 0 10px}
+html.kb nav.tabs{display:none!important}html.kb .rd-bar{display:none!important}

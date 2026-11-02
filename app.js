@@ -341,6 +341,12 @@ function wake(on) {
   vv.addEventListener('scroll', function () { clearTimeout(t); t = setTimeout(unzoom, 250); });
 })();
 
+(function () { // typing in a text field: the bottom bar steps aside, as in native apps where the keyboard covers it
+  function typing(el) { return !!el && (el.tagName === 'TEXTAREA' || el.isContentEditable || (el.tagName === 'INPUT' && !/^(button|submit|reset|checkbox|radio|range|color|file|image|hidden)$/i.test(el.type || ''))); }
+  document.addEventListener('focusin', function (e) { if (typing(e.target)) document.documentElement.classList.add('kb'); });
+  document.addEventListener('focusout', function () { setTimeout(function () { if (!typing(document.activeElement)) document.documentElement.classList.remove('kb'); }, 60); });
+})();
+
 /* ---------- the book reader: PDF pages with a writing layer ---------- */
 var PEN_C = ['#1B2621', '#C62828', '#1F5FB8', '#1E7B4F'], PEN_N = ['أسود', 'أحمر', 'أزرق', 'أخضر'];
 var HL_C = ['#FFD23F', '#6FDB98', '#86B6FF', '#FF9EC4'], HL_N = ['أصفر', 'أخضر', 'أزرق', 'وردي'];
