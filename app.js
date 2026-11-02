@@ -194,13 +194,14 @@ function saveBook(b) { b.t = Date.now(); return dbPut('books', b); }
    and how smoothly the screen kept up. It tells where a lag comes from on the teacher's own iPad. */
 var INKD = null;
 function inkdBegin(where) {
+  if (!P.inkdiag) return;
   var D = INKD = { w: where, t0: performance.now(), ev: 0, pe: 0, pts: 0, fr: 0, gapF: 0, gapE: 0, lastE: 0, lastF: 0, on: true };
   (function tick(t) { if (!D.on) return; if (D.lastF) D.gapF = Math.max(D.gapF, t - D.lastF); D.lastF = t; D.fr++; requestAnimationFrame(tick); })(performance.now());
 }
 function inkdEv(n) { var D = INKD; if (!D) return; var t = performance.now(); if (D.lastE) D.gapE = Math.max(D.gapE, t - D.lastE); D.lastE = t; D.ev++; if (n) D.pe += n; }
 function inkdPt() { if (INKD) INKD.pts++; }
 function inkdEnd() {
-  var D = INKD; if (!D) return; D.on = false; INKD = null; var s = (performance.now() - D.t0) / 1000; if (s < 0.25) return;
+  var D = INKD; if (!D) return; D.on = false; INKD = null; var s = (performance.now() - D.t0) / 1000; if (s < 0.25 || !P.inkdiag) return; // shown only when switched on (P.inkdiag), to look into a lag again
   var el = document.getElementById('ink-diag'); if (!el) { el = document.createElement('div'); el.id = 'ink-diag'; el.setAttribute('aria-hidden', 'true'); document.body.appendChild(el); }
   el.textContent = D.w + ' · ' + s.toFixed(1) + 'ث · نقاط ' + D.pts + ' · أحداث ' + Math.round(D.ev / s) + '/ث' + (D.pe ? ' · عيّنات القلم ' + Math.round(D.pe / s) + '/ث' : '') + ' · إطارات ' + Math.round(D.fr / s) + '/ث · أطول توقف ' + Math.round(Math.max(D.gapF, D.gapE)) + 'م/ث';
   el.hidden = false; clearTimeout(el.__t); el.__t = setTimeout(function () { el.hidden = true; }, 6000);
