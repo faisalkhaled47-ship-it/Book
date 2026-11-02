@@ -372,9 +372,13 @@ details.ai-fold:not([open]){padding-top:14px;padding-bottom:14px}
 .rd-pages.spread .pg-m{display:none}
 .pgr>.pg{left:var(--sx,0px)}
 .rd-pages.spread .pgr>.pg{left:0}
-.ink-live{position:fixed;left:0;top:0;pointer-events:none;z-index:6}
+
 .rb-w i{display:block;width:var(--d);height:var(--d);border-radius:50%;background:var(--c);margin:auto}
 .lab-types{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 10px}
 .lab-types .chip{appearance:none;border:1px solid var(--rule);background:var(--panel);color:var(--ink);border-radius:999px;padding:7px 12px;font:inherit;font-size:13.5px;cursor:pointer}
 .lab-types .chip.on{box-shadow:0 0 0 2px var(--accent);border-color:transparent}
 .lab-n select{font:inherit;font-size:16px;padding:8px 10px;border-radius:10px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);max-width:260px}
+.q-skip{appearance:none;border:1px solid var(--rule);background:var(--panel);color:var(--ink-3);border-radius:999px;font:inherit;font-size:12px;padding:2px 10px;margin-inline-start:8px;cursor:pointer;vertical-align:middle}
+.q-skipped{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px dashed var(--rule);border-radius:12px;padding:8px 12px;margin:8px 0;color:var(--ink-3);background:transparent}
+.q-skipped span{overflow:hidden;text-overflow:ellipsis}
+.q-skipnote{margin:0 0 10px}

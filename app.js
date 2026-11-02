@@ -166,7 +166,7 @@ var S = loadJSON(STATE_KEY);  // cur, last{bookId:page}, taught{lk:{cls:iso}}, a
 function savePref() { try { localStorage.setItem(PREF_KEY, JSON.stringify(P)); } catch (e) {} if (typeof syncStateMark === 'function') syncStateMark(); }
 var saveT = null;
 function saveState(now) { clearTimeout(saveT); var f = function () { S.t = Date.now(); try { localStorage.setItem(STATE_KEY, JSON.stringify(S)); } catch (e) {} syncStateMark(); }; if (now) f(); else saveT = setTimeout(f, 250); }
-['last', 'taught', 'ans', 'plan', 'notes'].forEach(function (k) { if (!S[k] || typeof S[k] !== 'object') S[k] = {}; });
+['last', 'taught', 'ans', 'plan', 'notes', 'skip'].forEach(function (k) { if (!S[k] || typeof S[k] !== 'object') S[k] = {}; }); // skip{lk:[question signatures]}: questions set aside until they are taught
 if (!Array.isArray(P.classes)) P.classes = [];
 if (!P.ai || typeof P.ai !== 'object') P.ai = {};
 
@@ -403,7 +403,7 @@ AFTER.push(function () { if (route.v === 'read' && document.getElementById('rd')
 
 function readerUnmount() {
   if (!RD) return;
-  RD.dead = true; flushInk(); if (LIVE) { LIVE.remove(); LIVE = null; }
+  RD.dead = true; flushInk();
   if (RD.io) RD.io.disconnect();
   window.removeEventListener('scroll', RD.onScroll); window.removeEventListener('resize', RD.onResize);
   RD.pages.forEach(function (pg) { if (pg.task) try { pg.task.cancel(); } catch (e) {} if (pg.c) { pg.c.width = pg.c.height = 0; } if (pg.ic) { pg.ic.width = pg.ic.height = 0; } });
@@ -442,7 +442,7 @@ function readerMount() {
       R.onResize = function () { clearTimeout(R.rzT); R.rzT = setTimeout(function () { if (route.present) presentFit(); rerenderAll(); }, 200); };
       window.addEventListener('scroll', R.onScroll, { passive: true });
       window.addEventListener('resize', R.onResize);
-      hookPinch(R); hookShift(R); liveOn({ width: INK_W, left: 0, top: 0 }); // the writing layer is made before the first stroke, not during it
+      hookPinch(R); hookShift(R);
       requestAnimationFrame(function () { scrollToPage(start, true); trackPage(R); });
     });
   })['catch'](function (e) {
@@ -525,15 +525,15 @@ function sizeInk(pg) {
   if (pg.mc) { // the blank space beside the page: a board that shares the page's writing (in page units, beyond 0–1000)
     var row = pg.mc.parentNode, rw = row.clientWidth, rh = row.clientHeight, ox = pg.el.offsetLeft, oy = pg.el.offsetTop, room = rw - w > 8;
     pg.mc.hidden = !room;
-    if (room) { pg.mc.width = Math.round(rw * dpr); pg.mc.height = Math.round(rh * dpr); pg.dpr = dpr; mcFit(pg); }
+    if (room) { var md = Math.min(dpr, 1.5); pg.mc.width = Math.round(rw * md); pg.mc.height = Math.round(rh * md); pg.dpr = md; mcFit(pg); } // the board is wide: a lighter resolution keeps memory (and the pen) light
     else pg.mc.width = pg.mc.height = 0;
   }
   inkOf(R, pg.n).then(function () { drawInk(pg); });
 }
 function mcFit(pg) { var dpr = pg.dpr || 1; pg.mc.getContext('2d').setTransform(dpr * pg.k, 0, 0, dpr * pg.k, dpr * pg.el.offsetLeft, dpr * pg.el.offsetTop); }
-function drawInk(pg, onlyM) {
+function drawInk(pg, only) { // only: 'm' the board beside the page, 'i' the page itself
   var R = RD; if (!R || !pg.ic.width) return; var d = R.ink[pg.n];
-  [onlyM ? null : pg.ic, pg.mc && pg.mc.width ? pg.mc : null].forEach(function (cv) {
+  [only === 'm' ? null : pg.ic, only !== 'i' && pg.mc && pg.mc.width ? pg.mc : null].forEach(function (cv) {
     if (!cv) return; var x = cv.getContext('2d');
     x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cv.width, cv.height); x.restore();
     if (d) d.s.forEach(function (st) { stroke(x, st); });
@@ -571,7 +571,7 @@ function hookInk(R, pg) {
     var o = rt(); if (o.tool === 'off') return false;
     inkOf(R, pg.n); rc = pg.el.getBoundingClientRect(); R.inking = true; // the page does not move while writing, so where it sits is read once
     cur = o.tool === 'er' ? { er: true, gone: [] } : o.tool === 'hl' ? { k: 'hl', hc: o.hlc, w: 18, p: [] } : { c: PEN_C[o.ink], w: PEN_W[o.pw] || 3.2, p: [] };
-    if (!cur.er) liveOn(rc);
+    if (!cur.er) pg.live = cur;
     move(q); return true;
   }
   function move(q) {
@@ -582,28 +582,29 @@ function hookInk(R, pg) {
       if (hit) rafInk(pg); return;
     }
     var a = cur.p, n = a.length;
-    if (n && Math.abs(a[n - 3] - q[0]) + Math.abs(a[n - 2] - q[1]) < 0.8) return;
+    if (n && Math.abs(a[n - 3] - q[0]) + Math.abs(a[n - 2] - q[1]) < 1.2) return;
     if (cur.k === 'hl' && n >= 3) q[1] = a[1] + (q[1] - a[1]) * 0.25; // a highlighter keeps to its line
     a.push(q[0], q[1], q[2]);
-    liveDraw(cur); // at once, right in the touch event, and right up to the pen's tip
+    drawInk(pg, 'i'); // the page, as on the morning of 1 Nov
+    var m = a.length / 3 - 1; if (m > 0 && pg.mc && pg.mc.width && (a[m * 3] < 10 || a[m * 3] > INK_W - 10 || a[m * 3 - 3] < 10 || a[m * 3 - 3] > INK_W - 10)) { // out on the board: just this step
+      var x = pg.mc.getContext('2d'); cur.out = 1; x.lineCap = 'round'; x.strokeStyle = cur.k === 'hl' ? HL_C[cur.hc || 0] : cur.c; x.globalAlpha = cur.k === 'hl' ? 0.42 : 1;
+      x.lineWidth = cur.k === 'hl' ? cur.w : (cur.w || 3.2) * (0.45 + (a[m * 3 + 2] + a[m * 3 - 1]) / 180); x.beginPath(); x.moveTo(a[m * 3 - 3], a[m * 3 - 2]); x.lineTo(a[m * 3], a[m * 3 + 1]); x.stroke(); x.globalAlpha = 1;
+    }
   }
   function end() {
-    var s = cur; cur = null; rc = null; R.inking = false; R.penT = Date.now(); if (!s) return;
-    var d = R.ink[pg.n]; if (!d) { liveOff(); return; }
+    var s = cur; cur = null; pg.live = null; rc = null; R.inking = false; R.penT = Date.now(); if (!s) return;
+    var d = R.ink[pg.n]; if (!d) { drawInk(pg); return; }
     if (s.er) { if (s.gone.length) { R.undo.push({ n: pg.n, a: 'del', items: s.gone.reverse() }); saveInk(R, pg.n); } return; }
-    if (!s.p.length) { liveOff(); return; }
+    if (!s.p.length) { drawInk(pg, 'i'); return; }
     d.s.push(s); R.undo.push({ n: pg.n, a: 'add' }); saveInk(R, pg.n);
-    // the finished stroke goes onto the page (and the board beside it only if it reached there), then the live layer clears in the same frame
-    var out = false; for (var i = 0; i < s.p.length; i += 3) if (s.p[i] < 12 || s.p[i] > INK_W - 12) { out = true; break; }
-    [pg.ic, out && pg.mc && pg.mc.width ? pg.mc : null].forEach(function (cv) { if (cv && cv.width) stroke(cv.getContext('2d'), s); });
-    liveOff();
+    var out = s.out; delete s.out; drawInk(pg, out ? null : 'i');
   }
   function wants(t) { return t.touchType === 'stylus' || rt().finger; }
   [pg.ic, pg.mc].forEach(function (c) {
     if (!c) return;
     c.addEventListener('touchstart', function (e) {
       if (touch != null) { e.preventDefault(); return; }
-      if (e.touches.length > 1 && cur) { cur = null; touch = null; rc = null; R.inking = false; liveOff(); return; }
+      if (e.touches.length > 1 && cur) { cur = null; pg.live = null; touch = null; rc = null; R.inking = false; drawInk(pg); return; }
       for (var k = 0; k < e.changedTouches.length; k++) {
         var t = e.changedTouches[k]; if (!wants(t) || e.touches.length > 1) continue;
         if (begin(pt(t.clientX, t.clientY, t.touchType === 'stylus' ? t.force : null))) { e.preventDefault(); touch = t.identifier; }
@@ -625,34 +626,13 @@ function hookInk(R, pg) {
     c.addEventListener('pointerup', function (e) { if (e.pointerType === 'mouse' && touch == null) end(); });
   });
 }
-/* the stroke being written lives on one screen-sized layer above the pages: redrawn whole on every move (a few hundred points at most),
-   so the line reaches the pen's tip at once and the big page and board canvases are touched only once, when the pen lifts */
-var LIVE = null;
-function liveOn(r) {
-  if (!LIVE) { LIVE = document.createElement('canvas'); LIVE.className = 'ink-live'; LIVE.setAttribute('aria-hidden', 'true'); document.body.appendChild(LIVE); }
-  var dpr = Math.min(window.devicePixelRatio || 1, 2), w = Math.round(window.innerWidth * dpr), h = Math.round(window.innerHeight * dpr);
-  if (LIVE.width !== w || LIVE.height !== h) { LIVE.width = w; LIVE.height = h; LIVE.style.width = window.innerWidth + 'px'; LIVE.style.height = window.innerHeight + 'px'; }
-  var k = r.width / INK_W; LIVE.t = [dpr * k, dpr * r.left, dpr * r.top]; LIVE.bb = null;
-}
-function liveDraw(st) { // like the lesson cards' writing: only the newest piece, a straight step to the pen's tip; the smooth curve is drawn when the pen lifts
-  if (!LIVE) return; var x = LIVE.getContext('2d'), t = LIVE.t, p = st.p, n = p.length / 3; if (!n) return;
-  var X = t[1] + p[n * 3 - 3] * t[0], Y = t[2] + p[n * 3 - 2] * t[0], pad = (st.w || 3.2) * t[0] + 4, B = LIVE.bb;
-  if (!B) B = LIVE.bb = [X, Y, X, Y]; B[0] = Math.min(B[0], X - pad); B[1] = Math.min(B[1], Y - pad); B[2] = Math.max(B[2], X + pad); B[3] = Math.max(B[3], Y + pad);
-  x.setTransform(t[0], 0, 0, t[0], t[1], t[2]); x.lineCap = 'round'; x.lineJoin = 'round';
-  if (st.k === 'hl') { x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(B[0], B[1], B[2] - B[0], B[3] - B[1]); x.restore(); stroke(x, st); return; }
-  x.strokeStyle = x.fillStyle = st.c;
-  if (n === 1) { x.beginPath(); x.arc(p[0], p[1], inkW(st, p, 0) / 2, 0, 7); x.fill(); return; }
-  x.lineWidth = (st.w || 3.2) * (0.45 + (p[n * 3 - 1] + p[n * 3 - 4]) / 180);
-  x.beginPath(); x.moveTo(p[n * 3 - 6], p[n * 3 - 5]); x.lineTo(p[n * 3 - 3], p[n * 3 - 2]); x.stroke();
-}
-function liveOff() { if (!LIVE || !LIVE.bb) return; var x = LIVE.getContext('2d'), B = LIVE.bb; x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(B[0] - 2, B[1] - 2, B[2] - B[0] + 4, B[3] - B[1] + 4); LIVE.bb = null; }
 function rafInk(pg) { if (!pg.raf) pg.raf = requestAnimationFrame(function () { pg.raf = 0; drawInk(pg); }); }
 /* sliding the page sideways over its board (one finger across, when not writing with the finger) */
 function shiftMax(R) { var pg = R.pages[0]; if (!pg || rt().spread) return 0; return Math.max(0, (R.wrap.clientWidth - pg.el.offsetWidth) / 2); }
 function shiftTo(R, v) {
   var m = shiftMax(R); v = m < 4 ? 0 : clamp(v, -m, m); if (v === R.sx) return;
   R.sx = v; R.wrap.style.setProperty('--sx', Math.round(v) + 'px');
-  if (!R.sxT) R.sxT = requestAnimationFrame(function () { R.sxT = 0; R.pages.forEach(function (pg) { if (pg.mc && pg.mc.width) { mcFit(pg); drawInk(pg, true); } }); });
+  if (!R.sxT) R.sxT = requestAnimationFrame(function () { R.sxT = 0; R.pages.forEach(function (pg) { if (pg.mc && pg.mc.width) { mcFit(pg); drawInk(pg, 'm'); } }); });
 }
 function hookShift(R) {
   var g = null, el = R.wrap;
@@ -1057,7 +1037,7 @@ VIEWS.lesson = function () {
   if (!a) h += genPanel(b, l);
   else {
     var tab = route.tab || 'goals';
-    h += '<div class="subtabs" role="tablist">' + LTABS.map(function (t) { return '<button role="tab" aria-selected="' + (tab === t[0]) + '" class="stab' + (tab === t[0] ? ' on' : '') + '" data-act="ltab" data-tab="' + t[0] + '">' + t[1] + (t[0] === 'eval' ? ' (' + aidCounts(a.d).q + ')' : (t[0] === 'lab' || t[0] === 'game') && labsOf(b, l, t[0]).length ? ' (' + labsOf(b, l, t[0]).length + ')' : '') + '</button>'; }).join('') + '</div>';
+    h += '<div class="subtabs" role="tablist">' + LTABS.map(function (t) { return '<button role="tab" aria-selected="' + (tab === t[0]) + '" class="stab' + (tab === t[0] ? ' on' : '') + '" data-act="ltab" data-tab="' + t[0] + '">' + t[1] + (t[0] === 'eval' ? ' (' + (aidCounts(a.d).q - qSkipN(lk(b, l), a.d)) + ')' : (t[0] === 'lab' || t[0] === 'game') && labsOf(b, l, t[0]).length ? ' (' + labsOf(b, l, t[0]).length + ')' : '') + '</button>'; }).join('') + '</div>';
     h += '<div class="l-body">' + (L_TAB[tab] || L_TAB.goals)(a.d, b, l) + '</div>';
   }
   h += '<div class="l-nav">' + (prev ? '<button class="btn ghost sm" data-act="lesson" data-k="' + esc(lk(b, prev)) + '">→ ' + esc(prev.title) + '</button>' : '<span></span>') + (next ? '<button class="btn ghost sm" data-act="lesson" data-k="' + esc(lk(b, next)) + '">' + esc(next.title) + ' ←</button>' : '<span></span>') + '</div>';
@@ -1122,10 +1102,12 @@ var L_TAB = {
   eval: function (a, b, l) {
     var k = lk(b, l), qz = a.quiz;
     if (!qz.mcq.length && !qz.tf.length && !qz.short.length) return '<p class="muted">لا أسئلة في هذا المساعد.</p>';
-    var h = '<div class="actions" style="margin-top:0"><button class="btn ghost sm tint hue-violet" data-act="pv-open" data-k="' + esc(k) + '" data-from="quiz">' + rIcon('present') + 'اعرض الأسئلة على الطلاب</button><button class="btn ghost sm" data-act="q-copy" data-k="' + esc(k) + '">انسخ الأسئلة</button><button class="btn ghost sm" data-act="q-reset" data-k="' + esc(k) + '">أعد الحل</button></div>';
+    var ns = qSkipN(k, a);
+    var h = (ns ? '<p class="small muted q-skipnote">متجاهَل حتى تشرحه: ' + cnt(ns, WORDS.q) + '. لا تظهر في العرض على الطلاب ولا في النسخ ولا في التدريب، وتتجنبها الألعاب الجديدة. أرجعها متى شرحتها.</p>' : '') +
+      '<div class="actions" style="margin-top:0"><button class="btn ghost sm tint hue-violet" data-act="pv-open" data-k="' + esc(k) + '" data-from="quiz">' + rIcon('present') + 'اعرض الأسئلة على الطلاب</button><button class="btn ghost sm" data-act="q-copy" data-k="' + esc(k) + '">انسخ الأسئلة</button><button class="btn ghost sm" data-act="q-reset" data-k="' + esc(k) + '">أعد الحل</button></div>';
     if (qz.mcq.length) h += '<h3 class="sec-h">اختيار من متعدد</h3>' + qz.mcq.map(function (q, i) { return mcqHtml(k + ':m' + i, q, i + 1); }).join('');
     if (qz.tf.length) h += '<h3 class="sec-h">صح أو خطأ</h3>' + qz.tf.map(function (q, i) { return tfHtml(k + ':t' + i, q, i + 1); }).join('');
-    if (qz.short.length) h += '<h3 class="sec-h">أسئلة مقالية قصيرة</h3>' + qz.short.map(function (q, i) { return '<details class="citem"><summary><span class="i-num">' + (i + 1) + '</span> ' + fx(q.q) + '</summary><div class="c-a">' + fx(q.a) + '</div></details>'; }).join('');
+    if (qz.short.length) h += '<h3 class="sec-h">أسئلة مقالية قصيرة</h3>' + qz.short.map(function (q, i) { return qSkipped(k, q) ? qSkipRow(k, q, 'سؤال ' + (i + 1)) : '<details class="citem"><summary><span class="i-num">' + (i + 1) + '</span> ' + fx(q.q) + '<button type="button" class="q-skip" data-act="q-skip" data-k="' + esc(k) + '" data-s="' + qSig(q) + '">تجاهل</button></summary><div class="c-a">' + fx(q.a) + '</div></details>'; }).join('');
     return h;
   },
   sum: function (a, b, l) {
@@ -1144,16 +1126,32 @@ var L_TAB = {
 
 /* answering the lesson questions on the page */
 var ANS = {}; // this session's choices: qid -> option
+/* a question not taught yet is set aside: kept, but out of the presentation, the copy, the practice and new games, until the teacher brings it back */
+function qSig(q) { var s = plain(q && q.q).replace(/\s+/g, ' ').trim(), a = 2166136261; for (var i = 0; i < s.length; i++) { a ^= s.charCodeAt(i); a = Math.imul(a, 16777619); } return (a >>> 0).toString(36); }
+function qSkipped(k, q) { var a = S.skip[k]; return !!(a && a.indexOf(qSig(q)) >= 0); }
+function qSkipN(k, a) { var z = a.quiz || a.d.quiz; return z.mcq.concat(z.tf, z.short).filter(function (q) { return qSkipped(k, q); }).length; }
+function qLive(k, list) { return list.filter(function (q) { return !qSkipped(k, q); }); }
+function qSkipBtn(id, q) { var k = id.replace(/:(m|t)\d+$/, ''); return '<button type="button" class="q-skip" data-act="q-skip" data-k="' + esc(k) + '" data-s="' + qSig(q) + '">تجاهل</button>'; }
+function qSkipRow(k, q, lbl) { return '<div class="q-skipped"><span class="small"><b>' + lbl + ' متجاهَل</b> · ' + esc(plain(q.q).slice(0, 90)) + '</span><button type="button" class="btn ghost sm" data-act="q-skip" data-k="' + esc(k) + '" data-s="' + qSig(q) + '">أرجعه</button></div>'; }
+ACT['q-skip'] = function (el, e) {
+  if (e && e.preventDefault) e.preventDefault();
+  var k = el.getAttribute('data-k'), sg = el.getAttribute('data-s'), a = S.skip[k] = S.skip[k] || [], i = a.indexOf(sg);
+  if (i >= 0) a.splice(i, 1); else a.push(sg);
+  if (!a.length) delete S.skip[k];
+  saveState(); render(true); toast(i >= 0 ? 'رجع السؤال إلى الأسئلة' : 'تجاهلت السؤال حتى تشرحه: لا يظهر للطلاب');
+};
 function mcqHtml(id, q, no) {
-  var ch = ANS[id], done = ch != null;
-  return '<article class="qcard lq"><p class="q-meta">سؤال ' + no + (q.lv ? ' · ' + esc(q.lv) : '') + '</p><h3 class="q-text">' + fx(q.q) + '</h3><div class="opts">' + q.o.map(function (o, k) {
+  var ch = ANS[id], done = ch != null, k = id.replace(/:(m|t)\d+$/, '');
+  if (qSkipped(k, q)) return qSkipRow(k, q, 'سؤال ' + no);
+  return '<article class="qcard lq"><p class="q-meta">سؤال ' + no + (q.lv ? ' · ' + esc(q.lv) : '') + qSkipBtn(id, q) + '</p><h3 class="q-text">' + fx(q.q) + '</h3><div class="opts">' + q.o.map(function (o, k) {
     var cls = done ? (k === q.a ? ' right' : k === ch ? ' wrong' : ' dim') : '';
     return '<button class="opt' + cls + '" data-act="lq-opt" data-id="' + esc(id) + '" data-k="' + k + '"' + (done ? ' disabled' : '') + '><span class="lt">' + LET[k] + '</span><span>' + fx(o) + '</span></button>';
   }).join('') + '</div>' + (done ? '<div class="explain ' + (ch === q.a ? 'ok' : 'no') + '"><p><b>' + (ch === q.a ? 'إجابة صحيحة.' : 'الإجابة الصحيحة (' + LET[q.a] + ').') + '</b> ' + fx(q.e) + '</p></div>' : '') + '</article>';
 }
 function tfHtml(id, q, no) {
-  var ch = ANS[id], done = ch != null;
-  return '<article class="qcard lq"><p class="q-meta">عبارة ' + no + '</p><h3 class="q-text">' + fx(q.q) + '</h3><div class="opts tf">' + [[1, 'صح'], [0, 'خطأ']].map(function (x) {
+  var ch = ANS[id], done = ch != null, k = id.replace(/:(m|t)\d+$/, '');
+  if (qSkipped(k, q)) return qSkipRow(k, q, 'عبارة ' + no);
+  return '<article class="qcard lq"><p class="q-meta">عبارة ' + no + qSkipBtn(id, q) + '</p><h3 class="q-text">' + fx(q.q) + '</h3><div class="opts tf">' + [[1, 'صح'], [0, 'خطأ']].map(function (x) {
     var v = !!x[0], cls = done ? (v === q.a ? ' right' : (ch === x[0] ? ' wrong' : ' dim')) : '';
     return '<button class="opt' + cls + '" data-act="lq-tf" data-id="' + esc(id) + '" data-k="' + x[0] + '"' + (done ? ' disabled' : '') + '><span>' + x[1] + '</span></button>';
   }).join('') + '</div>' + (done ? '<div class="explain ' + (!!ch === q.a ? 'ok' : 'no') + '"><p><b>' + (q.a ? 'العبارة صحيحة.' : 'العبارة خاطئة.') + '</b> ' + fx(q.e) + '</p></div>' : '') + '</article>';
@@ -1164,7 +1162,7 @@ ACT['lq-opt'] = function (el) { var id = el.getAttribute('data-id'), q = qById(i
 ACT['lq-tf'] = function (el) { var id = el.getAttribute('data-id'), q = qById(id); if (!q || ANS[id] != null) return; var k = +el.getAttribute('data-k'); ANS[id] = k; recordAns(id, !!k === q.a); var art = el.closest('.lq'); art.outerHTML = tfHtml(id, q, +(/\d+/.exec(art.querySelector('.q-meta').textContent) || [0])[0]); };
 ACT['q-reset'] = function (el) { var k = el.getAttribute('data-k'); Object.keys(ANS).forEach(function (id) { if (id.indexOf(k + ':') === 0) delete ANS[id]; }); render(true); };
 function quizText(x, a, withAns) {
-  var q = a.d.quiz, t = [x.l.title, ''];
+  var k0 = lk(x.b, x.l), q0 = a.d.quiz, q = { mcq: qLive(k0, q0.mcq), tf: qLive(k0, q0.tf), short: qLive(k0, q0.short) }, t = [x.l.title, ''];
   if (q.mcq.length) { t.push('أولًا: اختر الإجابة الصحيحة'); q.mcq.forEach(function (m, i) { t.push((i + 1) + ') ' + plain(m.q)); m.o.forEach(function (o, k) { t.push('   ' + LET[k] + ') ' + plain(o)); }); if (withAns) t.push('   الإجابة: ' + LET[m.a]); }); t.push(''); }
   if (q.tf.length) { t.push('ثانيًا: ضع علامة (✓) أمام العبارة الصحيحة وعلامة (✗) أمام الخاطئة'); q.tf.forEach(function (m, i) { t.push((i + 1) + ') ' + plain(m.q) + ' (   )' + (withAns ? '  ← ' + (m.a ? '✓' : '✗') : '')); }); t.push(''); }
   if (q.short.length) { t.push('ثالثًا: أجب عما يأتي'); q.short.forEach(function (m, i) { t.push((i + 1) + ') ' + plain(m.q)); if (withAns) t.push('   الإجابة: ' + plain(m.a)); }); }
@@ -1224,6 +1222,7 @@ var GAME_SYS = [
   '- شاشة بداية فيها اسم اللعبة وطريقة اللعب في سطرين وزر «ابدأ»، واختيار «لاعب واحد» أو «فريقان» إن ناسب نوع اللعبة (في الفريقين يتناوب الدور وتظهر نقاط كل فريق).',
   '- نقاط ومستويات أو جولات، ومؤقت اختياري يمكن إيقافه، وتغذية راجعة فورية لكل إجابة: تأثير بصري للصح والخطأ وجملة قصيرة تشرح السبب.',
   '- شاشة نهاية فيها النتيجة ومراجعة سريعة لما أخطأ فيه الطالب مع الإجابة الصحيحة، وزر «العب مرة أخرى» يخلط الترتيب.',
+  '- زر صغير واضح «تجاهل السؤال» مع كل سؤال أو بطاقة أو عنصر: يخرجه من اللعبة فورًا دون أن يُحسب صحًا أو خطأً ودون أن تتغير النقاط أو الدور، ويُكمل اللعب بما بعده (للمعلم حين يظهر سؤال عن جزء لم يُشرح بعد). وإن قلّت العناصر عن جولة كاملة انتهت اللعبة بما بقي. وتذكر شاشة النهاية عدد ما تُجوهل.',
   '- 10 إلى 16 عنصرًا (سؤالًا أو بطاقة أو مفهومًا) مأخوذة من محتوى الدرس نفسه ومصطلحاته، دقيقة علميًا، وبعربية فصيحة قصيرة الجمل، تتدرج من السهل إلى الأصعب.',
   '- اللعب ينبغي أن يُعلّم: يفكر الطالب في المفهوم ليفوز، لا يخمّن. لا عنف ولا محتوى غير لائق، ومناسبة لطلاب بنين في المرحلة المتوسطة.',
   'قبل أن تكتب، تجنب الأخطاء الشائعة: عناصر تخرج من حدود الشاشة على الجوال، نص يتداخل مع غيره، سحب لا يعمل باللمس، زر «ابدأ» لا يعيد كل شيء، إجابة صحيحة تُحسب خطأً بسبب مقارنة نصوص (قارن بالمعرّفات لا بالنص).'
@@ -1242,9 +1241,14 @@ var LKIND = {
     ph: 'مثال: سباق بين فريقين، كل إجابة صحيحة تقدّم سيارة الفريق خطوة، عن أشكال الطاقة وتحولاتها', pick: 'اختر أنت نوع اللعبة الأنسب والأمتع لهذا الدرس.', ask: 'نوع اللعبة أو فكرتها كما طلبها المعلم: ',
     types: ['مسابقة فريقين على جهاز العرض', 'اسحب كل مصطلح إلى تعريفه', 'بطاقات الذاكرة: طابق المفهوم بمثاله', 'صنّف العناصر في مجموعات', 'سباق مع الزمن: صح أو خطأ', 'رتّب الخطوات أو السلسلة', 'لغز الكلمات من مفردات الدرس', 'من سيربح المليون'],
     ideas: 'أنت مصمم ألعاب تعليمية للمرحلة المتوسطة في السعودية. اقترح 4 أفكار متنوعة ومبتكرة لألعاب تعليمية إلكترونية عن الدرس المعطى، بأنواع لعب مختلفة، يتعلم فيها الطالب المفاهيم وهو يلعب.',
-    fixes: ['سهلة جدًا، اجعلها أصعب', 'صعبة، اجعلها أسهل', 'أضف وضع فريقين', 'السحب لا يعمل باللمس', 'كبّر الخط والأزرار للعرض', 'أضف أسئلة أكثر وأنوع', 'أضف مؤقتًا وأصواتًا'],
+    fixes: ['أضف زر «تجاهل السؤال» لما لم يُشرح بعد', 'سهلة جدًا، اجعلها أصعب', 'صعبة، اجعلها أسهل', 'أضف وضع فريقين', 'السحب لا يعمل باللمس', 'كبّر الخط والأزرار للعرض', 'أضف أسئلة أكثر وأنوع', 'أضف مؤقتًا وأصواتًا'],
     fixPh: 'مثال: البطاقات تخرج من الشاشة على الآيفون، وأريد مؤقتًا لكل سؤال وأسئلة أصعب في الجولة الأخيرة' }
 };
+function labNotYet(x, typed) { // what the class has not reached yet: the teacher's words, and the questions set aside in «التقويم»
+  var a = aidOf(x.b, x.l), k = lk(x.b, x.l), z = a ? a.d.quiz : null, set = z ? z.mcq.concat(z.tf, z.short).filter(function (q) { return qSkipped(k, q); }).map(function (q) { return plain(q.q).slice(0, 160); }) : [];
+  if (!typed && !set.length) return '';
+  return '\n\nلم يُشرح بعد للطلاب، فلا تضع في اللعبة أي سؤال أو عنصر عنه:' + (typed ? '\n' + typed : '') + (set.length ? '\nوهذه أسئلة أجّلها المعلم لأنها عن أجزاء لم يشرحها، فتجنب موضوعاتها:\n- ' + set.join('\n- ') : '');
+}
 function lkind(el) { var v = el && el.getAttribute && el.getAttribute('data-kind'); return LKIND[v] ? v : 'lab'; }
 function labKey(b, l, kind) { return LKIND[kind || 'lab'].pre + lk(b, l); }
 function labsOf(b, l, kind) { var r = XC[labKey(b, l, kind)]; return r && Array.isArray(r.labs) ? r.labs : []; }
@@ -1287,7 +1291,8 @@ function labTab(b, l, kind) {
     (ai ? (K.types ? '<div class="lab-types">' + K.types.map(function (t) { return '<button type="button" class="chip" data-act="lab-type" data-v="' + esc(t) + '">' + esc(t) + '</button>'; }).join('') + '</div>' : '') +
       '<label class="field"><span>' + K.label + '</span><textarea id="lab-idea" rows="2" placeholder="' + esc(K.ph) + '"></textarea></label>' +
       '<div id="lab-ideas" class="lab-ideas"></div>' +
-      (kind === 'game' ? '<label class="field lab-n"><span>عدد الألعاب</span><select id="lab-n"><option value="1">لعبة واحدة</option><option value="2">لعبتان مختلفتان</option><option value="3">ثلاث ألعاب مختلفة</option></select></label>' : '') +
+      (kind === 'game' ? '<label class="field"><span>ما لم يُشرح بعد (اختياري): تتجنبه اللعبة</span><textarea id="lab-skip" rows="2" placeholder="مثال: محطات توليد الكهرباء، والطاقة النووية"></textarea></label>' +
+        '<label class="field lab-n"><span>عدد الألعاب</span><select id="lab-n"><option value="1">لعبة واحدة</option><option value="2">لعبتان مختلفتان</option><option value="3">ثلاث ألعاب مختلفة</option></select></label>' : '') +
       '<div class="actions"><button class="btn" data-act="lab-gen" data-k="' + esc(k) + '"' + kd + '>' + svgI('spark') + K.btn + '</button><button class="btn ghost" data-act="lab-ideas" data-k="' + esc(k) + '"' + kd + '>اقترح عليّ أفكارًا</button></div>' +
       '<p class="small muted">' + labCost(kind) + '</p>'
       : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
@@ -1350,7 +1355,7 @@ function labCutMsg(e) { return 'طالت صفحة التجربة أكثر من �
 ACT['lab-gen'] = function (el) {
   var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var kind = lkind(el), K = LKIND[kind];
   if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
-  var t = document.getElementById('lab-idea'), idea = t ? t.value.trim() : '', ns = document.getElementById('lab-n'), total = kind === 'game' && ns ? clamp(+ns.value || 1, 1, 3) : 1;
+  var t = document.getElementById('lab-idea'), idea = t ? t.value.trim() : '', sk = document.getElementById('lab-skip'), notYet = sk ? sk.value.trim() : '', ns = document.getElementById('lab-n'), total = kind === 'game' && ns ? clamp(+ns.value || 1, 1, 3) : 1;
   LABGEN = { stopped: false }; wake(true);
   var t0 = Date.now(), made = [], i = 0, prog = progModal('Claude ' + K.made, 'lab-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / (1600 * total), 4, 95) + '%'; }, 500);
   function one() {
@@ -1358,6 +1363,7 @@ ACT['lab-gen'] = function (el) {
     prog('يقرأ الدرس و' + K.made + tag + '…');
     var ask = labCtx(x.b, x.l) + '\n\n' + (idea ? K.ask + idea : K.pick) +
       (have.length ? '\n\nموجود من قبل لهذا الدرس (اجعل الجديدة مختلفة عنها في نوع اللعب والفكرة): ' + have.join('؛ ') : '') +
+      (kind === 'game' ? labNotYet(x, notYet) : '') +
       (total > 1 ? '\n\nهذه ' + K.a + ' رقم ' + (i + 1) + ' من ' + total + ' مختلفة النوع، فاختر نوعًا لم يُستعمل.' : '') +
       '\n\nاكتب صفحة HTML الآن، مختصرة (أقل من 28 ألف حرف) ومكتملة حتى </html>.';
     return labWrite(ask, function (m) { prog(m + tag); }, K.writing, K.sys).then(function (html) {
@@ -1629,9 +1635,10 @@ function pvSlides(x, a) {
   d.figs.forEach(function (f, k) { if (!d.exp.some(function (e) { return e.fig === k; })) sl.push({ k: 'fig', h: figure(f) }); });
   figsOf(x.b, x.l).forEach(function (f) { sl.push({ k: 'fig', h: f.img ? figure({ img: f.img, cap: f.cap }) + (f.credit ? '<p class="fig-cr small muted">' + esc(f.credit) + '</p>' : '') : figure({ svg: f.svg, cap: f.cap }) }); }); // the teacher's own drawings and photos
   d.maps.forEach(function (m, k) { sl.push({ k: 'map', h: mapHtml(m, 'pv:' + k) }); });
-  sl.push({ k: 'quiz0', h: '<h1 class="pv-t">اختبر فهمك</h1><p class="pv-idea">' + cnt(d.quiz.mcq.length + d.quiz.tf.length, WORDS.q) + '</p>', quiz: true });
-  d.quiz.mcq.forEach(function (q, i) { sl.push({ k: 'mcq', q: q, i: i, quiz: true }); });
-  d.quiz.tf.forEach(function (q, i) { sl.push({ k: 'tf', q: q, i: i, quiz: true }); });
+  var qk = lk(x.b, x.l), mq = qLive(qk, d.quiz.mcq), tq = qLive(qk, d.quiz.tf); // questions not taught yet stay out
+  if (mq.length + tq.length) sl.push({ k: 'quiz0', h: '<h1 class="pv-t">اختبر فهمك</h1><p class="pv-idea">' + cnt(mq.length + tq.length, WORDS.q) + '</p>', quiz: true });
+  mq.forEach(function (q, i) { sl.push({ k: 'mcq', q: q, i: i, quiz: true }); });
+  tq.forEach(function (q, i) { sl.push({ k: 'tf', q: q, i: i, quiz: true }); });
   if (d.sum.length) sl.push({ k: 'sum', h: '<h2>الخلاصة</h2><ul class="pv-list">' + d.sum.map(function (s) { return '<li>' + fx(s) + '</li>'; }).join('') + '</ul>' });
   return sl;
 }
@@ -2741,8 +2748,8 @@ function bookQs(b, scope) {
   b.lessons.forEach(function (l) {
     if (scope && scope !== 'all' && scope !== l.id && scope !== 'u:' + (l.unit || 'الدروس')) return;
     var a = aidOf(b, l); if (!a) return;
-    a.d.quiz.mcq.forEach(function (q, i) { out.push(lk(b, l) + ':m' + i); });
-    a.d.quiz.tf.forEach(function (q, i) { out.push(lk(b, l) + ':t' + i); });
+    a.d.quiz.mcq.forEach(function (q, i) { if (!qSkipped(lk(b, l), q)) out.push(lk(b, l) + ':m' + i); });
+    a.d.quiz.tf.forEach(function (q, i) { if (!qSkipped(lk(b, l), q)) out.push(lk(b, l) + ':t' + i); });
   });
   return out;
 }
@@ -2992,6 +2999,7 @@ function statePieces() { // the state, cut into pieces that change separately
   Object.keys(S.taught).forEach(function (k) { o['taught:' + k] = S.taught[k]; });
   Object.keys(S.notes).forEach(function (k) { o['note:' + k] = S.notes[k]; });
   Object.keys(S.plan).forEach(function (k) { o['plan:' + k] = S.plan[k]; });
+  Object.keys(S.skip).forEach(function (k) { if (S.skip[k].length) o['skip:' + k] = S.skip[k]; });
   o['pref:classes'] = P.classes; if (P.region) o['pref:region'] = P.region;
   return o;
 }
@@ -3006,6 +3014,7 @@ function setPiece(k, v) { // a piece that came from the other device
   var i = k.indexOf(':'), kind = k.slice(0, i), key = k.slice(i + 1);
   if (kind === 'taught') { if (v == null) delete S.taught[key]; else S.taught[key] = v; }
   else if (kind === 'note') { if (v == null) delete S.notes[key]; else S.notes[key] = String(v); }
+  else if (kind === 'skip') { if (v == null || !Array.isArray(v)) delete S.skip[key]; else S.skip[key] = v.map(String).slice(0, 200); }
   else if (kind === 'plan') { if (v == null) delete S.plan[key]; else S.plan[key] = v; }
   else if (k === 'pref:classes') { P.classes = Array.isArray(v) ? v.map(String).slice(0, 20) : []; }
   else if (k === 'pref:region') { P.region = v === 'west' ? 'west' : 'std'; }
@@ -3115,7 +3124,7 @@ function rekeyBook(oldId, nu) { // move everything of a book to the id the other
     var b = bookById(oldId); if (b) { b.id = nu; b.synced = true; }
     Object.keys(AIDS).forEach(function (key) { if (pk(key)) { var a = AIDS[key]; delete AIDS[key]; a.k = mk(key); AIDS[a.k] = a; } });
     Object.keys(XC).forEach(function (key) { if (npk(key)) { var x = XC[key]; delete XC[key]; x.k = nmk(key); XC[x.k] = x; } });
-    ['taught', 'notes', 'ans'].forEach(function (f) { Object.keys(S[f]).forEach(function (key) { if (pk(key)) { S[f][mk(key)] = S[f][key]; delete S[f][key]; } }); });
+    ['taught', 'notes', 'ans', 'skip'].forEach(function (f) { Object.keys(S[f]).forEach(function (key) { if (pk(key)) { S[f][mk(key)] = S[f][key]; delete S[f][key]; } }); });
     ['plan', 'last'].forEach(function (f) { if (S[f][oldId] != null) { S[f][nu] = S[f][oldId]; delete S[f][oldId]; } });
     if (S.cur === oldId) S.cur = nu; delete DOCS[oldId];
     Object.keys(SBQ).forEach(function (q) { if (q.indexOf(oldId) >= 0) delete SBQ[q]; });
@@ -3530,7 +3539,7 @@ function restore(o) {
       arr(o.aids).forEach(function (a) { if (a && typeof a.k === 'string') a.k = rk(a.k); });
       arr(o.ink).forEach(function (a) { if (a && typeof a.k === 'string') a.k = rk(a.k); });
       arr(o.notes).forEach(function (a) { if (a && typeof a.k === 'string') { a.k = rk(a.k); if (Array.isArray(a.imgs)) a.imgs.forEach(function (m) { if (m && m.mk) m.mk = 'm:' + rk(String(m.mk).slice(2)); }); } });
-      var st0 = o.state || {}; ['taught', 'ans', 'notes', 'plan', 'last'].forEach(function (f) { if (st0[f]) st0[f] = rkObj(st0[f]); }); if (st0.cur && MAP[st0.cur]) st0.cur = MAP[st0.cur];
+      var st0 = o.state || {}; ['taught', 'ans', 'notes', 'plan', 'last', 'skip'].forEach(function (f) { if (st0[f]) st0[f] = rkObj(st0[f]); }); if (st0.cur && MAP[st0.cur]) st0.cur = MAP[st0.cur];
     }
     arr(o.aids).forEach(function (a) {
       if (!a || typeof a.k !== 'string' || (haveA[a.k] || 0) >= (a.at || 0)) return;
