@@ -401,3 +401,7 @@ html.kb nav.tabs{display:none!important}html.kb .rd-bar{display:none!important}
 .ws-bulk p{margin:2px 0 0}
 #ink-diag{position:fixed;top:calc(6px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:120;pointer-events:none;background:rgba(16,24,20,.86);color:#fff;font-size:12.5px;line-height:1.5;padding:5px 12px;border-radius:999px;max-width:calc(100vw - 20px);text-align:center;font-variant-numeric:tabular-nums}
 #ink-diag[hidden]{display:none}
+/* every canvas of a page on its own layer: a pen step then redraws only the writing layer, never the printed page under it
+   (measured on the iPad: 12 frames a second while writing on the book, the page repainted whole with each step) */
+.pg canvas{will-change:transform}
+.pg canvas.pg-lv{will-change:transform,contents}
