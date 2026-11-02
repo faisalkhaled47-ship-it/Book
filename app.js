@@ -1774,6 +1774,7 @@ var WS_SYS = [
   '- ورقة الطالب صفحة A4 واحدة فقط لا يفيض منها شيء: ترويسة مختصرة، ثم الأسئلة، مع break-inside:avoid لكل سؤال، ومساحات إجابة كافية تناسب خط طالب في المتوسط.',
   '- خط font-family: system-ui, "Geeza Pro", "Noto Naskh Arabic", sans-serif، النص 12pt تقريبًا، وأرقام غربية 0-9، واتجاه من اليمين إلى اليسار.',
   '- ألوان زاهية متناسقة (3 ألوان) مع خلفيات فاتحة للأقسام، وتباين واضح، ولا خلفيات داكنة كبيرة.',
+  '- أسطر الإجابة عناصر div بارتفاع ثابت و border-bottom منقط أو متصل، لا خلفيات متدرجة (gradient) ولا الكلمة transparent في أي تدرج: التدرجات الشفافة تُطبع سوداء في PDF على الآيباد.',
   '- الحجم: الصفحة كلها أقل من 16 ألف حرف.',
   'محتوى ورقة الطالب:',
   '- الترويسة: عنوان قصير مبتكر للورقة، ومادة العلوم واسم الدرس، وخانات: الاسم، والفصل، والتاريخ. و«إعداد المعلم: ...» باسم المعلم المعطى، واسم المدرسة إن أُعطي.',
@@ -1806,9 +1807,12 @@ function wsClean(html) { // from Claude's page: its styles and pages only, nothi
   if (!/class="[^"]*\bpage\b/.test(body)) body = '<section class="page">' + body + '</section>';
   return { css: css, html: body };
 }
+function wsCss(css) { // see-through colours inside gradients turn black in the iPad's PDF: they become see-through white
+  return String(css || '').replace(/\btransparent\b/gi, 'rgba(255,255,255,0)').replace(/rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)/gi, 'rgba(255,255,255,0)');
+}
 function wsDoc(w, mode, screen) { // the sheet as one page of its own (for the preview and the shared file)
   return '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:; font-src data:"><title>' + esc(w.title) + '</title>' +
-    '<style>@page{size:A4;margin:0}html,body{margin:0;background:' + (screen ? '#e9ecea' : '#fff') + '}body{padding:' + (screen ? '10px 0' : '0') + '}' + WS_BASE + '@media screen{.ws-root .page{height:297mm;margin-bottom:6mm}}' + (true ? '@media screen and (max-width:860px){.ws-root{zoom:.9}}@media screen and (max-width:760px){.ws-root{zoom:.8}}@media screen and (max-width:660px){.ws-root{zoom:.7}}@media screen and (max-width:560px){.ws-root{zoom:.6}}@media screen and (max-width:470px){.ws-root{zoom:.5}}@media screen and (max-width:400px){.ws-root{zoom:.44}}' : '') + '</style><style>' + w.css + '</style></head><body><div class="ws-root ' + (mode || 'all') + '">' + w.html + '</div></body></html>';
+    '<style>@page{size:A4;margin:0}html,body{margin:0;background:' + (screen ? '#e9ecea' : '#fff') + '}body{padding:' + (screen ? '10px 0' : '0') + '}' + WS_BASE + '@media screen{.ws-root .page{height:297mm;margin-bottom:6mm}}' + (true ? '@media screen and (max-width:860px){.ws-root{zoom:.9}}@media screen and (max-width:760px){.ws-root{zoom:.8}}@media screen and (max-width:660px){.ws-root{zoom:.7}}@media screen and (max-width:560px){.ws-root{zoom:.6}}@media screen and (max-width:470px){.ws-root{zoom:.5}}@media screen and (max-width:400px){.ws-root{zoom:.44}}' : '') + '</style><style>' + wsCss(w.css) + '</style></head><body><div class="ws-root ' + (mode || 'all') + '">' + w.html + '</div></body></html>';
 }
 L_TAB.ws = function (a, b, l) {
   var list = wsOf(b, l), k = lk(b, l), ai = !!P.ai.key, z = a.quiz, nq = qLive(k, z.mcq).length + qLive(k, z.tf).length + qLive(k, z.short).length, open = route.ws;
@@ -1950,15 +1954,13 @@ ACT['ws-bulk'] = function (el) { // two sheets, in two different looks, for ever
 var WS_JOBS = null;
 ACT['ws-bulk-go'] = function () { var jobs = WS_JOBS; WS_JOBS = null; if (!jobs) return; closeModal(); wsRun(jobs, 'Claude يصمّم أوراق العمل', function (d) { var ls = {}; d.forEach(function (r) { ls[r.j.x.l.title] = 1; }); return 'في ' + cnt(Object.keys(ls).length, WORDS.lesson) + '؛ تجدها في تبويب «ورقة العمل» لكل درس.'; }); };
 ACT['ws-stop'] = function () { if (WSGEN) { WSGEN.stopped = true; if (WSGEN.abort) WSGEN.abort(); (WSGEN.ctls || []).forEach(function (c) { if (c.abort) c.abort(); }); } };
-ACT['ws-print'] = function (el) { // the sheet in the app's own page, alone on paper: the iPad's print sheet prints it or saves it as PDF
+function wsB64(str) { var b = new TextEncoder().encode(str), bin = ''; for (var i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+ACT['ws-print'] = function (el) { // the sheet goes in the address itself (after #, so it never reaches a server), to a print page that opens in Safari
   var f = wsFind(el); if (!f) return; var mode = el.getAttribute('data-m') === 'key' ? 'key' : 'student';
-  var old = document.getElementById('ws-print'); if (old) old.remove();
-  var host = document.createElement('div'); host.id = 'ws-print'; document.body.appendChild(host);
-  var root = host.attachShadow ? host.attachShadow({ mode: 'open' }) : host;
-  root.innerHTML = '<style>' + WS_BASE + '</style><style>' + f.w.css + '</style><div class="ws-root ' + mode + '">' + f.w.html + '</div>';
-  var done = function () { window.removeEventListener('afterprint', done); setTimeout(function () { if (host.parentNode) host.remove(); }, 400); };
-  window.addEventListener('afterprint', done);
-  setTimeout(function () { try { window.print(); } catch (e) { toast('تعذّرت الطباعة هنا: استعمل «شارك الملف»'); } setTimeout(function () { if (host.parentNode && !window.matchMedia('print').matches) done(); }, 60000); }, 80);
+  var data = { t: f.x.l.title + ' - ' + f.w.title + (mode === 'key' ? ' - نموذج الإجابة' : ''), css: WS_BASE + wsCss(f.w.css), html: '<div class="ws-root ' + mode + '">' + f.w.html + '</div>' };
+  var url = new URL('ws.html', location.href).href + '#' + wsB64(JSON.stringify(data));
+  var win = null; try { win = window.open(url, '_blank'); } catch (e) {}
+  if (!win) { location.href = url; }
 };
 ACT['ws-share'] = function (el) {
   var f = wsFind(el); if (!f) return;
