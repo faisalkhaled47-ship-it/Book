@@ -1766,23 +1766,22 @@ window.addEventListener('resize', function () { if (ZK && ZK.fit) setTimeout(ZK.
    built on A4 pages: two pages for the student and a page of answers for the teacher. */
 var WS_SYS = [
   'أنت مصمم أوراق عمل مبدع ومعلم علوم خبير في المرحلة المتوسطة (بنين) في المملكة العربية السعودية.',
-  'صمّم ورقة عمل ملونة جميلة جذابة للطلاب، واجبًا منزليًا في صورة مهام أدائية عن الدرس المعطى، تُطبع على ورق A4 بطابعة ملونة.',
+  'صمّم ورقة عمل واحدة ملونة جذابة مركّزة، واجبًا منزليًا عن الدرس المعطى، تُطبع على ورق A4 بطابعة ملونة. الطالب ينجزها في 20 إلى 30 دقيقة: لا حشو ولا تكرار ولا عبارات تشجيعية أو شعارات ولا زخرفة تأخذ مساحة الإجابة.',
   'أعد صفحة HTML كاملة واحدة فقط تبدأ بـ <!DOCTYPE html> وتنتهي بـ </html>، دون أي شرح أو علامات ``` قبلها أو بعدها.',
   'شروط تقنية لازمة:',
-  '- ممنوع JavaScript وممنوع أي مورد خارجي (خطوط أو صور أو روابط). الزخارف والأيقونات بـ SVG داخل الصفحة أو CSS أو رموز تعبيرية.',
-  '- كل المحتوى داخل عناصر <section class="page"> متتالية، وكل CSS يخص عناصر داخلها بأصناف (class) خاصة بك. لا تكتب قواعد لـ html أو body أو * ولا @page ولا @import، ولا تغيّر عرض .page أو ارتفاعه أو هوامشه (التطبيق يجعل كل .page ورقة A4 بحشوة 11 مم).',
-  '- بالضبط ثلاث صفحات: صفحتان للطالب، ثم صفحة ثالثة <section class="page ws-key"> هي نموذج الإجابة للمعلم.',
-  '- كل صفحة يتسع محتواها في ورقة A4 واحدة دون أن يفيض: نحو 6 أسئلة أو مهمتين في الصفحة. استعمل break-inside:avoid لكل سؤال ومهمة، ومسافات إجابة كافية (أسطر منقطة أو مربعات) تناسب خط طالب في المتوسط.',
-  '- خط font-family: system-ui, "Geeza Pro", "Noto Naskh Arabic", sans-serif، وأحجام مقروءة عند الطباعة (النص 12pt تقريبًا، والعناوين أكبر)، وأرقام غربية 0-9، واتجاه من اليمين إلى اليسار.',
-  '- ألوان زاهية متناسقة بلوحة من 3 أو 4 ألوان مع خلفيات فاتحة للبطاقات، وتباين واضح للنص، ولا خلفية داكنة كاملة تستهلك الحبر.',
-  '- الحجم: الصفحة كلها أقل من 24 ألف حرف.',
-  'المحتوى:',
-  '- الصفحة الأولى: ترويسة جذابة بعنوان مبتكر للورقة ومادة العلوم واسم الدرس، وخانات: اسم الطالب، والفصل، والتاريخ، وموعد التسليم. وعبارة «إعداد المعلم: ...» باسم المعلم المعطى بخط واضح في الترويسة أو التذييل، واسم المدرسة إن أُعطي.',
-  '- مهام أدائية للبيت (عددها كما يُطلب) يطبّق فيها الطالب الدرس في حياته: يلاحظ في بيته، أو يجري نشاطًا آمنًا بأدوات منزلية، أو يرسم ويصمم، أو يجمع بيانات بسيطة في جدول، أو يشرح لأحد أفراد أسرته. لكل مهمة: عنوان، وهدف في سطر، وخطوات قصيرة مرقمة، ومساحة للإنجاز، واحتياط سلامة إن لزم (لا مواد كيميائية ولا نار ولا كهرباء منزلية).',
-  '- سلم تقدير صغير للمهام (جدول: المعيار والدرجات) في آخر صفحة الطالب الثانية، وسطر تقييم ذاتي («فهمت الدرس / أحتاج مراجعة»).',
-  '- أسئلة التقويم المعطاة كما هي بنصها وخياراتها دون تغيير معناها، موزعة على أقسام بأسماء جذابة، ومرتبة من الأسهل إلى الأصعب بعلامة نجمة أو اثنتين أو ثلاث. وسؤال «تحدٍّ» اختياري أخير من عندك عن الدرس نفسه.',
-  '- صفحة نموذج الإجابة: إجابة كل سؤال برقمه، والإجابة النموذجية المختصرة لكل سؤال مقالي، ومعايير تصحيح كل مهمة أدائية.',
-  '- عربية فصيحة سليمة قصيرة الجمل، ودقة علمية تامة بمصطلحات الكتاب. لا تذكر أي شيء عن الذكاء الاصطناعي أو Claude في الورقة.'
+  '- ممنوع JavaScript وممنوع أي مورد خارجي (خطوط أو صور أو روابط). الأيقونات القليلة بـ SVG صغير داخل الصفحة أو رموز تعبيرية.',
+  '- المحتوى في عنصرين فقط: <section class="page"> هو ورقة الطالب، ثم <section class="page ws-key"> هو نموذج الإجابة للمعلم. كل CSS لأصناف (class) خاصة بك داخلهما؛ لا قواعد لـ html أو body أو * ولا @page ولا @import، ولا تغيّر عرض .page أو ارتفاعه أو حشوته (كل .page ورقة A4 بحشوة 11 مم).',
+  '- ورقة الطالب صفحة A4 واحدة فقط لا يفيض منها شيء: ترويسة مختصرة في سطرين، ثم المحتوى، مع break-inside:avoid لكل سؤال ومهمة، ومساحات إجابة كافية (أسطر منقطة أو مربعات) تناسب خط طالب في المتوسط.',
+  '- خط font-family: system-ui, "Geeza Pro", "Noto Naskh Arabic", sans-serif، النص 12pt تقريبًا، وأرقام غربية 0-9، واتجاه من اليمين إلى اليسار.',
+  '- ألوان زاهية متناسقة (3 ألوان) مع خلفيات فاتحة للأقسام، وتباين واضح، ولا خلفيات داكنة كبيرة.',
+  '- الحجم: الصفحة كلها أقل من 16 ألف حرف.',
+  'محتوى ورقة الطالب:',
+  '- الترويسة: عنوان قصير مبتكر للورقة، ومادة العلوم واسم الدرس، وخانات: الاسم، والفصل، والتاريخ، وموعد التسليم. و«إعداد المعلم: ...» باسم المعلم المعطى، واسم المدرسة إن أُعطي.',
+  '- المهام الأدائية بالعدد المطلوب: كل مهمة يطبّق فيها الطالب الدرس في بيته (يلاحظ، أو يجري نشاطًا آمنًا بأدوات منزلية، أو يرسم، أو يملأ جدولًا صغيرًا)، بعنوان، وخطوات قصيرة (3 خطوات على الأكثر)، ومساحة إنجاز. واحتياط سلامة في سطر إن لزم (لا مواد كيميائية ولا نار ولا كهرباء منزلية).',
+  '- من أسئلة التقويم المعطاة اختر 6 إلى 8 أسئلة متنوعة تغطي أهم أفكار الدرس (اختيار من متعدد، وصح أو خطأ، وسؤال أو سؤالان مقاليان)، وانقلها بنصها وخياراتها دون تغيير، وبأقسام قليلة بأسماء جذابة. لا تضع إجاباتها في ورقة الطالب.',
+  '- لا سلم تقدير ولا تقييم ذاتي ولا سؤال تحدٍّ إلا إن بقيت مساحة حقيقية.',
+  'نموذج الإجابة (الصفحة الثانية): إجابة كل سؤال في الورقة برقمه، والإجابة النموذجية المختصرة للأسئلة المقالية، وما يُقبل في كل مهمة أدائية في سطرين.',
+  'عربية فصيحة سليمة قصيرة الجمل، ودقة علمية تامة بمصطلحات الكتاب. لا تذكر أي شيء عن الذكاء الاصطناعي أو Claude في الورقة.'
 ].join('\n');
 var WS_STYLES = ['مغامرة علمية', 'ملف محقق علمي', 'مجلة علمية', 'رحلة استكشاف', 'كلاسيكي ملون'];
 var WS_BASE = '.ws-root.ws-root{background:none!important;margin:0!important;padding:0!important;width:auto!important;min-height:0!important}.ws-root{direction:rtl;color:#1d2422;font-family:system-ui,"Geeza Pro","Noto Naskh Arabic",sans-serif;font-size:12pt;line-height:1.55}' +
@@ -1821,24 +1820,27 @@ L_TAB.ws = function (a, b, l) {
       '<div class="actions" style="margin-top:8px"><button class="btn' + (on ? ' ghost' : '') + ' sm" data-act="ws-open"' + q + '>' + (on ? 'أغلق المعاينة' : 'عاين الورقة') + '</button>' +
       '<button class="btn ghost sm tint hue-rose" data-act="ws-print" data-m="student"' + q + '>اطبع أو احفظ PDF</button>' +
       '<button class="btn ghost sm" data-act="ws-print" data-m="key"' + q + '>نموذج الإجابة</button>' +
-      '<button class="btn ghost sm" data-act="ws-share"' + q + '>شارك الملف</button>' +
+      '<button class="btn ghost sm" data-act="ws-share" data-m="student"' + q + '>شارك ورقة الطالب</button>' +
+      '<button class="btn ghost sm" data-act="ws-share" data-m="key"' + q + '>شارك نموذج الإجابة</button>' +
       '<button class="btn ghost sm" data-act="ws-edit"' + q + '>' + svgI('spark') + 'عدّلها</button>' +
       (w.prev ? '<button class="btn ghost sm" data-act="ws-undo"' + q + '>ارجع للنسخة السابقة</button>' : '') +
       '<button class="btn ghost sm danger" data-act="ws-del"' + q + '>احذف</button></div></article>';
   }).join('');
   h += '<details class="panel gen ai-fold" data-fold="ws"' + (foldOpen('ws', !list.length) ? ' open' : '') + '><summary class="hh">' + ico('pen', 'rose') + (list.length ? 'صمّم ورقة أخرى' : 'صمّم ورقة عمل لهذا الدرس') + '</summary>' +
     (ai ? '<div class="lab-types">' + WS_STYLES.map(function (t) { return '<button type="button" class="chip" data-act="ws-style" data-v="' + esc(t) + '">' + esc(t) + '</button>'; }).join('') + '</div>' +
-      '<label class="field"><span>طابع الورقة أو فكرتها (اختياري)</span><textarea id="ws-idea" rows="2" placeholder="مثال: محقق علمي يتتبع تحولات الطاقة في المطبخ"></textarea></label>' +
-      '<div class="ws-row"><label class="field"><span>عدد المهام الأدائية</span><select id="ws-n"><option value="2">مهمتان</option><option value="3">ثلاث مهام</option></select></label>' +
+      '<p class="small muted" style="margin:-4px 0 8px">اختر طابعًا أو أكثر: تُصمَّم ورقة لكل طابع دفعة واحدة.</p>' +
+      '<label class="field"><span>فكرة إضافية (اختياري)</span><textarea id="ws-idea" rows="2" placeholder="مثال: محقق علمي يتتبع تحولات الطاقة في المطبخ"></textarea></label>' +
+      '<div class="ws-row"><label class="field"><span>عدد المهام الأدائية</span><select id="ws-n"><option value="1">مهمة واحدة</option><option value="2">مهمتان قصيرتان</option></select></label>' +
       '<label class="field"><span>موعد التسليم (اختياري)</span><input id="ws-due" type="text" placeholder="مثال: الأحد القادم"></label></div>' +
       '<div class="ws-row"><label class="field"><span>إعداد المعلم</span><input id="ws-t" type="text" value="' + esc(wsTeacher()) + '"></label>' +
       '<label class="field"><span>المدرسة (اختياري)</span><input id="ws-s" type="text" value="' + esc(P.school || '') + '" placeholder="اسم المدرسة"></label></div>' +
-      '<div class="actions"><button class="btn" data-act="ws-gen" data-k="' + esc(k) + '"' + (nq ? '' : ' disabled') + '>' + svgI('spark') + 'صمّم ورقة العمل</button></div>' +
-      '<p class="small muted">' + (nq ? 'تستغرق دقيقة إلى ثلاث.' : 'لا أسئلة في «التقويم» لهذا الدرس (أو كلها متجاهلة).') + '</p>'
+      '<div class="actions"><button class="btn" data-act="ws-gen" data-k="' + esc(k) + '"' + (nq ? '' : ' disabled') + '>' + svgI('spark') + 'صمّم الأوراق</button></div>' +
+      '<p class="small muted">' + (nq ? 'كل ورقة: صفحة للطالب، وصفحة نموذج إجابة منفصلة لك. تُصمَّم حتى 3 أوراق معًا في دقيقة إلى ثلاث.' : 'لا أسئلة في «التقويم» لهذا الدرس (أو كلها متجاهلة).') + '</p>' +
+      '<div class="ws-bulk"><b>ورقتان لكل درس دفعة واحدة</b><p class="small muted">بطابعين مختلفين، للدروس التي جُهّز مساعدها ولم تكتمل لها ورقتان.</p><div class="actions"><button class="btn ghost sm" data-act="ws-bulk" data-k="' + esc(k) + '" data-s="unit">دروس هذه الوحدة</button><button class="btn ghost sm" data-act="ws-bulk" data-k="' + esc(k) + '" data-s="all">كل دروس الكتاب</button></div></div>'
       : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
   return h;
 };
-ACT['ws-style'] = function (el) { var t = document.getElementById('ws-idea'); if (t) t.value = el.getAttribute('data-v'); Array.prototype.forEach.call(document.querySelectorAll('.lab-types .chip'), function (c) { c.classList.toggle('on', c === el); }); };
+ACT['ws-style'] = function (el) { el.classList.toggle('on'); }; // several can be chosen: one sheet each
 ACT['ws-open'] = function (el) { var id = el.getAttribute('data-id'); route.ws = route.ws === id ? null : id; render(true); };
 function wsFind(el) { var x = lessonByKey(el.getAttribute('data-k')); if (!x) return null; var list = wsOf(x.b, x.l), w = list.filter(function (y) { return y.id === el.getAttribute('data-id'); })[0]; return w ? { x: x, list: list, w: w } : null; }
 function wsQuestions(x) { // the lesson's questions as the sheet must keep them, with their answers for the key
@@ -1862,28 +1864,74 @@ function wsMake(raw, teacher) {
     c.html = c.html.replace(/<\/section>/i, '<p class="ws-by" style="position:absolute;bottom:6mm;left:11mm;right:11mm;text-align:center;font-size:10pt;color:#555">إعداد المعلم: ' + esc(teacher) + '</p></section>');
   return { css: c.css, html: c.html, title: ((tm && tm[1]) || 'ورقة عمل').replace(/<[^>]+>/g, '').trim().slice(0, 90) };
 }
+function wsAsk(x, o) {
+  return labCtx(x.b, x.l) + '\n\nأسئلة التقويم (اختر منها للورقة بنصها؛ والإجابات لنموذج الإجابة فقط):\n' + wsQuestions(x) +
+    '\n\nعدد المهام الأدائية: ' + (o.n || 1) + '\nإعداد المعلم: ' + (o.teacher || '—') + (o.school ? '\nالمدرسة: ' + o.school : '') + (o.due ? '\nموعد التسليم: ' + o.due : '') +
+    (o.style ? '\nطابع الورقة: ' + o.style : '') + (o.idea ? '\nفكرة المعلم: ' + o.idea : '') + (!o.style && !o.idea ? '\nاختر أنت طابعًا مبتكرًا جذابًا للورقة يناسب الدرس.' : '') +
+    (o.others && o.others.length ? '\nأوراق موجودة لهذا الدرس (اجعل هذه مختلفة عنها في المهام والطابع): ' + o.others.join('؛ ') : '') + labNotYet(x, '') +
+    '\n\nاكتب صفحة HTML الآن، مكتملة حتى </html>.';
+}
+function wsOne(x, o, onText) { // one sheet, saved to its lesson
+  var ctl = {}; (WSGEN.ctls = WSGEN.ctls || []).push(ctl);
+  return claude(WS_SYS, [{ type: 'text', text: wsAsk(x, o) }], 20000, onText, ctl).then(function (res) {
+    var t = res.text, i = t.search(/<!DOCTYPE html|<html[\s>]/i), j = t.toLowerCase().lastIndexOf('</html>');
+    if (i < 0 || j < i) throw aiErr(res.stop === 'max_tokens' ? 'cut' : 'json');
+    var m = wsMake(t.slice(i, j + 7), o.teacher), w = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), title: m.title, css: m.css, html: m.html, idea: (o.style || o.idea || '').slice(0, 200), at: Date.now() };
+    wsSave(x.b, x.l, wsOf(x.b, x.l).concat([w])); return w;
+  });
+}
+function wsRun(jobs, title, label) { // the jobs, three at a time; what is finished stays even if the rest stops or fails
+  WSGEN = { stopped: false }; wake(true);
+  var total = jobs.length, done = [], failed = [], next = 0, live = {}, prog = progModal(title, 'ws-stop');
+  function show() { var n = Object.keys(live).map(function (k) { return live[k]; }).reduce(function (a, b) { return a + b; }, 0); prog('جاهز ' + done.length + ' من ' + total + (Object.keys(live).length ? ' · يكتب ' + Object.keys(live).length + ' الآن (' + num(n) + ' حرفًا)' : ''), (done.length + failed.length) / total * 100); }
+  function worker() {
+    if (WSGEN.stopped || next >= total) return Promise.resolve();
+    var j = jobs[next], id = next++; live[id] = 0; show();
+    return wsOne(j.x, j.o, function (c) { live[id] = c; show(); }).then(function (w) { done.push({ j: j, w: w }); }, function (e) { if (e.code !== 'stop') failed.push({ j: j, e: e }); })
+      .then(function () { delete live[id]; show(); return worker(); });
+  }
+  show();
+  return Promise.all([worker(), worker(), worker()]).then(function () {
+    wake(false); var md = document.getElementById('modal'); md.__busy = false;
+    var stopped = WSGEN.stopped && done.length + failed.length < total;
+    doneModal('<h2>' + (stopped ? 'أُوقف' : done.length ? 'جاهزة ' + cnt(done.length, ['ورقة واحدة', 'ورقتان', 'أوراق', 'ورقة']) : 'لم تكتمل الأوراق') + '</h2>' +
+      (done.length ? '<p class="muted">' + label(done) + ' راجع كل ورقة قبل طباعتها.</p>' : '') +
+      (failed.length ? '<p class="small bad">تعذّرت ' + cnt(failed.length, ['ورقة واحدة', 'ورقتان', 'أوراق', 'ورقة']) + ': ' + esc(aiMsg(failed[0].e)) + '</p>' : ''));
+    if (done.length) { route.tab = 'ws'; route.ws = null; render(true); }
+  });
+}
+function wsOpts() {
+  function val(id) { var e = document.getElementById(id); return e ? e.value.trim() : ''; }
+  var o = { idea: val('ws-idea'), n: +val('ws-n') || 1, due: val('ws-due'), teacher: val('ws-t'), school: val('ws-s') };
+  P.teacher = o.teacher; P.school = o.school; savePref(); return o;
+}
 ACT['ws-gen'] = function (el) {
   var x = lessonByKey(el.getAttribute('data-k')); if (!x) return;
   if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
-  function val(id) { var e = document.getElementById(id); return e ? e.value.trim() : ''; }
-  var idea = val('ws-idea'), n = +val('ws-n') || 2, due = val('ws-due'), teacher = val('ws-t'), school = val('ws-s');
-  P.teacher = teacher; P.school = school; savePref();
-  WSGEN = { stopped: false }; wake(true);
-  var t0 = Date.now(), prog = progModal('Claude يصمّم ورقة العمل', 'ws-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 1400, 4, 95) + '%'; }, 500);
-  prog('يقرأ الدرس وأسئلته…');
-  var ask = labCtx(x.b, x.l) + '\n\nأسئلة التقويم التي تضعها في الورقة (بنصها، والإجابات لصفحة نموذج الإجابة فقط):\n' + wsQuestions(x) +
-    '\n\nعدد المهام الأدائية: ' + n + '\nإعداد المعلم: ' + (teacher || '—') + (school ? '\nالمدرسة: ' + school : '') + (due ? '\nموعد التسليم: ' + due : '') +
-    (idea ? '\nطابع الورقة كما طلبه المعلم: ' + idea : '\nاختر أنت طابعًا مبتكرًا جذابًا للورقة يناسب الدرس.') + labNotYet(x, '') +
-    '\n\nاكتب صفحة HTML الآن، مكتملة حتى </html>.';
-  wsWrite(ask, prog).then(function (raw) {
-    clearInterval(tick); wake(false);
-    var m = wsMake(raw, teacher), w = { id: 'w' + Date.now().toString(36), title: m.title, css: m.css, html: m.html, idea: idea.slice(0, 200), at: Date.now() };
-    wsSave(x.b, x.l, wsOf(x.b, x.l).concat([w]));
-    var md = document.getElementById('modal'); md.__busy = false; closeModal();
-    route.tab = 'ws'; route.ws = w.id; render(true); toast('جاهزة: «' + w.title + '». راجعها ثم اطبعها أو احفظها PDF', 4500);
-  })['catch'](function (e) { clearInterval(tick); wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم تكتمل الورقة') + '</h2><p class="muted">' + (e.code === 'stop' ? '' : e.code === 'cut' ? 'طالت الورقة أكثر من حد الرد فلم تُحفظ. أعد المحاولة بمهمتين.' : esc(aiMsg(e))) + '</p>'); });
+  var o = wsOpts(), styles = Array.prototype.map.call(document.querySelectorAll('.lab-types .chip.on'), function (c) { return c.getAttribute('data-v'); }), have = wsOf(x.b, x.l).map(function (w) { return w.title; });
+  var jobs = (styles.length ? styles : ['']).map(function (st) { return { x: x, o: Object.assign({}, o, { style: st, others: have }) }; });
+  wsRun(jobs, jobs.length > 1 ? 'Claude يصمّم ' + cnt(jobs.length, ['ورقة واحدة', 'ورقتين', 'أوراق', 'ورقة']) : 'Claude يصمّم ورقة العمل', function (d) { return d.map(function (r) { return '«' + esc(r.w.title) + '»'; }).join('، ') + '.'; });
 };
-ACT['ws-stop'] = function () { if (WSGEN) { WSGEN.stopped = true; if (WSGEN.abort) WSGEN.abort(); } };
+ACT['ws-bulk'] = function (el) { // two sheets, in two different looks, for every lesson still without them
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return;
+  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  var scope = el.getAttribute('data-s'), o = wsOpts(), jobs = [];
+  x.b.lessons.forEach(function (l, li) {
+    if (scope === 'unit' && (l.unit || '') !== (x.l.unit || '')) return;
+    var a = aidOf(x.b, l); if (!a) return; var k = lk(x.b, l), z = a.d.quiz;
+    if (!(qLive(k, z.mcq).length + qLive(k, z.tf).length + qLive(k, z.short).length)) return;
+    var have = wsOf(x.b, l).map(function (w) { return w.title; }), need = 2 - have.length;
+    for (var i = 0; i < need; i++) jobs.push({ x: { b: x.b, l: l }, o: Object.assign({}, o, { style: WS_STYLES[(li * 2 + i) % WS_STYLES.length], idea: '', others: have }) });
+  });
+  if (!jobs.length) { toast('كل الدروس الجاهزة فيها ورقتان من قبل'); return; }
+  var ls = jobs.filter(function (j, i) { return !i || jobs[i - 1].x.l !== j.x.l; }).length;
+  openModal(card('<h2>' + cnt(jobs.length, ['ورقة واحدة', 'ورقتان', 'أوراق', 'ورقة']) + ' · ' + cnt(ls, WORDS.lesson) + '</h2><p class="muted">تُصمَّم 3 أوراق معًا، فتستغرق نحو ' + Math.max(1, Math.round(jobs.length / 3 * 2)) + ' دقيقة. أبقِ التطبيق مفتوحًا والآيباد يعمل؛ وتستطيع الإيقاف في أي وقت، وما اكتمل يبقى.</p>' +
+    '<div class="actions"><button class="btn" data-act="ws-bulk-go">ابدأ</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
+  WS_JOBS = jobs;
+};
+var WS_JOBS = null;
+ACT['ws-bulk-go'] = function () { var jobs = WS_JOBS; WS_JOBS = null; if (!jobs) return; closeModal(); wsRun(jobs, 'Claude يصمّم أوراق العمل', function (d) { var ls = {}; d.forEach(function (r) { ls[r.j.x.l.title] = 1; }); return 'في ' + cnt(Object.keys(ls).length, WORDS.lesson) + '؛ تجدها في تبويب «ورقة العمل» لكل درس.'; }); };
+ACT['ws-stop'] = function () { if (WSGEN) { WSGEN.stopped = true; if (WSGEN.abort) WSGEN.abort(); (WSGEN.ctls || []).forEach(function (c) { if (c.abort) c.abort(); }); } };
 ACT['ws-print'] = function (el) { // the sheet in the app's own page, alone on paper: the iPad's print sheet prints it or saves it as PDF
   var f = wsFind(el); if (!f) return; var mode = el.getAttribute('data-m') === 'key' ? 'key' : 'student';
   var old = document.getElementById('ws-print'); if (old) old.remove();
@@ -1896,7 +1944,8 @@ ACT['ws-print'] = function (el) { // the sheet in the app's own page, alone on p
 };
 ACT['ws-share'] = function (el) {
   var f = wsFind(el); if (!f) return;
-  saveFile((f.x.l.title + ' - ' + f.w.title).replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80) + '.html', wsDoc(f.w, 'all', false), 'text/html').then(function (r) { if (r === 'download') toast('حُفظ الملف: افتحه واطبعه أو احفظه PDF'); });
+  var mode = el.getAttribute('data-m') === 'key' ? 'key' : 'student';
+  saveFile((f.x.l.title + ' - ' + f.w.title + (mode === 'key' ? ' - نموذج الإجابة' : '')).replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 90) + '.html', wsDoc(f.w, mode, false), 'text/html').then(function (r) { if (r === 'download') toast('حُفظ الملف: افتحه واطبعه أو احفظه PDF'); });
 };
 ACT['ws-del'] = function (el) {
   if (!el.classList.contains('arm')) { el.classList.add('arm'); el.textContent = 'اضغط مرة ثانية للحذف'; setTimeout(function () { el.classList.remove('arm'); el.textContent = 'احذف'; }, 3000); return; }

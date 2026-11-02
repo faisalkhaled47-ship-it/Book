@@ -397,3 +397,5 @@ html.kb nav.tabs{display:none!important}html.kb .rd-bar{display:none!important}
   body>*:not(#ws-print){display:none!important}
   #ws-print{display:block!important}
 }
+.ws-bulk{border-top:1px solid var(--rule);margin-top:12px;padding-top:10px}
+.ws-bulk p{margin:2px 0 0}
