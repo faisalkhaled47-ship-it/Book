@@ -544,6 +544,14 @@ function drawInk(pg, only) { // only: 'm' the board beside the page, 'i' the pag
     if (pg.live) stroke(x, pg.live);
   });
 }
+function inkStep(x, st, m) { // step m of a stroke (the same pixels as the whole stroke drawn by stroke())
+  var p = st.p; x.lineCap = 'round'; x.lineJoin = 'round';
+  if (st.k === 'hl') { if (!m) return; x.save(); x.globalAlpha = 0.42; x.strokeStyle = HL_C[st.hc || 0]; x.lineWidth = st.w || 18; x.beginPath(); x.moveTo(p[m * 3 - 3], p[m * 3 - 2]); x.lineTo(p[m * 3], p[m * 3 + 1]); x.stroke(); x.restore(); return; }
+  var base = st.w || 3.2; x.strokeStyle = x.fillStyle = st.c || PEN_C[0];
+  if (!m) { x.beginPath(); x.arc(p[0], p[1], base * (0.45 + p[2] / 90) / 2, 0, 7); x.fill(); return; }
+  x.lineWidth = base * (0.45 + (p[m * 3 + 2] + p[m * 3 - 1]) / 180);
+  x.beginPath(); x.moveTo(p[m * 3 - 3], p[m * 3 - 2]); x.lineTo(p[m * 3], p[m * 3 + 1]); x.stroke();
+}
 function stroke(ctx, st) { // exactly as on the morning of 1 Nov: straight steps through the pen's own points, so the line is the hand's line
   var p = st.p, n = p.length / 3; if (!n) return;
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -581,11 +589,11 @@ function hookInk(R, pg) {
     if (n && Math.abs(a[n - 3] - q[0]) + Math.abs(a[n - 2] - q[1]) < 1.2) return;
     if (cur.k === 'hl' && n >= 3) q[1] = a[1] + (q[1] - a[1]) * 0.25; // a highlighter keeps to its line
     a.push(q[0], q[1], q[2]);
-    drawInk(pg, 'i'); // the page, as on the morning of 1 Nov
-    var m = a.length / 3 - 1; if (m > 0 && pg.mc && pg.mc.width && (a[m * 3] < 10 || a[m * 3] > INK_W - 10 || a[m * 3 - 3] < 10 || a[m * 3 - 3] > INK_W - 10)) { // out on the board: just this step
-      var x = pg.mc.getContext('2d'); cur.out = 1; x.lineCap = 'round'; x.strokeStyle = cur.k === 'hl' ? HL_C[cur.hc || 0] : cur.c; x.globalAlpha = cur.k === 'hl' ? 0.42 : 1;
-      x.lineWidth = cur.k === 'hl' ? cur.w : (cur.w || 3.2) * (0.45 + (a[m * 3 + 2] + a[m * 3 - 1]) / 180); x.beginPath(); x.moveTo(a[m * 3 - 3], a[m * 3 - 2]); x.lineTo(a[m * 3], a[m * 3 + 1]); x.stroke(); x.globalAlpha = 1;
-    }
+    // only the newest step is drawn, like the writing on the lesson cards. Redrawing the whole page on every move grew slower with every
+    // stroke already on it (a page full of writing and highlights halved the frame rate), so the pen fell behind and its line broke into dashes
+    var m = a.length / 3 - 1, out = pg.mc && pg.mc.width && (a[m * 3] < 10 || a[m * 3] > INK_W - 10 || (m > 0 && (a[m * 3 - 3] < 10 || a[m * 3 - 3] > INK_W - 10)));
+    if (out) cur.out = 1;
+    [pg.ic, out ? pg.mc : null].forEach(function (cv) { if (cv && cv.width) inkStep(cv.getContext('2d'), cur, m); });
   }
   function end() {
     var s = cur; cur = null; pg.live = null; rc = null; R.inking = false; R.penT = Date.now(); if (!s) return;
@@ -593,7 +601,8 @@ function hookInk(R, pg) {
     if (s.er) { if (s.gone.length) { R.undo.push({ n: pg.n, a: 'del', items: s.gone.reverse() }); saveInk(R, pg.n); } return; }
     if (!s.p.length) { drawInk(pg, 'i'); return; }
     d.s.push(s); R.undo.push({ n: pg.n, a: 'add' }); saveInk(R, pg.n);
-    var out = s.out; delete s.out; drawInk(pg, out ? null : 'i');
+    var out = s.out; delete s.out;
+    if (s.k === 'hl') drawInk(pg, out ? null : 'i'); // a highlighter is redrawn once as one see-through band (its steps overlap while it is drawn)
   }
   function wants(t) { return t.touchType === 'stylus' || rt().finger; }
   [pg.ic, pg.mc].forEach(function (c) {
