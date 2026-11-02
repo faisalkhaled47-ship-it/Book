@@ -399,3 +399,5 @@ html.kb nav.tabs{display:none!important}html.kb .rd-bar{display:none!important}
 }
 .ws-bulk{border-top:1px solid var(--rule);margin-top:12px;padding-top:10px}
 .ws-bulk p{margin:2px 0 0}
+#ink-diag{position:fixed;top:calc(6px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:120;pointer-events:none;background:rgba(16,24,20,.86);color:#fff;font-size:12.5px;line-height:1.5;padding:5px 12px;border-radius:999px;max-width:calc(100vw - 20px);text-align:center;font-variant-numeric:tabular-nums}
+#ink-diag[hidden]{display:none}

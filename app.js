@@ -190,6 +190,22 @@ function printedOf(b, p) { return p - (+b.offset || 0); }
 function lessonAtPage(b, p) { var pr = printedOf(b, p), hit = null; b.lessons.forEach(function (l) { if (pr >= l.from && pr <= (l.to || l.from)) hit = hit || l; }); return hit; }
 function saveBook(b) { b.t = Date.now(); return dbPut('books', b); }
 
+/* measuring the pen while it writes (shown for a few seconds after each line): how many pencil samples and events arrived,
+   and how smoothly the screen kept up. It tells where a lag comes from on the teacher's own iPad. */
+var INKD = null;
+function inkdBegin(where) {
+  var D = INKD = { w: where, t0: performance.now(), ev: 0, pe: 0, pts: 0, fr: 0, gapF: 0, gapE: 0, lastE: 0, lastF: 0, on: true };
+  (function tick(t) { if (!D.on) return; if (D.lastF) D.gapF = Math.max(D.gapF, t - D.lastF); D.lastF = t; D.fr++; requestAnimationFrame(tick); })(performance.now());
+}
+function inkdEv(n) { var D = INKD; if (!D) return; var t = performance.now(); if (D.lastE) D.gapE = Math.max(D.gapE, t - D.lastE); D.lastE = t; D.ev++; if (n) D.pe += n; }
+function inkdPt() { if (INKD) INKD.pts++; }
+function inkdEnd() {
+  var D = INKD; if (!D) return; D.on = false; INKD = null; var s = (performance.now() - D.t0) / 1000; if (s < 0.25) return;
+  var el = document.getElementById('ink-diag'); if (!el) { el = document.createElement('div'); el.id = 'ink-diag'; el.setAttribute('aria-hidden', 'true'); document.body.appendChild(el); }
+  el.textContent = D.w + ' · ' + s.toFixed(1) + 'ث · نقاط ' + D.pts + ' · أحداث ' + Math.round(D.ev / s) + '/ث' + (D.pe ? ' · عيّنات القلم ' + Math.round(D.pe / s) + '/ث' : '') + ' · إطارات ' + Math.round(D.fr / s) + '/ث · أطول توقف ' + Math.round(Math.max(D.gapF, D.gapE)) + 'م/ث';
+  el.hidden = false; clearTimeout(el.__t); el.__t = setTimeout(function () { el.hidden = true; }, 6000);
+}
+
 /* ---------- PDF library (loaded once, on first need) ---------- */
 var PDFJS = null, DOCS = {};
 function pdfjs() {
@@ -580,7 +596,7 @@ function hookInk(R, pg) {
     var o = rt(); if (o.tool === 'off') return false;
     inkOf(R, pg.n); rc = pg.el.getBoundingClientRect(); R.inking = true; // the page does not move while writing, so where it sits is read once
     cur = o.tool === 'er' ? { er: true, gone: [] } : o.tool === 'hl' ? { k: 'hl', hc: o.hlc, w: 18, p: [] } : { c: PEN_C[o.ink], w: PEN_W[o.pw] || 3.2, p: [] };
-    if (!cur.er) lvOn(pg, rc);
+    if (!cur.er) { lvOn(pg, rc); inkdBegin('الكتاب'); }
     move(q); return true;
   }
   function move(q) {
@@ -593,14 +609,14 @@ function hookInk(R, pg) {
     var a = cur.p, n = a.length;
     if (n && Math.abs(a[n - 3] - q[0]) + Math.abs(a[n - 2] - q[1]) < 1.2) return;
     if (cur.k === 'hl' && n >= 3) q[1] = a[1] + (q[1] - a[1]) * 0.25; // a highlighter keeps to its line
-    a.push(q[0], q[1], q[2]);
+    a.push(q[0], q[1], q[2]); inkdPt();
     // only the newest step is drawn, like the writing on the lesson cards. Redrawing the whole page on every move grew slower with every
     // stroke already on it (a page full of writing and highlights halved the frame rate), so the pen fell behind and its line broke into dashes
     // and it goes on the writing layer (as on an opened drawing), not on the page's own canvas, which is blended into the printed page
     inkStep(LV.getContext('2d'), cur, a.length / 3 - 1);
   }
   function end() {
-    var s = cur; cur = null; rc = null; R.inking = false; R.penT = Date.now(); if (!s) return;
+    inkdEnd(); var s = cur; cur = null; rc = null; R.inking = false; R.penT = Date.now(); if (!s) return;
     var d = R.ink[pg.n]; if (!d) { lvOff(); return; }
     if (s.er) { if (s.gone.length) { R.undo.push({ n: pg.n, a: 'del', items: s.gone.reverse() }); saveInk(R, pg.n); } return; }
     if (!s.p.length) { lvOff(); return; }
@@ -623,7 +639,7 @@ function hookInk(R, pg) {
     }, { passive: false });
     c.addEventListener('touchmove', function (e) {
       if (touch == null) return; e.preventDefault();
-      if (cur && cur.pe) return; // once the pencil's pointer events arrive, its points come from them (below)
+      if (!cur || !cur.pe) inkdEv(0); if (cur && cur.pe) return; // once the pencil's pointer events arrive, its points come from them (below)
       for (var k = 0; k < e.changedTouches.length; k++) { var t = e.changedTouches[k]; if (t.identifier === touch) move(pt(t.clientX, t.clientY, t.touchType === 'stylus' ? t.force : null)); }
       if (cur && cur.pen) cur.ts = Math.max(cur.ts || 0, e.timeStamp || 0);
     }, { passive: false });
@@ -636,7 +652,7 @@ function hookInk(R, pg) {
     c.addEventListener('pointermove', function (e) {
       if (e.pointerType === 'pen') { // every sample the pencil took since the last event, even when the screen could not keep up; never one already used
         if (!cur || !cur.pen || touch == null) return; cur.pe = 1;
-        var L = e.getCoalescedEvents ? e.getCoalescedEvents() : null; if (!L || !L.length) L = [e];
+        var L = e.getCoalescedEvents ? e.getCoalescedEvents() : null; if (!L || !L.length) L = [e]; inkdEv(L.length);
         for (var k = 0; k < L.length; k++) { var v = L[k], ts = v.timeStamp || 0; if (ts && ts <= cur.ts) continue; cur.ts = ts; move(pt(v.clientX, v.clientY, v.pressure)); }
         return;
       }
@@ -1760,15 +1776,15 @@ function zkSave() {
 function zkHook(c) { // the same pen handling as the book's pages: every pencil sample, in order, and only the newest step drawn
   var cur = null, touch = null, rc = null;
   function pt(cx, cy, f) { var r = rc || c.getBoundingClientRect(), k = r.width / INK_W; return [Math.round((cx - r.left) / k * 10) / 10, Math.round((cy - r.top) / k * 10) / 10, Math.max(0, Math.min(99, Math.round((f == null || !(f > 0) ? 0.5 : f) * 100)))]; }
-  function begin(q) { rc = c.getBoundingClientRect(); cur = ZK.er ? { er: true, gone: [] } : { c: PEN_C[zkPref().ink], w: 4, p: [] }; move(q); return true; }
+  function begin(q) { rc = c.getBoundingClientRect(); cur = ZK.er ? { er: true, gone: [] } : { c: PEN_C[zkPref().ink], w: 4, p: [] }; if (!cur.er) inkdBegin('الرسمة'); move(q); return true; }
   function move(q) {
     if (!cur || !ZK) return;
     if (cur.er) { var hit = false; for (var i = ZK.s.length - 1; i >= 0; i--) { var p = ZK.s[i].p; for (var j = 0; j < p.length; j += 3) if (Math.abs(p[j] - q[0]) < 14 && Math.abs(p[j + 1] - q[1]) < 14) { cur.gone.push({ i: i, s: ZK.s[i] }); ZK.s.splice(i, 1); hit = true; break; } } if (hit) zkDraw(); return; }
     var a = cur.p, n = a.length; if (n && Math.abs(a[n - 3] - q[0]) + Math.abs(a[n - 2] - q[1]) < 1.2) return;
-    a.push(q[0], q[1], q[2]); inkStep(c.getContext('2d'), cur, a.length / 3 - 1);
+    a.push(q[0], q[1], q[2]); inkdPt(); inkStep(c.getContext('2d'), cur, a.length / 3 - 1);
   }
   function end() {
-    var s = cur; cur = null; rc = null; if (!s || !ZK) return;
+    inkdEnd(); var s = cur; cur = null; rc = null; if (!s || !ZK) return;
     if (s.er) { if (s.gone.length) { ZK.undo.push({ a: 'del', items: s.gone.reverse() }); zkSave(); } return; }
     if (!s.p.length) return; ZK.s.push(s); ZK.undo.push({ a: 'add' }); zkSave();
   }
@@ -1781,7 +1797,7 @@ function zkHook(c) { // the same pen handling as the book's pages: every pencil 
     if (t.touchType === 'stylus') { cur.pen = 1; cur.ts = e.timeStamp || 0; }
   }, { passive: false });
   c.addEventListener('touchmove', function (e) {
-    if (touch == null) return; e.preventDefault(); if (cur && cur.pe) return;
+    if (touch == null) return; e.preventDefault(); if (!cur || !cur.pe) inkdEv(0); if (cur && cur.pe) return;
     for (var k = 0; k < e.changedTouches.length; k++) { var t = e.changedTouches[k]; if (t.identifier === touch) move(pt(t.clientX, t.clientY, t.touchType === 'stylus' ? t.force : null)); }
     if (cur && cur.pen) cur.ts = Math.max(cur.ts || 0, e.timeStamp || 0);
   }, { passive: false });
@@ -1794,7 +1810,7 @@ function zkHook(c) { // the same pen handling as the book's pages: every pencil 
   c.addEventListener('pointermove', function (e) {
     if (e.pointerType === 'pen') {
       if (!cur || !cur.pen || touch == null) return; cur.pe = 1;
-      var L = e.getCoalescedEvents ? e.getCoalescedEvents() : null; if (!L || !L.length) L = [e];
+      var L = e.getCoalescedEvents ? e.getCoalescedEvents() : null; if (!L || !L.length) L = [e]; inkdEv(L.length);
       for (var k = 0; k < L.length; k++) { var v = L[k], ts = v.timeStamp || 0; if (ts && ts <= cur.ts) continue; cur.ts = ts; move(pt(v.clientX, v.clientY, v.pressure)); }
       return;
     }
@@ -2914,7 +2930,8 @@ function stkPt(box, e) { var r = box.getBoundingClientRect(); return [Math.round
 function stkInkBegin(svg, e, col, w) { // a live stroke drawn into the note's svg
   var st = { c: col || 0, w: w || 9, p: stkPt(svg, e) }, el = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   el.setAttribute('stroke', STK_INK[st.c]); el.setAttribute('stroke-width', st.w); svg.appendChild(el);
-  return { st: st, el: el, svg: svg, add: function (ev) { var q = stkPt(svg, ev), p = st.p, n = p.length; if (Math.abs(p[n - 3] - q[0]) + Math.abs(p[n - 2] - q[1]) < 3) return; p.push(q[0], q[1], q[2]); var d = ''; for (var j = 0; j < p.length; j += 3) d += (j ? 'L' : 'M') + p[j] + ' ' + p[j + 1]; el.setAttribute('d', d); } };
+  var d = 'M' + st.p[0] + ' ' + st.p[1] + 'l0.1 0', ts = e.timeStamp || 0; el.setAttribute('d', d); inkdBegin('اللاصقة');
+  return { st: st, el: el, svg: svg, add: function (ev) { var t = ev.timeStamp || 0; if (t && t <= ts) return; ts = t; inkdEv(0); var q = stkPt(svg, ev), p = st.p, n = p.length; if (Math.abs(p[n - 3] - q[0]) + Math.abs(p[n - 2] - q[1]) < 3) return; p.push(q[0], q[1], q[2]); inkdPt(); d += 'L' + q[0] + ' ' + q[1]; el.setAttribute('d', d); } };
 }
 function stkBind(layer, ctx) { // ctx: {host(), get(), set(items)}
   var drag = null, pen = null;
@@ -2941,7 +2958,7 @@ function stkBind(layer, ctx) { // ctx: {host(), get(), set(items)}
   });
   function up(e) {
     if (pen && e.pointerId === pen.id) {
-      var P = pen; pen = null; var items = ctx.get(), it = items[P.i]; if (!it) return;
+      var P = pen; pen = null; inkdEnd(); var items = ctx.get(), it = items[P.i]; if (!it) return;
       if (P.st.p.length <= 6 && Math.abs(e.clientX - P.x0) + Math.abs(e.clientY - P.y0) < 6) { P.el.remove(); stkEdit(ctx, P.i); return; } // a tap of the pencil opens the note
       (it.ink = it.ink || []).push(P.st); it.at = Date.now(); ctx.set(items); return;
     }
@@ -2980,7 +2997,7 @@ function stkPadBind(pad) { // inside the open note: pencil and finger both write
     cur = stkInkBegin(pad.querySelector('svg.stk-ink'), e, STK_LAST.ink, 9); cur.id = e.pointerId; try { pad.setPointerCapture(e.pointerId); } catch (x) {}
   });
   pad.addEventListener('pointermove', function (e) { if (cur && e.pointerId === cur.id) { var evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e]; (evs.length ? evs : [e]).forEach(cur.add); } });
-  function up(e) { if (!cur || e.pointerId !== cur.id) return; var c = cur; cur = null; if (STK_ED) STK_ED.ink.push(c.st); }
+  function up(e) { if (!cur || e.pointerId !== cur.id) return; var c = cur; cur = null; inkdEnd(); if (STK_ED) STK_ED.ink.push(c.st); }
   pad.addEventListener('pointerup', up); pad.addEventListener('pointercancel', up);
 }
 function stkRedrawPad() { var pad = document.getElementById('stk-pad'); if (!pad || !STK_ED) return; var old = pad.querySelector('svg.stk-ink'), w = document.createElement('div'); w.innerHTML = stkSvg(STK_ED.ink); pad.replaceChild(w.firstChild, old); }
