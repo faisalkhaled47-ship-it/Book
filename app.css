@@ -477,3 +477,6 @@ html.kb nav.tabs{display:none!important}html.kb .rd-bar{display:none!important}
 .fp-ctl.on{opacity:1;pointer-events:auto}
 .fp-ctl button{appearance:none;border:0;background:rgba(255,255,255,.12);color:#fff;font:inherit;font-size:20px;width:46px;height:46px;border-radius:50%;cursor:pointer}
 .fp-prog{width:min(260px,30vw);height:6px;border-radius:6px;background:rgba(255,255,255,.2);overflow:hidden}.fp-prog i{display:block;height:100%;width:0;background:#f5b819;transition:width .4s}
+.tabs-pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px 10px;margin-top:6px}
+.tabs-pick .tp{display:flex;align-items:center;gap:8px;font-size:15px;padding:6px 8px;border-radius:10px;background:var(--panel-2,rgba(0,0,0,.03));cursor:pointer}
+.tabs-pick input{width:20px;height:20px;accent-color:var(--accent)}

@@ -1078,6 +1078,19 @@ function destPage(doc, dest) {
 }
 
 /* ---------- one lesson ---------- */
+/* the lesson's tabs the teacher chose to show (settings); what a hidden tab holds stays saved */
+function ltabsShown() { var hid = Array.isArray(P.htabs) ? P.htabs : [], v = LTABS.filter(function (t) { return hid.indexOf(t[0]) < 0; }); return v.length ? v : LTABS.slice(0, 1); }
+function tabsSec() {
+  var hid = Array.isArray(P.htabs) ? P.htabs : [];
+  return '<section class="set-sec"><h3>تبويبات الدرس</h3><p class="small muted">أخفِ ما لا تستعمله فتخف صفحة الدرس. ما فيها يبقى محفوظًا ويعود حين تُظهرها.</p><div class="tabs-pick">' +
+    LTABS.map(function (t) { return '<label class="tp"><input type="checkbox" data-tabpick="' + t[0] + '"' + (hid.indexOf(t[0]) < 0 ? ' checked' : '') + '><span>' + t[1] + '</span></label>'; }).join('') + '</div></section>';
+}
+document.addEventListener('change', function (e) {
+  var k = e.target && e.target.getAttribute && e.target.getAttribute('data-tabpick'); if (!k) return;
+  var hid = (Array.isArray(P.htabs) ? P.htabs : []).filter(function (x) { return x !== k; }); if (!e.target.checked) hid.push(k);
+  if (hid.length >= LTABS.length) { e.target.checked = true; toast('أبقِ تبويبًا واحدًا على الأقل'); return; }
+  P.htabs = hid; savePref(); render(true);
+});
 var LTABS = [['goals', 'الأهداف'], ['exp', 'الشرح'], ['film', 'مقطع الدرس'], ['figs', 'الرسوم'], ['map', 'خريطة المفاهيم'], ['eval', 'التقويم'], ['ws', 'ورقة العمل'], ['lab', 'المختبر'], ['game', 'الألعاب'], ['sum', 'الملخص والأنشطة'], ['notes', 'ملاحظاتي']];
 VIEWS.lesson = function () {
   var x = lessonByKey(route.k || ''); if (!x) { route = { v: 'lessons' }; return VIEWS.lessons(); }
@@ -1091,8 +1104,8 @@ VIEWS.lesson = function () {
   if (P.classes.length) h += taughtBar(b, l);
   if (!a) h += genPanel(b, l);
   else {
-    var tab = route.tab || 'goals';
-    h += '<div class="subtabs" role="tablist">' + LTABS.map(function (t) { return '<button role="tab" aria-selected="' + (tab === t[0]) + '" class="stab' + (tab === t[0] ? ' on' : '') + '" data-act="ltab" data-tab="' + t[0] + '">' + t[1] + (t[0] === 'eval' ? ' (' + (aidCounts(a.d).q - qSkipN(lk(b, l), a.d)) + ')' : (t[0] === 'lab' || t[0] === 'game') && labsOf(b, l, t[0]).length ? ' (' + labsOf(b, l, t[0]).length + ')' : '') + '</button>'; }).join('') + '</div>';
+    var shown = ltabsShown(), tab = route.tab || 'goals'; if (!shown.some(function (t) { return t[0] === tab; })) tab = shown[0][0];
+    h += '<div class="subtabs" role="tablist">' + shown.map(function (t) { return '<button role="tab" aria-selected="' + (tab === t[0]) + '" class="stab' + (tab === t[0] ? ' on' : '') + '" data-act="ltab" data-tab="' + t[0] + '">' + t[1] + (t[0] === 'eval' ? ' (' + (aidCounts(a.d).q - qSkipN(lk(b, l), a.d)) + ')' : (t[0] === 'lab' || t[0] === 'game') && labsOf(b, l, t[0]).length ? ' (' + labsOf(b, l, t[0]).length + ')' : '') + '</button>'; }).join('') + '</div>';
     h += '<div class="l-body">' + (L_TAB[tab] || L_TAB.goals)(a.d, b, l) + '</div>';
   }
   h += '<div class="l-nav">' + (prev ? '<button class="btn ghost sm" data-act="lesson" data-k="' + esc(lk(b, prev)) + '">→ ' + esc(prev.title) + '</button>' : '<span></span>') + (next ? '<button class="btn ghost sm" data-act="lesson" data-k="' + esc(lk(b, next)) + '">' + esc(next.title) + ' ←</button>' : '<span></span>') + '</div>';
@@ -3795,7 +3808,7 @@ function statePieces() { // the state, cut into pieces that change separately
   Object.keys(S.notes).forEach(function (k) { o['note:' + k] = S.notes[k]; });
   Object.keys(S.plan).forEach(function (k) { o['plan:' + k] = S.plan[k]; });
   Object.keys(S.skip).forEach(function (k) { if (S.skip[k].length) o['skip:' + k] = S.skip[k]; });
-  o['pref:classes'] = P.classes; if (P.region) o['pref:region'] = P.region;
+  o['pref:classes'] = P.classes; if (P.region) o['pref:region'] = P.region; if (Array.isArray(P.htabs) && P.htabs.length) o['pref:htabs'] = P.htabs;
   return o;
 }
 function syncStateMark() {
@@ -3811,6 +3824,7 @@ function setPiece(k, v) { // a piece that came from the other device
   else if (kind === 'note') { if (v == null) delete S.notes[key]; else S.notes[key] = String(v); }
   else if (kind === 'skip') { if (v == null || !Array.isArray(v)) delete S.skip[key]; else S.skip[key] = v.map(String).slice(0, 200); }
   else if (kind === 'plan') { if (v == null) delete S.plan[key]; else S.plan[key] = v; }
+  else if (k === 'pref:htabs') { P.htabs = Array.isArray(v) ? v.map(String).slice(0, 20) : []; }
   else if (k === 'pref:classes') { P.classes = Array.isArray(v) ? v.map(String).slice(0, 20) : []; }
   else if (k === 'pref:region') { P.region = v === 'west' ? 'west' : 'std'; }
 }
@@ -4246,7 +4260,7 @@ function settingsHtml() {
     syncSec() +
     '<section class="set-sec"><h3>فصولي</h3><label class="field"><span>أسماء الفصول التي تدرّسها، تفصل بينها بفاصلة</span><input type="text" id="classes" placeholder="1/1، 1/2، 2/1" value="' + esc(P.classes.join('، ')) + '"></label><p class="small muted">تعلّم في كل درس الفصول التي شرحته لها، وترى تقدم كل فصل في الرئيسية.</p></section>' +
     '<section class="set-sec"><h3>التقويم الدراسي</h3>' + segBtns('pref-region', P.region === 'west' ? 'west' : 'std', [['std', 'باقي مناطق المملكة'], ['west', 'مكة والمدينة وجدة والطائف']]) + '</section>' +
-    fontSec() +
+    tabsSec() + fontSec() +
     '<section class="set-sec"><h3>النسخ الاحتياطي</h3><p class="small muted">' + (S.backupAt ? 'آخر نسخة: ' + relDay(S.backupAt) + '. ' : '') + 'يحفظ الدروس ومساعدها وكتابتك على الصفحات وسبوراتك وملاحظاتك وتقدم فصولك في ملف واحد، دون ملفات الكتب نفسها (تضيفها مرة أخرى فتعود إليها كتابتها)، ودون مقاطع الفيديو التي أضفتها من جهازك لكبر حجمها؛ روابط يوتيوب تدخل فيها.</p>' +
     '<div class="actions" style="margin-top:0"><button class="btn" data-act="backup-save">احفظ نسخة احتياطية</button><button class="btn ghost" data-act="backup-restore">استعد من ملف</button></div></section>' +
     '<section class="set-sec"><h3>التخزين على الجهاز</h3><p class="small muted" id="storage-info">…</p>' + (STANDALONE ? '' : '<p class="hint">' + INSTALL + '</p>') + '<div class="actions" style="margin-top:0"><button class="btn ghost sm danger" data-act="reset">احذف كل بيانات التطبيق</button></div></section>' +
