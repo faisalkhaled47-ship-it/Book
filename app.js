@@ -1761,29 +1761,29 @@ ACT['zk-undo'] = function () {
 ACT['zk-clear'] = function () { if (!ZK || !ZK.s.length) return; ZK.undo.push({ a: 'clear', s: ZK.s }); ZK.s = []; zkDraw(); zkSave(); toast('مُسحت الكتابة (تراجع يعيدها)'); };
 window.addEventListener('resize', function () { if (ZK && ZK.fit) setTimeout(ZK.fit, 120); });
 
-/* ---------- «ورقة العمل»: a homework sheet of performance tasks for a lesson, designed by Claude, printed or saved as PDF ----------
+/* ---------- «ورقة العمل»: a homework sheet of the lesson's questions, laid out to draw the students in, designed by Claude, printed or saved as PDF ----------
    Kept in the notes store as w:<bookId>:<lessonId> {ws:[{id, title, css, html, idea, at}], t}. The sheet is HTML and CSS only (no scripts),
    built on A4 pages: two pages for the student and a page of answers for the teacher. */
 var WS_SYS = [
   'أنت مصمم أوراق عمل مبدع ومعلم علوم خبير في المرحلة المتوسطة (بنين) في المملكة العربية السعودية.',
-  'صمّم ورقة عمل واحدة ملونة جذابة مركّزة، واجبًا منزليًا عن الدرس المعطى، تُطبع على ورق A4 بطابعة ملونة. الطالب ينجزها في 20 إلى 30 دقيقة: لا حشو ولا تكرار ولا عبارات تشجيعية أو شعارات ولا زخرفة تأخذ مساحة الإجابة.',
+  'صمّم ورقة أسئلة واحدة ملونة جميلة مشوقة مبتكرة، واجبًا منزليًا عن الدرس المعطى، تُطبع على ورق A4 بطابعة ملونة. الورقة أسئلة فقط: لا تجارب ولا مهام عملية ولا أنشطة منزلية، ولا حشو ولا عبارات تشجيعية أو شعارات.',
   'أعد صفحة HTML كاملة واحدة فقط تبدأ بـ <!DOCTYPE html> وتنتهي بـ </html>، دون أي شرح أو علامات ``` قبلها أو بعدها.',
   'شروط تقنية لازمة:',
-  '- ممنوع JavaScript وممنوع أي مورد خارجي (خطوط أو صور أو روابط). الأيقونات القليلة بـ SVG صغير داخل الصفحة أو رموز تعبيرية.',
+  '- ممنوع JavaScript وممنوع أي مورد خارجي (خطوط أو صور أو روابط). الأيقونات والزخارف الصغيرة بـ SVG داخل الصفحة أو رموز تعبيرية.',
   '- المحتوى في عنصرين فقط: <section class="page"> هو ورقة الطالب، ثم <section class="page ws-key"> هو نموذج الإجابة للمعلم. كل CSS لأصناف (class) خاصة بك داخلهما؛ لا قواعد لـ html أو body أو * ولا @page ولا @import، ولا تغيّر عرض .page أو ارتفاعه أو حشوته (كل .page ورقة A4 بحشوة 11 مم).',
-  '- ورقة الطالب صفحة A4 واحدة فقط لا يفيض منها شيء: ترويسة مختصرة في سطرين، ثم المحتوى، مع break-inside:avoid لكل سؤال ومهمة، ومساحات إجابة كافية (أسطر منقطة أو مربعات) تناسب خط طالب في المتوسط.',
+  '- ورقة الطالب صفحة A4 واحدة فقط لا يفيض منها شيء: ترويسة مختصرة، ثم الأسئلة، مع break-inside:avoid لكل سؤال، ومساحات إجابة كافية تناسب خط طالب في المتوسط.',
   '- خط font-family: system-ui, "Geeza Pro", "Noto Naskh Arabic", sans-serif، النص 12pt تقريبًا، وأرقام غربية 0-9، واتجاه من اليمين إلى اليسار.',
   '- ألوان زاهية متناسقة (3 ألوان) مع خلفيات فاتحة للأقسام، وتباين واضح، ولا خلفيات داكنة كبيرة.',
   '- الحجم: الصفحة كلها أقل من 16 ألف حرف.',
   'محتوى ورقة الطالب:',
-  '- الترويسة: عنوان قصير مبتكر للورقة، ومادة العلوم واسم الدرس، وخانات: الاسم، والفصل، والتاريخ، وموعد التسليم. و«إعداد المعلم: ...» باسم المعلم المعطى، واسم المدرسة إن أُعطي.',
-  '- المهام الأدائية بالعدد المطلوب: كل مهمة يطبّق فيها الطالب الدرس في بيته (يلاحظ، أو يجري نشاطًا آمنًا بأدوات منزلية، أو يرسم، أو يملأ جدولًا صغيرًا)، بعنوان، وخطوات قصيرة (3 خطوات على الأكثر)، ومساحة إنجاز. واحتياط سلامة في سطر إن لزم (لا مواد كيميائية ولا نار ولا كهرباء منزلية).',
-  '- من أسئلة التقويم المعطاة اختر 6 إلى 8 أسئلة متنوعة تغطي أهم أفكار الدرس (اختيار من متعدد، وصح أو خطأ، وسؤال أو سؤالان مقاليان)، وانقلها بنصها وخياراتها دون تغيير، وبأقسام قليلة بأسماء جذابة. لا تضع إجاباتها في ورقة الطالب.',
-  '- لا سلم تقدير ولا تقييم ذاتي ولا سؤال تحدٍّ إلا إن بقيت مساحة حقيقية.',
-  'نموذج الإجابة (الصفحة الثانية): إجابة كل سؤال في الورقة برقمه، والإجابة النموذجية المختصرة للأسئلة المقالية، وما يُقبل في كل مهمة أدائية في سطرين.',
+  '- الترويسة: عنوان قصير مبتكر للورقة، ومادة العلوم واسم الدرس، وخانات: الاسم، والفصل، والتاريخ. و«إعداد المعلم: ...» باسم المعلم المعطى، واسم المدرسة إن أُعطي.',
+  '- من أسئلة التقويم المعطاة اختر 8 إلى 10 أسئلة متنوعة تغطي أهم أفكار الدرس، وانقل نص كل سؤال وخياراته دون تغيير معناه.',
+  '- الإبداع في طريقة العرض لا في المحتوى: وزّع الأسئلة على 3 أو 4 محطات أو تحديات بأسماء مشوقة تناسب طابع الورقة، وبأشكال متنوعة تجذب الطالب، مثل: خيارات في دوائر أو بطاقات يظلل الطالب رمزها، وعبارات صح أو خطأ بمربعي ✓ و✗، وسؤال مقالي في إطار «فكّر واكتب» بأسطر كافية. ويمكن إضافة قسم صغير «طابِق» أو «أكمل من بنك الكلمات» من مفردات الدرس نفسه، دون تجاوز الصفحة.',
+  '- تدرّج من الأسهل إلى الأصعب بعلامة نجمة أو اثنتين أو ثلاث. لا تضع الإجابات في ورقة الطالب.',
+  'نموذج الإجابة (الصفحة الثانية): إجابة كل سؤال في الورقة برقمه، والإجابة النموذجية المختصرة للأسئلة المقالية.',
   'عربية فصيحة سليمة قصيرة الجمل، ودقة علمية تامة بمصطلحات الكتاب. لا تذكر أي شيء عن الذكاء الاصطناعي أو Claude في الورقة.'
 ].join('\n');
-var WS_STYLES = ['مغامرة علمية', 'ملف محقق علمي', 'مجلة علمية', 'رحلة استكشاف', 'كلاسيكي ملون'];
+var WS_STYLES = ['مغامرة علمية', 'ملف محقق علمي', 'مجلة علمية', 'رحلة فضائية', 'تحدي الألغاز', 'كلاسيكي ملون'];
 var WS_BASE = '.ws-root.ws-root{background:none!important;margin:0!important;padding:0!important;width:auto!important;min-height:0!important}.ws-root{direction:rtl;color:#1d2422;font-family:system-ui,"Geeza Pro","Noto Naskh Arabic",sans-serif;font-size:12pt;line-height:1.55}' +
   '.ws-root *,.ws-root *::before,.ws-root *::after{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
   '.ws-root .page{width:210mm;height:297mm;padding:11mm;margin:0 auto 8mm;background:#fff;position:relative;overflow:hidden;break-after:page;page-break-after:always;box-shadow:0 2px 14px rgba(0,0,0,.14)}' +
@@ -1812,7 +1812,7 @@ function wsDoc(w, mode, screen) { // the sheet as one page of its own (for the p
 }
 L_TAB.ws = function (a, b, l) {
   var list = wsOf(b, l), k = lk(b, l), ai = !!P.ai.key, z = a.quiz, nq = qLive(k, z.mcq).length + qLive(k, z.tf).length + qLive(k, z.short).length, open = route.ws;
-  var h = '<p class="muted small" style="margin-bottom:12px">ورقة عمل ملونة للبيت: مهام أدائية يطبّق فيها الطالب الدرس، ومعها أسئلة «التقويم» (' + cnt(nq, WORDS.q) + ' غير المتجاهلة)، وصفحة نموذج إجابة لك. اطبعها أو احفظها PDF ووزّعها.</p>';
+  var h = '<p class="muted small" style="margin-bottom:12px">ورقة أسئلة ملونة مشوقة للبيت من أسئلة «التقويم» (' + cnt(nq, WORDS.q) + ' غير المتجاهلة): صفحة للطالب، ونموذج إجابة منفصل لك. اطبعها أو احفظها PDF ووزّعها.</p>';
   h += list.map(function (w) {
     var on = open === w.id, q = ' data-k="' + esc(k) + '" data-id="' + w.id + '"';
     return '<article class="xcard lab-card hue-rose"><header class="x-head"><span class="i-num">' + svgI('pen') + '</span><p class="x-ind">' + esc(w.title) + '</p></header>' +
@@ -1829,13 +1829,12 @@ L_TAB.ws = function (a, b, l) {
   h += '<details class="panel gen ai-fold" data-fold="ws"' + (foldOpen('ws', !list.length) ? ' open' : '') + '><summary class="hh">' + ico('pen', 'rose') + (list.length ? 'صمّم ورقة أخرى' : 'صمّم ورقة عمل لهذا الدرس') + '</summary>' +
     (ai ? '<div class="lab-types">' + WS_STYLES.map(function (t) { return '<button type="button" class="chip" data-act="ws-style" data-v="' + esc(t) + '">' + esc(t) + '</button>'; }).join('') + '</div>' +
       '<p class="small muted" style="margin:-4px 0 8px">اختر طابعًا أو أكثر: تُصمَّم ورقة لكل طابع دفعة واحدة.</p>' +
-      '<label class="field"><span>فكرة إضافية (اختياري)</span><textarea id="ws-idea" rows="2" placeholder="مثال: محقق علمي يتتبع تحولات الطاقة في المطبخ"></textarea></label>' +
-      '<div class="ws-row"><label class="field"><span>عدد المهام الأدائية</span><select id="ws-n"><option value="1">مهمة واحدة</option><option value="2">مهمتان قصيرتان</option></select></label>' +
-      '<label class="field"><span>موعد التسليم (اختياري)</span><input id="ws-due" type="text" placeholder="مثال: الأحد القادم"></label></div>' +
+      '<label class="field"><span>فكرة إضافية (اختياري)</span><textarea id="ws-idea" rows="2" placeholder="مثال: الأسئلة على شكل محطات في رحلة إلى الفضاء"></textarea></label>' +
+      '<label class="field"><span>موعد التسليم (اختياري)</span><input id="ws-due" type="text" placeholder="مثال: الأحد القادم"></label>' +
       '<div class="ws-row"><label class="field"><span>إعداد المعلم</span><input id="ws-t" type="text" value="' + esc(wsTeacher()) + '"></label>' +
       '<label class="field"><span>المدرسة (اختياري)</span><input id="ws-s" type="text" value="' + esc(P.school || '') + '" placeholder="اسم المدرسة"></label></div>' +
       '<div class="actions"><button class="btn" data-act="ws-gen" data-k="' + esc(k) + '"' + (nq ? '' : ' disabled') + '>' + svgI('spark') + 'صمّم الأوراق</button></div>' +
-      '<p class="small muted">' + (nq ? 'كل ورقة: صفحة للطالب، وصفحة نموذج إجابة منفصلة لك. تُصمَّم حتى 3 أوراق معًا في دقيقة إلى ثلاث.' : 'لا أسئلة في «التقويم» لهذا الدرس (أو كلها متجاهلة).') + '</p>' +
+      '<p class="small muted">' + (nq ? 'كل ورقة: صفحة أسئلة للطالب، ونموذج إجابة منفصل لك. تُصمَّم حتى 3 أوراق معًا في دقيقة إلى ثلاث.' : 'لا أسئلة في «التقويم» لهذا الدرس (أو كلها متجاهلة).') + '</p>' +
       '<div class="ws-bulk"><b>ورقتان لكل درس دفعة واحدة</b><p class="small muted">بطابعين مختلفين، للدروس التي جُهّز مساعدها ولم تكتمل لها ورقتان.</p><div class="actions"><button class="btn ghost sm" data-act="ws-bulk" data-k="' + esc(k) + '" data-s="unit">دروس هذه الوحدة</button><button class="btn ghost sm" data-act="ws-bulk" data-k="' + esc(k) + '" data-s="all">كل دروس الكتاب</button></div></div>'
       : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
   return h;
@@ -1885,9 +1884,9 @@ function wsMake(raw, teacher) {
 }
 function wsAsk(x, o) {
   return labCtx(x.b, x.l) + '\n\nأسئلة التقويم (اختر منها للورقة بنصها؛ والإجابات لنموذج الإجابة فقط):\n' + wsQuestions(x) +
-    '\n\nعدد المهام الأدائية: ' + (o.n || 1) + '\nإعداد المعلم: ' + (o.teacher || '—') + (o.school ? '\nالمدرسة: ' + o.school : '') + (o.due ? '\nموعد التسليم: ' + o.due : '') +
+    '\n\nإعداد المعلم: ' + (o.teacher || '—') + (o.school ? '\nالمدرسة: ' + o.school : '') + (o.due ? '\nموعد التسليم: ' + o.due : '') +
     (o.style ? '\nطابع الورقة: ' + o.style : '') + (o.idea ? '\nفكرة المعلم: ' + o.idea : '') + (!o.style && !o.idea ? '\nاختر أنت طابعًا مبتكرًا جذابًا للورقة يناسب الدرس.' : '') +
-    (o.others && o.others.length ? '\nأوراق موجودة لهذا الدرس (اجعل هذه مختلفة عنها في المهام والطابع): ' + o.others.join('؛ ') : '') + labNotYet(x, '') +
+    (o.others && o.others.length ? '\nأوراق موجودة لهذا الدرس (اجعل هذه مختلفة عنها في الطابع وفي اختيار الأسئلة وأشكالها): ' + o.others.join('؛ ') : '') + labNotYet(x, '') +
     '\n\nاكتب صفحة HTML الآن، مكتملة حتى </html>.';
 }
 function wsOne(x, o, onText) { // one sheet, saved to its lesson
@@ -1972,7 +1971,7 @@ ACT['ws-del'] = function (el) {
 };
 ACT['ws-edit'] = function (el) {
   var f = wsFind(el); if (!f) return; if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
-  var fixes = ['صحّح خطأ في سؤال أو إجابة', 'أبسط وأقل ازدحامًا', 'ألوان أهدأ', 'مساحات إجابة أكبر', 'غيّر إحدى المهام', 'محتوى فاض عن الصفحة'];
+  var fixes = ['صحّح خطأ في سؤال أو إجابة', 'أبسط وأقل ازدحامًا', 'أشكال أسئلة أكثر تشويقًا', 'ألوان أهدأ', 'مساحات إجابة أكبر', 'أسئلة أقل'];
   openModal(card('<h2>عدّل ورقة العمل</h2><p class="small muted">صف ما تريد تغييره، ويعيد Claude كتابة الورقة. تبقى النسخة الحالية فتستطيع الرجوع إليها.</p>' +
     '<div class="lab-ideas">' + fixes.map(function (t) { return '<button type="button" class="lab-idea lab-fix" data-act="lab-fix-pick" data-v="' + esc(t) + '"><span>' + esc(t) + '</span></button>'; }).join('') + '</div>' +
     '<label class="field"><span>ملاحظاتك</span><textarea id="lab-note" rows="3" placeholder="مثال: السؤال الثالث فاض إلى خارج الصفحة، وأريد المهمة الثانية عن المطبخ"></textarea></label>' +
