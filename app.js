@@ -1061,7 +1061,7 @@ function destPage(doc, dest) {
 }
 
 /* ---------- one lesson ---------- */
-var LTABS = [['goals', 'الأهداف'], ['exp', 'الشرح'], ['figs', 'الرسوم'], ['map', 'خريطة المفاهيم'], ['eval', 'التقويم'], ['lab', 'المختبر'], ['game', 'الألعاب'], ['sum', 'الملخص والأنشطة'], ['notes', 'ملاحظاتي']];
+var LTABS = [['goals', 'الأهداف'], ['exp', 'الشرح'], ['figs', 'الرسوم'], ['map', 'خريطة المفاهيم'], ['eval', 'التقويم'], ['ws', 'ورقة العمل'], ['lab', 'المختبر'], ['game', 'الألعاب'], ['sum', 'الملخص والأنشطة'], ['notes', 'ملاحظاتي']];
 VIEWS.lesson = function () {
   var x = lessonByKey(route.k || ''); if (!x) { route = { v: 'lessons' }; return VIEWS.lessons(); }
   var b = x.b, l = x.l, a = aidOf(b, l), k = lk(b, l), idx = b.lessons.indexOf(l);
@@ -1760,6 +1760,174 @@ ACT['zk-undo'] = function () {
 };
 ACT['zk-clear'] = function () { if (!ZK || !ZK.s.length) return; ZK.undo.push({ a: 'clear', s: ZK.s }); ZK.s = []; zkDraw(); zkSave(); toast('مُسحت الكتابة (تراجع يعيدها)'); };
 window.addEventListener('resize', function () { if (ZK && ZK.fit) setTimeout(ZK.fit, 120); });
+
+/* ---------- «ورقة العمل»: a homework sheet of performance tasks for a lesson, designed by Claude, printed or saved as PDF ----------
+   Kept in the notes store as w:<bookId>:<lessonId> {ws:[{id, title, css, html, idea, at}], t}. The sheet is HTML and CSS only (no scripts),
+   built on A4 pages: two pages for the student and a page of answers for the teacher. */
+var WS_SYS = [
+  'أنت مصمم أوراق عمل مبدع ومعلم علوم خبير في المرحلة المتوسطة (بنين) في المملكة العربية السعودية.',
+  'صمّم ورقة عمل ملونة جميلة جذابة للطلاب، واجبًا منزليًا في صورة مهام أدائية عن الدرس المعطى، تُطبع على ورق A4 بطابعة ملونة.',
+  'أعد صفحة HTML كاملة واحدة فقط تبدأ بـ <!DOCTYPE html> وتنتهي بـ </html>، دون أي شرح أو علامات ``` قبلها أو بعدها.',
+  'شروط تقنية لازمة:',
+  '- ممنوع JavaScript وممنوع أي مورد خارجي (خطوط أو صور أو روابط). الزخارف والأيقونات بـ SVG داخل الصفحة أو CSS أو رموز تعبيرية.',
+  '- كل المحتوى داخل عناصر <section class="page"> متتالية، وكل CSS يخص عناصر داخلها بأصناف (class) خاصة بك. لا تكتب قواعد لـ html أو body أو * ولا @page ولا @import، ولا تغيّر عرض .page أو ارتفاعه أو هوامشه (التطبيق يجعل كل .page ورقة A4 بحشوة 11 مم).',
+  '- بالضبط ثلاث صفحات: صفحتان للطالب، ثم صفحة ثالثة <section class="page ws-key"> هي نموذج الإجابة للمعلم.',
+  '- كل صفحة يتسع محتواها في ورقة A4 واحدة دون أن يفيض: نحو 6 أسئلة أو مهمتين في الصفحة. استعمل break-inside:avoid لكل سؤال ومهمة، ومسافات إجابة كافية (أسطر منقطة أو مربعات) تناسب خط طالب في المتوسط.',
+  '- خط font-family: system-ui, "Geeza Pro", "Noto Naskh Arabic", sans-serif، وأحجام مقروءة عند الطباعة (النص 12pt تقريبًا، والعناوين أكبر)، وأرقام غربية 0-9، واتجاه من اليمين إلى اليسار.',
+  '- ألوان زاهية متناسقة بلوحة من 3 أو 4 ألوان مع خلفيات فاتحة للبطاقات، وتباين واضح للنص، ولا خلفية داكنة كاملة تستهلك الحبر.',
+  '- الحجم: الصفحة كلها أقل من 24 ألف حرف.',
+  'المحتوى:',
+  '- الصفحة الأولى: ترويسة جذابة بعنوان مبتكر للورقة ومادة العلوم واسم الدرس، وخانات: اسم الطالب، والفصل، والتاريخ، وموعد التسليم. وعبارة «إعداد المعلم: ...» باسم المعلم المعطى بخط واضح في الترويسة أو التذييل، واسم المدرسة إن أُعطي.',
+  '- مهام أدائية للبيت (عددها كما يُطلب) يطبّق فيها الطالب الدرس في حياته: يلاحظ في بيته، أو يجري نشاطًا آمنًا بأدوات منزلية، أو يرسم ويصمم، أو يجمع بيانات بسيطة في جدول، أو يشرح لأحد أفراد أسرته. لكل مهمة: عنوان، وهدف في سطر، وخطوات قصيرة مرقمة، ومساحة للإنجاز، واحتياط سلامة إن لزم (لا مواد كيميائية ولا نار ولا كهرباء منزلية).',
+  '- سلم تقدير صغير للمهام (جدول: المعيار والدرجات) في آخر صفحة الطالب الثانية، وسطر تقييم ذاتي («فهمت الدرس / أحتاج مراجعة»).',
+  '- أسئلة التقويم المعطاة كما هي بنصها وخياراتها دون تغيير معناها، موزعة على أقسام بأسماء جذابة، ومرتبة من الأسهل إلى الأصعب بعلامة نجمة أو اثنتين أو ثلاث. وسؤال «تحدٍّ» اختياري أخير من عندك عن الدرس نفسه.',
+  '- صفحة نموذج الإجابة: إجابة كل سؤال برقمه، والإجابة النموذجية المختصرة لكل سؤال مقالي، ومعايير تصحيح كل مهمة أدائية.',
+  '- عربية فصيحة سليمة قصيرة الجمل، ودقة علمية تامة بمصطلحات الكتاب. لا تذكر أي شيء عن الذكاء الاصطناعي أو Claude في الورقة.'
+].join('\n');
+var WS_STYLES = ['مغامرة علمية', 'ملف محقق علمي', 'مجلة علمية', 'رحلة استكشاف', 'كلاسيكي ملون'];
+var WS_BASE = '.ws-root.ws-root{background:none!important;margin:0!important;padding:0!important;width:auto!important;min-height:0!important}.ws-root{direction:rtl;color:#1d2422;font-family:system-ui,"Geeza Pro","Noto Naskh Arabic",sans-serif;font-size:12pt;line-height:1.55}' +
+  '.ws-root *,.ws-root *::before,.ws-root *::after{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+  '.ws-root .page{width:210mm;min-height:297mm;padding:11mm;margin:0 auto 8mm;background:#fff;position:relative;overflow:hidden;break-after:page;page-break-after:always;box-shadow:0 2px 14px rgba(0,0,0,.14)}' +
+  '.ws-root .page:last-child{break-after:auto;page-break-after:auto}' +
+  '.ws-root.student .ws-key{display:none!important}.ws-root.key .page:not(.ws-key){display:none!important}' +
+  '@media print{.ws-root .page{margin:0;box-shadow:none;height:297mm}}';
+function wsKey(b, l) { return 'w:' + lk(b, l); }
+function wsOf(b, l) { var r = XC[wsKey(b, l)]; return r && Array.isArray(r.ws) ? r.ws : []; }
+function wsSave(b, l, list) { var k = wsKey(b, l); if (!list.length) { delete XC[k]; dbDel('notes', k); return; } var rec = { k: k, ws: list, t: Date.now() }; XC[k] = rec; dbPut('notes', rec); }
+function wsTeacher() { return P.teacher == null ? 'فيصل خالد المطيري' : P.teacher; }
+function wsClean(html) { // from Claude's page: its styles and pages only, nothing that runs or loads
+  var d = new DOMParser().parseFromString(html, 'text/html'), css = Array.prototype.map.call(d.querySelectorAll('style'), function (s) { return s.textContent; }).join('\n');
+  Array.prototype.forEach.call(d.querySelectorAll('script,style,link,meta,iframe,object,embed,base,form'), function (n) { n.remove(); });
+  Array.prototype.forEach.call(d.querySelectorAll('*'), function (n) {
+    Array.prototype.slice.call(n.attributes).forEach(function (a) { if (/^on/i.test(a.name) || (/^(src|href|xlink:href|action)$/i.test(a.name) && !/^(data:image\/|#)/i.test(a.value))) n.removeAttribute(a.name); });
+  });
+  css = css.replace(/@import[^;]+;/gi, '').replace(/@page[^{]*\{[^}]*\}/gi, '').replace(/url\(\s*['"]?(?!data:)[^)]*\)/gi, 'none')
+    .replace(/(^|[},;\s])(html|body)(?=[\s,{:.#\[>~+])/gi, '$1.ws-root').replace(/(^|[},;\s])\*(?=\s*[,{])/g, '$1.ws-root *');
+  var body = d.body ? d.body.innerHTML : '';
+  if (!/class="[^"]*\bpage\b/.test(body)) body = '<section class="page">' + body + '</section>';
+  return { css: css, html: body };
+}
+function wsDoc(w, mode, screen) { // the sheet as one page of its own (for the preview and the shared file)
+  return '<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:; font-src data:"><title>' + esc(w.title) + '</title>' +
+    '<style>@page{size:A4;margin:0}html,body{margin:0;background:' + (screen ? '#e9ecea' : '#fff') + '}body{padding:' + (screen ? '10px 0' : '0') + '}' + WS_BASE + (screen ? '@media screen and (max-width:860px){.ws-root{zoom:.9}}@media screen and (max-width:760px){.ws-root{zoom:.8}}@media screen and (max-width:660px){.ws-root{zoom:.7}}@media screen and (max-width:560px){.ws-root{zoom:.6}}@media screen and (max-width:470px){.ws-root{zoom:.5}}@media screen and (max-width:400px){.ws-root{zoom:.44}}' : '') + '</style><style>' + w.css + '</style></head><body><div class="ws-root ' + (mode || 'all') + '">' + w.html + '</div></body></html>';
+}
+L_TAB.ws = function (a, b, l) {
+  var list = wsOf(b, l), k = lk(b, l), ai = !!P.ai.key, z = a.quiz, nq = qLive(k, z.mcq).length + qLive(k, z.tf).length + qLive(k, z.short).length, open = route.ws;
+  var h = '<p class="muted small" style="margin-bottom:12px">ورقة عمل ملونة للبيت: مهام أدائية يطبّق فيها الطالب الدرس، ومعها أسئلة «التقويم» (' + cnt(nq, WORDS.q) + ' غير المتجاهلة)، وصفحة نموذج إجابة لك. اطبعها أو احفظها PDF ووزّعها.</p>';
+  h += list.map(function (w) {
+    var on = open === w.id, q = ' data-k="' + esc(k) + '" data-id="' + w.id + '"';
+    return '<article class="xcard lab-card hue-rose"><header class="x-head"><span class="i-num">' + svgI('pen') + '</span><p class="x-ind">' + esc(w.title) + '</p></header>' +
+      (on ? '<iframe class="ws-f" data-ws="' + w.id + '" title="' + esc(w.title) + '" sandbox="" srcdoc="' + esc(wsDoc(w, 'all', true)) + '"></iframe>' : '') +
+      '<div class="actions" style="margin-top:8px"><button class="btn' + (on ? ' ghost' : '') + ' sm" data-act="ws-open"' + q + '>' + (on ? 'أغلق المعاينة' : 'عاين الورقة') + '</button>' +
+      '<button class="btn ghost sm tint hue-rose" data-act="ws-print" data-m="student"' + q + '>اطبع أو احفظ PDF</button>' +
+      '<button class="btn ghost sm" data-act="ws-print" data-m="key"' + q + '>نموذج الإجابة</button>' +
+      '<button class="btn ghost sm" data-act="ws-share"' + q + '>شارك الملف</button>' +
+      '<button class="btn ghost sm" data-act="ws-edit"' + q + '>' + svgI('spark') + 'عدّلها</button>' +
+      (w.prev ? '<button class="btn ghost sm" data-act="ws-undo"' + q + '>ارجع للنسخة السابقة</button>' : '') +
+      '<button class="btn ghost sm danger" data-act="ws-del"' + q + '>احذف</button></div></article>';
+  }).join('');
+  h += '<details class="panel gen ai-fold" data-fold="ws"' + (foldOpen('ws', !list.length) ? ' open' : '') + '><summary class="hh">' + ico('pen', 'rose') + (list.length ? 'صمّم ورقة أخرى' : 'صمّم ورقة عمل لهذا الدرس') + '</summary>' +
+    (ai ? '<div class="lab-types">' + WS_STYLES.map(function (t) { return '<button type="button" class="chip" data-act="ws-style" data-v="' + esc(t) + '">' + esc(t) + '</button>'; }).join('') + '</div>' +
+      '<label class="field"><span>طابع الورقة أو فكرتها (اختياري)</span><textarea id="ws-idea" rows="2" placeholder="مثال: محقق علمي يتتبع تحولات الطاقة في المطبخ"></textarea></label>' +
+      '<div class="ws-row"><label class="field"><span>عدد المهام الأدائية</span><select id="ws-n"><option value="2">مهمتان</option><option value="3">ثلاث مهام</option></select></label>' +
+      '<label class="field"><span>موعد التسليم (اختياري)</span><input id="ws-due" type="text" placeholder="مثال: الأحد القادم"></label></div>' +
+      '<div class="ws-row"><label class="field"><span>إعداد المعلم</span><input id="ws-t" type="text" value="' + esc(wsTeacher()) + '"></label>' +
+      '<label class="field"><span>المدرسة (اختياري)</span><input id="ws-s" type="text" value="' + esc(P.school || '') + '" placeholder="اسم المدرسة"></label></div>' +
+      '<div class="actions"><button class="btn" data-act="ws-gen" data-k="' + esc(k) + '"' + (nq ? '' : ' disabled') + '>' + svgI('spark') + 'صمّم ورقة العمل</button></div>' +
+      '<p class="small muted">' + (nq ? 'تستغرق دقيقة إلى ثلاث.' : 'لا أسئلة في «التقويم» لهذا الدرس (أو كلها متجاهلة).') + '</p>'
+      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
+  return h;
+};
+ACT['ws-style'] = function (el) { var t = document.getElementById('ws-idea'); if (t) t.value = el.getAttribute('data-v'); Array.prototype.forEach.call(document.querySelectorAll('.lab-types .chip'), function (c) { c.classList.toggle('on', c === el); }); };
+ACT['ws-open'] = function (el) { var id = el.getAttribute('data-id'); route.ws = route.ws === id ? null : id; render(true); };
+function wsFind(el) { var x = lessonByKey(el.getAttribute('data-k')); if (!x) return null; var list = wsOf(x.b, x.l), w = list.filter(function (y) { return y.id === el.getAttribute('data-id'); })[0]; return w ? { x: x, list: list, w: w } : null; }
+function wsQuestions(x) { // the lesson's questions as the sheet must keep them, with their answers for the key
+  var a = aidOf(x.b, x.l), k = lk(x.b, x.l), z = a.d.quiz, t = [];
+  qLive(k, z.mcq).forEach(function (q, i) { t.push('اختيار من متعدد ' + (i + 1) + ': ' + plain(q.q) + '\n' + q.o.map(function (o, j) { return '  ' + LET[j] + ') ' + plain(o); }).join('\n') + '\n  الإجابة: ' + LET[q.a] + (q.e ? ' — ' + plain(q.e) : '')); });
+  qLive(k, z.tf).forEach(function (q, i) { t.push('صح أو خطأ ' + (i + 1) + ': ' + plain(q.q) + '\n  الإجابة: ' + (q.a ? 'صح' : 'خطأ') + (q.e ? ' — ' + plain(q.e) : '')); });
+  qLive(k, z.short).forEach(function (q, i) { t.push('سؤال مقالي ' + (i + 1) + ': ' + plain(q.q) + '\n  الإجابة النموذجية: ' + plain(q.a)); });
+  return t.join('\n\n');
+}
+var WSGEN = null;
+function wsWrite(ask, prog) {
+  return claude(WS_SYS, [{ type: 'text', text: ask }], 24000, function (n) { prog('يكتب Claude الورقة… ' + num(n) + ' حرفًا'); }, WSGEN).then(function (res) {
+    var s = res.text, i = s.search(/<!DOCTYPE html|<html[\s>]/i), j = s.toLowerCase().lastIndexOf('</html>');
+    if (i < 0 || j < i) throw aiErr(res.stop === 'max_tokens' ? 'cut' : 'json');
+    return s.slice(i, j + 7);
+  });
+}
+function wsMake(raw, teacher) {
+  var c = wsClean(raw), tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(raw);
+  if (teacher && plain(c.html.replace(/<[^>]+>/g, ' ')).indexOf(teacher) < 0) // the teacher's name is always on the sheet
+    c.html = c.html.replace(/<\/section>/i, '<p class="ws-by" style="position:absolute;bottom:6mm;left:11mm;right:11mm;text-align:center;font-size:10pt;color:#555">إعداد المعلم: ' + esc(teacher) + '</p></section>');
+  return { css: c.css, html: c.html, title: ((tm && tm[1]) || 'ورقة عمل').replace(/<[^>]+>/g, '').trim().slice(0, 90) };
+}
+ACT['ws-gen'] = function (el) {
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return;
+  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  function val(id) { var e = document.getElementById(id); return e ? e.value.trim() : ''; }
+  var idea = val('ws-idea'), n = +val('ws-n') || 2, due = val('ws-due'), teacher = val('ws-t'), school = val('ws-s');
+  P.teacher = teacher; P.school = school; savePref();
+  WSGEN = { stopped: false }; wake(true);
+  var t0 = Date.now(), prog = progModal('Claude يصمّم ورقة العمل', 'ws-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 1400, 4, 95) + '%'; }, 500);
+  prog('يقرأ الدرس وأسئلته…');
+  var ask = labCtx(x.b, x.l) + '\n\nأسئلة التقويم التي تضعها في الورقة (بنصها، والإجابات لصفحة نموذج الإجابة فقط):\n' + wsQuestions(x) +
+    '\n\nعدد المهام الأدائية: ' + n + '\nإعداد المعلم: ' + (teacher || '—') + (school ? '\nالمدرسة: ' + school : '') + (due ? '\nموعد التسليم: ' + due : '') +
+    (idea ? '\nطابع الورقة كما طلبه المعلم: ' + idea : '\nاختر أنت طابعًا مبتكرًا جذابًا للورقة يناسب الدرس.') + labNotYet(x, '') +
+    '\n\nاكتب صفحة HTML الآن، مكتملة حتى </html>.';
+  wsWrite(ask, prog).then(function (raw) {
+    clearInterval(tick); wake(false);
+    var m = wsMake(raw, teacher), w = { id: 'w' + Date.now().toString(36), title: m.title, css: m.css, html: m.html, idea: idea.slice(0, 200), at: Date.now() };
+    wsSave(x.b, x.l, wsOf(x.b, x.l).concat([w]));
+    var md = document.getElementById('modal'); md.__busy = false; closeModal();
+    route.tab = 'ws'; route.ws = w.id; render(true); toast('جاهزة: «' + w.title + '». راجعها ثم اطبعها أو احفظها PDF', 4500);
+  })['catch'](function (e) { clearInterval(tick); wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم تكتمل الورقة') + '</h2><p class="muted">' + (e.code === 'stop' ? '' : e.code === 'cut' ? 'طالت الورقة أكثر من حد الرد فلم تُحفظ. أعد المحاولة بمهمتين.' : esc(aiMsg(e))) + '</p>'); });
+};
+ACT['ws-stop'] = function () { if (WSGEN) { WSGEN.stopped = true; if (WSGEN.abort) WSGEN.abort(); } };
+ACT['ws-print'] = function (el) { // the sheet in the app's own page, alone on paper: the iPad's print sheet prints it or saves it as PDF
+  var f = wsFind(el); if (!f) return; var mode = el.getAttribute('data-m') === 'key' ? 'key' : 'student';
+  var old = document.getElementById('ws-print'); if (old) old.remove();
+  var host = document.createElement('div'); host.id = 'ws-print'; document.body.appendChild(host);
+  var root = host.attachShadow ? host.attachShadow({ mode: 'open' }) : host;
+  root.innerHTML = '<style>' + WS_BASE + '</style><style>' + f.w.css + '</style><div class="ws-root ' + mode + '">' + f.w.html + '</div>';
+  var done = function () { window.removeEventListener('afterprint', done); setTimeout(function () { if (host.parentNode) host.remove(); }, 400); };
+  window.addEventListener('afterprint', done);
+  setTimeout(function () { try { window.print(); } catch (e) { toast('تعذّرت الطباعة هنا: استعمل «شارك الملف»'); } setTimeout(function () { if (host.parentNode && !window.matchMedia('print').matches) done(); }, 60000); }, 80);
+};
+ACT['ws-share'] = function (el) {
+  var f = wsFind(el); if (!f) return;
+  saveFile((f.x.l.title + ' - ' + f.w.title).replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 80) + '.html', wsDoc(f.w, 'all', false), 'text/html').then(function (r) { if (r === 'download') toast('حُفظ الملف: افتحه واطبعه أو احفظه PDF'); });
+};
+ACT['ws-del'] = function (el) {
+  if (!el.classList.contains('arm')) { el.classList.add('arm'); el.textContent = 'اضغط مرة ثانية للحذف'; setTimeout(function () { el.classList.remove('arm'); el.textContent = 'احذف'; }, 3000); return; }
+  var f = wsFind(el); if (!f) return; wsSave(f.x.b, f.x.l, f.list.filter(function (y) { return y !== f.w; })); render(true); toast('حُذفت الورقة');
+};
+ACT['ws-edit'] = function (el) {
+  var f = wsFind(el); if (!f) return; if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  var fixes = ['صحّح خطأ في سؤال أو إجابة', 'أبسط وأقل ازدحامًا', 'ألوان أهدأ', 'مساحات إجابة أكبر', 'غيّر إحدى المهام', 'محتوى فاض عن الصفحة'];
+  openModal(card('<h2>عدّل ورقة العمل</h2><p class="small muted">صف ما تريد تغييره، ويعيد Claude كتابة الورقة. تبقى النسخة الحالية فتستطيع الرجوع إليها.</p>' +
+    '<div class="lab-ideas">' + fixes.map(function (t) { return '<button type="button" class="lab-idea lab-fix" data-act="lab-fix-pick" data-v="' + esc(t) + '"><span>' + esc(t) + '</span></button>'; }).join('') + '</div>' +
+    '<label class="field"><span>ملاحظاتك</span><textarea id="lab-note" rows="3" placeholder="مثال: السؤال الثالث فاض إلى خارج الصفحة، وأريد المهمة الثانية عن المطبخ"></textarea></label>' +
+    '<div class="actions"><button class="btn" data-act="ws-fix" data-k="' + esc(el.getAttribute('data-k')) + '" data-id="' + f.w.id + '">' + svgI('spark') + 'عدّلها</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
+};
+ACT['ws-fix'] = function (el) {
+  var f = wsFind(el); if (!f) return; var t = document.getElementById('lab-note'), note = t ? t.value.trim() : '';
+  if (!note) { toast('اكتب ما تريد تغييره، أو اختر من الاقتراحات'); return; }
+  WSGEN = { stopped: false }; wake(true);
+  var t0 = Date.now(), prog = progModal('Claude يعدّل ورقة العمل', 'ws-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 1600, 4, 95) + '%'; }, 500);
+  prog('يقرأ الورقة الحالية…');
+  var ask = labCtx(f.x.b, f.x.l) + '\n\nأسئلة التقويم:\n' + wsQuestions(f.x) + '\n\nإعداد المعلم: ' + wsTeacher() + '\n\nهذه الورقة الحالية:\n<!DOCTYPE html><html><head><style>' + f.w.css + '</style></head><body>' + f.w.html + '</body></html>\n\nملاحظات المعلم:\n' + note + '\n\nأعد كتابة الورقة كاملة بعد تنفيذ الملاحظات، مع الإبقاء على ما يعمل فيها. أعد صفحة HTML كاملة فقط حتى </html>.';
+  wsWrite(ask, prog).then(function (raw) {
+    clearInterval(tick); wake(false);
+    var m = wsMake(raw, wsTeacher()); f.w.prev = { css: f.w.css, html: f.w.html, title: f.w.title, at: f.w.at };
+    f.w.css = m.css; f.w.html = m.html; f.w.title = m.title || f.w.title; f.w.at = Date.now(); wsSave(f.x.b, f.x.l, f.list);
+    var md = document.getElementById('modal'); md.__busy = false; closeModal(); route.tab = 'ws'; route.ws = f.w.id; render(true); toast('عُدّلت الورقة. وإن لم تعجبك فارجع للنسخة السابقة', 4500);
+  })['catch'](function (e) { clearInterval(tick); wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم يكتمل التعديل') + '</h2><p class="muted">' + (e.code === 'stop' ? '' : esc(aiMsg(e))) + ' ولم تتغير الورقة الحالية.</p>'); });
+};
+ACT['ws-undo'] = function (el) {
+  var f = wsFind(el); if (!f || !f.w.prev) return; var cur = { css: f.w.css, html: f.w.html, title: f.w.title, at: f.w.at };
+  f.w.css = f.w.prev.css; f.w.html = f.w.prev.html; f.w.title = f.w.prev.title; f.w.at = f.w.prev.at; f.w.prev = cur; wsSave(f.x.b, f.x.l, f.list); render(true); toast('رجعت للنسخة السابقة (اضغط مرة أخرى للتبديل)');
+};
 
 /* ---------- presenting a lesson to the class: one idea per screen ---------- */
 var PV = null;
@@ -3251,7 +3419,7 @@ function rekeyBook(oldId, nu) { // move everything of a book to the id the other
     });
   }
   var pre = oldId + ':', pk = function (key) { return key.indexOf(pre) === 0; }, mk = function (key) { return nu + key.slice(oldId.length); };
-  var npk = function (key) { return /^[bxpalnfg]:/.test(key) && key.indexOf(pre, 2) === 2; }, nmk = function (key) { return key.slice(0, 2) + nu + key.slice(2 + oldId.length); };
+  var npk = function (key) { return /^[bxpalnfgw]:/.test(key) && key.indexOf(pre, 2) === 2; }, nmk = function (key) { return key.slice(0, 2) + nu + key.slice(2 + oldId.length); };
   return Promise.all([
     dbGet('books', oldId).then(function (b) { if (!b) return; b.id = nu; return tx('books', 'readwrite', function (s) { s.put(b); s['delete'](oldId); }); }),
     dbGet('files', oldId).then(function (f) { if (!f) return; f.id = nu; return tx('files', 'readwrite', function (s) { s.put(f); s['delete'](oldId); }); }),

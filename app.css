@@ -386,3 +386,14 @@ html.kb nav.tabs{display:none!important}html.kb .rd-bar{display:none!important}
 .zk-finger .zink{touch-action:none}
 .rd-bar.zbar{bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:3}
 .pg canvas.pg-lv{inset:auto;z-index:4;pointer-events:none}
+/* worksheets */
+.ws-f{display:block;width:100%;height:min(82vh,900px);min-height:420px;border:1px solid var(--rule);border-radius:12px;background:#e9ecea;margin-top:4px}
+.ws-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:520px){.ws-row{grid-template-columns:1fr}}
+#ws-print{display:none}
+@media print{
+  @page{size:A4;margin:0}
+  html,body{margin:0!important;padding:0!important;background:#fff!important;min-height:0!important;height:auto!important;overflow:visible!important}
+  body>*:not(#ws-print){display:none!important}
+  #ws-print{display:block!important}
+}
