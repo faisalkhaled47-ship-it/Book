@@ -2764,7 +2764,8 @@ function xaHook(card) {
   card.addEventListener('touchstart', function (e) {
     var t = e.changedTouches[0]; if (!t) return;
     var stylus = t.touchType === 'stylus', finger = !stylus && xaPref().finger;
-    if (finger && e.touches.length >= 2) { // a second finger: cancel the stroke just begun, and scroll instead
+    var pen2 = Array.prototype.some.call(e.touches, function (x) { return x.touchType === 'stylus'; }) || (XA_LIVE && XA_LIVE.stylus); // a palm beside the pencil is not a two-finger scroll
+    if (finger && e.touches.length >= 2 && !pen2) { // a second finger: cancel the stroke just begun, and scroll instead
       if (XA_LIVE && !XA_LIVE.stylus) { var L0 = XA_LIVE; XA_LIVE = null; xaDraw(L0.card); }
       pan = { y: (e.touches[0].clientY + e.touches[1].clientY) / 2 }; e.preventDefault(); return;
     }
@@ -4025,12 +4026,12 @@ function sbPush() {
   });
 }
 function sbRefresh() { // show what arrived, unless the teacher is in the middle of something
-  var busy = route.v === 'read' || !document.getElementById('modal').hidden || !document.getElementById('pv').hidden || XA_LIVE || NB_LIVE.some(function (B) { return B.cur; }) || (document.activeElement && /input|textarea|select/i.test(document.activeElement.tagName));
+  var busy = route.v === 'read' || route.v === 'lesson' || !document.getElementById('modal').hidden || !document.getElementById('pv').hidden || XA_LIVE || NB_LIVE.some(function (B) { return B.cur; }) || (document.activeElement && /input|textarea|select/i.test(document.activeElement.tagName));
   if (busy) { SB_LATER = true; return; }
   SB_LATER = false; render(true);
 }
 var SB_LATER = false;
-AFTER.push(function () { if (SB_LATER && route.v !== 'read') { SB_LATER = false; setTimeout(function () { render(true); }, 0); } });
+AFTER.push(function () { if (SB_LATER && route.v !== 'read' && route.v !== 'lesson') { SB_LATER = false; setTimeout(function () { render(true); }, 0); } }); // never while a lesson is open: re-drawing it under the teacher moved the page
 document.addEventListener('input', function (e) { // keep what is typed, so leaving the app to copy the key loses nothing
   var t = e.target, id = t && t.id; if (sbOn() || (id !== 'sb-url' && id !== 'sb-key' && id !== 'sb-email')) return;
   P.sb = P.sb || {};
