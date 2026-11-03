@@ -2139,12 +2139,9 @@ var FILM_SYS = [
   ' "sum":[4 إلى 6 عناصر {"i":"أيقونة","x":"جملة خلاصة"}]}',
   'أنواع المشاهد:',
   '- {"t":"cards","sec":"اسم المحطة","h":"عنوان","items":[3 إلى 6 {"i":"أيقونة","l":"اسم قصير","d":"وصف في جملة قصيرة","c":"لون"}]} لتعريف مجموعة مفاهيم (مثل أشكال الطاقة أو أنواع شيء).',
-  '- {"t":"explain","sec":"اسم المحطة","h":"عنوان المشهد","pts":[2 إلى 4 نقاط، كل نقطة 14 كلمة على الأكثر],"flow":[اختياري: سلسلة تحول أو خطوات {"i":"أيقونة","l":"تسمية قصيرة","c":"لون"} من 2 إلى 4],"svg":"رسم توضيحي","note":"اختياري: ربط بالحياة أو تنبيه في جملة"}.',
+  '- {"t":"explain","sec":"اسم المحطة","h":"عنوان المشهد","pts":[2 إلى 4 نقاط، كل نقطة 14 كلمة على الأكثر],"flow":[اختياري: سلسلة تحول أو خطوات {"i":"أيقونة","l":"تسمية قصيرة","c":"لون"} من 2 إلى 4],"art":"وصف الرسم في جملة أو جملتين","note":"اختياري: ربط بالحياة أو تنبيه في جملة"}.',
   '- {"t":"q","sec":"اسم المحطة","i":"أيقونة","q":"سؤال مفتوح يفكر فيه الطلاب","a":"الإجابة في جملة أو جملتين"} ضع 2 أو 3 منها بين مشاهد الشرح.',
-  'قواعد svg (لمشاهد explain، وفي أغلبها رسم):',
-  '- <svg viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg"> فقط، رسم مسطح واضح بخطوط عريضة (stroke-width 3 إلى 6) وألوان من اللوحة، يشرح الفكرة نفسها (جهاز، جسم، عملية، تجربة، مقارنة) لا زخرفة.',
-  '- قسّمه إلى 3 إلى 6 مجموعات <g> مباشرة تحت svg بترتيب الشرح: التطبيق يُظهرها واحدة بعد أخرى فيصير الرسم متحركًا، والمسارات المرسومة بلا تعبئة (fill="none") تُرسم أمام الطلاب كأنها تُخط. ضع الأسهم والتسميات في المجموعة التي تشرحها.',
-  '- التسميات <text> عربية قصيرة بحجم font-size 24 على الأقل، direction="rtl"، بلون داكن، لا تتداخل مع الرسم. لا صور ولا روابط ولا script ولا style ولا foreignObject. الرسم كله أقل من 2500 حرف.',
+  '- في أغلب مشاهد explain (6 على الأقل) اكتب art: وصفًا دقيقًا لرسم يشرح فكرة المشهد نفسها (ماذا يُرسم، وأجزاؤه بالترتيب، والأسهم، والتسميات)؛ يرسمه رسّام بعدك، فلا تكتب svg.',
   'الأيقونات المتاحة فقط: ' + Object.keys(FILM_IC).join('، ') + '، leaf، planet، globe، flask، bolt، bulb، star، book، clock، warn، target، chart، people.',
   'الألوان المتاحة فقط: ' + Object.keys(FILM_C).join('، ') + '. اجعل لكل مفهوم لونًا وأيقونة ثابتين في المقطع كله.',
   'المحطات (sec): 3 إلى 5 أسماء قصيرة (كلمتان على الأكثر) تقسم الدرس، تتكرر في مشاهدها بالترتيب.',
@@ -2153,6 +2150,14 @@ var FILM_SYS = [
 function filmKey(b, l) { return 'v:' + lk(b, l); }
 function filmsOf(b, l) { var r = XC[filmKey(b, l)]; return r && Array.isArray(r.films) ? r.films : []; }
 function filmsSave(b, l, list) { var k = filmKey(b, l); if (!list.length) { delete XC[k]; dbDel('notes', k); return; } var rec = { k: k, films: list, t: Date.now() }; XC[k] = rec; dbPut('notes', rec); }
+var FILM_ART_SYS = [
+  'أنت رسّام رسوم تعليمية متحركة بـ SVG لمقاطع دروس العلوم في المرحلة المتوسطة.',
+  'ارسم رسمًا واحدًا لمشهد من المقطع كما يُوصف لك، دقيقًا علميًا وواضحًا على جهاز العرض. أعد عنصر <svg> واحدًا فقط بلا أي نص قبله أو بعده.',
+  '- <svg viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg"> فقط، رسم مسطح واضح بخطوط عريضة (stroke-width 3 إلى 6) وألوان من اللوحة، يشرح الفكرة نفسها (جهاز، جسم، عملية، تجربة، مقارنة) لا زخرفة.',
+  '- قسّمه إلى 3 إلى 6 مجموعات <g> مباشرة تحت svg بترتيب الشرح: التطبيق يُظهرها واحدة بعد أخرى فيصير الرسم متحركًا، والمسارات المرسومة بلا تعبئة (fill="none") تُرسم أمام الطلاب كأنها تُخط. ضع الأسهم والتسميات في المجموعة التي تشرحها.',
+  '- التسميات <text> عربية قصيرة بحجم font-size 24 على الأقل، direction="rtl"، بلون داكن، لا تتداخل مع الرسم. لا صور ولا روابط ولا script ولا style ولا foreignObject. الرسم كله أقل من 4000 حرف.',
+  'الألوان: ' + Object.keys(FILM_C).map(function (k) { return FILM_C[k]; }).join('، ') + ' مع خلفيات فاتحة منها، ونص داكن #1d2b4c.'
+].join('\n');
 function filmSvg(src) { // Claude's drawing, cleaned: shapes and text only
   if (!src || typeof src !== 'string' || !/<svg[\s>]/i.test(src)) return '';
   var d; try { d = new DOMParser().parseFromString(src.slice(src.search(/<svg[\s>]/i)), 'image/svg+xml'); } catch (e) { return ''; }
@@ -2174,12 +2179,29 @@ function filmClean(o) { // what Claude sent, made safe and complete enough to pl
   (Array.isArray(o.scenes) ? o.scenes : []).slice(0, 16).forEach(function (c) {
     if (!c || !c.t) return; var sec = s(c.sec, 24);
     if (c.t === 'cards' && Array.isArray(c.items)) f.scenes.push({ t: 'cards', sec: sec, h: s(c.h, 80), items: c.items.slice(0, 6).filter(Boolean).map(function (x) { return { i: ic(x.i), l: s(x.l, 30), d: s(x.d, 110), c: col(x.c) }; }) });
-    else if (c.t === 'explain') f.scenes.push({ t: 'explain', sec: sec, h: s(c.h, 80), pts: (Array.isArray(c.pts) ? c.pts : []).slice(0, 4).map(function (x) { return s(x, 130); }).filter(Boolean), flow: (Array.isArray(c.flow) ? c.flow : []).slice(0, 4).filter(Boolean).map(function (x) { return { i: ic(x.i), l: s(x.l, 30), c: col(x.c) }; }), svg: filmSvg(c.svg), note: s(c.note, 200) });
+    else if (c.t === 'explain') f.scenes.push({ t: 'explain', sec: sec, h: s(c.h, 80), pts: (Array.isArray(c.pts) ? c.pts : []).slice(0, 4).map(function (x) { return s(x, 130); }).filter(Boolean), flow: (Array.isArray(c.flow) ? c.flow : []).slice(0, 4).filter(Boolean).map(function (x) { return { i: ic(x.i), l: s(x.l, 30), c: col(x.c) }; }), svg: filmSvg(c.svg), note: s(c.note, 200), art: s(c.art, 400) });
     else if (c.t === 'q' && c.q) f.scenes.push({ t: 'q', sec: sec, i: ic(c.i), q: s(c.q, 200), a: s(c.a, 300) });
   });
   (Array.isArray(o.sum) ? o.sum : []).slice(0, 6).forEach(function (x) { if (x && x.x) f.sum.push({ i: ic(x.i), x: s(x.x, 160) }); });
   if (f.scenes.length < 3) throw aiErr('json');
   return f;
+}
+
+
+/* the drawings are made one scene at a time, after the scenes are written: a whole film in one answer ran past its length limit,
+   and a drawing made on its own is clearer */
+function filmArtSys() { return FILM_ART_SYS; }
+function filmArt(f, ctxText, call, onProg) { // call(system, text, maxTokens, ctl) -> the answer's text
+  var jobs = f.scenes.filter(function (s) { return s.t === 'explain' && s.art && !s.svg; }), done = 0, next = 0;
+  if (!jobs.length) return Promise.resolve(f);
+  function worker() {
+    if (next >= jobs.length) return Promise.resolve();
+    var s = jobs[next++];
+    var ask = ctxText + '\n\nالمشهد: ' + s.h + '\nنقاطه: ' + s.pts.join('؛ ') + '\nالرسم المطلوب: ' + s.art + '\n\nأعد رسم svg واحدًا فقط.';
+    return call(FILM_ART_SYS, ask, 7000).then(function (t) { var m = /<svg[\s\S]*<\/svg>/i.exec(t || ''); s.svg = m ? filmSvg(m[0]) : ''; }, function (e) { if (e && e.code === 'stop') throw e; s.svg = ''; })
+      .then(function () { done++; if (onProg) onProg(done, jobs.length); return worker(); });
+  }
+  return Promise.all([worker(), worker(), worker()]).then(function () { return f; });
 }
 
 /* ---------- the film as scenes, each with its own length and timed steps ---------- */
@@ -2368,21 +2390,25 @@ ACT['film-del'] = function (el) {
 };
 ACT['film-undo'] = function (el) { var f = filmFind(el); if (!f || !f.fm.prev) return; var cur = { d: f.fm.d, title: f.fm.title, at: f.fm.at }; f.fm.d = f.fm.prev.d; f.fm.title = f.fm.prev.title; f.fm.at = f.fm.prev.at; f.fm.prev = cur; filmsSave(f.x.b, f.x.l, f.list); render(true); toast('رجعت للنسخة السابقة (اضغط مرة أخرى للتبديل)'); };
 var FILMGEN = null;
-function filmWrite(x, extra, ctl, onText) {
+function filmWrite(x, extra, ctl, onText, onArt) { // the scenes first, then each drawing on its own
   var ask = labCtx(x.b, x.l) + (extra ? '\n\n' + extra : '') + labNotYet(x, '') + '\n\nاكتب JSON المقطع الآن.';
-  return claude(FILM_SYS, [{ type: 'text', text: ask }], 24000, onText, ctl).then(function (res) {
+  return claude(FILM_SYS, [{ type: 'text', text: ask }], 16000, onText, ctl).then(function (res) {
     var o = parseJSON(res); if (!o || !o.scenes) throw aiErr(res.stop === 'max_tokens' ? 'cut' : 'json');
-    return filmClean(o);
+    var f = filmClean(o);
+    return filmArt(f, 'الكتاب: ' + x.b.title + '\nالدرس: ' + x.l.title, function (sys, text, max) {
+      var c = {}; if (FILMGEN) (FILMGEN.ctls = FILMGEN.ctls || []).push(c);
+      return claude(sys, [{ type: 'text', text: text }], max, null, c).then(function (r) { return r.text; });
+    }, onArt);
   });
 }
 function filmRun(jobs, title) { // one or many films, three at a time
   FILMGEN = { stopped: false, ctls: [] }; wake(true);
-  var total = jobs.length, done = [], failed = [], next = 0, live = {}, prog = progModal(title, 'film-stop');
-  function show() { var n = 0; Object.keys(live).forEach(function (k) { n += live[k]; }); prog(total > 1 ? 'جاهز ' + done.length + ' من ' + total + (Object.keys(live).length ? ' · يكتب ' + Object.keys(live).length + ' الآن (' + num(n) + ' حرفًا)' : '') : 'يكتب Claude المقطع… ' + num(n) + ' حرفًا', total > 1 ? (done.length + failed.length) / total * 100 : null); }
+  var total = jobs.length, done = [], failed = [], next = 0, live = {}, art = null, prog = progModal(title, 'film-stop');
+  function show() { var n = 0; Object.keys(live).forEach(function (k) { n += live[k]; }); prog(total > 1 ? 'جاهز ' + done.length + ' من ' + total + (Object.keys(live).length ? ' · يعمل على ' + Object.keys(live).length + ' الآن' : '') : art ? 'يرسم Claude الرسوم… ' + art[0] + ' من ' + art[1] : 'يكتب Claude المشاهد… ' + num(n) + ' حرفًا', total > 1 ? (done.length + failed.length) / total * 100 : art ? 50 + art[0] / art[1] * 48 : null); }
   function worker() {
     if (FILMGEN.stopped || next >= total) return Promise.resolve();
     var j = jobs[next], id = next++, ctl = {}; FILMGEN.ctls.push(ctl); live[id] = 0; show();
-    return filmWrite(j.x, j.extra, ctl, function (c) { live[id] = c; show(); }).then(function (d) {
+    return filmWrite(j.x, j.extra, ctl, function (c) { live[id] = c; show(); }, function (a, b) { art = [a, b]; show(); }).then(function (d) {
       if (j.fm) { j.fm.prev = { d: j.fm.d, title: j.fm.title, at: j.fm.at }; j.fm.d = d; j.fm.title = d.title || j.fm.title; j.fm.at = Date.now(); filmsSave(j.x.b, j.x.l, filmsOf(j.x.b, j.x.l)); }
       else filmsSave(j.x.b, j.x.l, filmsOf(j.x.b, j.x.l).concat([{ id: 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), title: d.title || j.x.l.title, d: d, at: Date.now() }]));
       done.push(j);
