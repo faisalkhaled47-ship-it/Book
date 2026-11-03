@@ -3372,8 +3372,11 @@ function stkEdit(ctx, i, fresh) {
 }
 function stkPadBind(pad) { // inside the open note: pencil and finger both write
   if (!pad) return; var cur = null;
+  // writing must never start a text selection or the copy menu (iOS does so on a held pencil or finger)
+  pad.addEventListener('touchstart', function (e) { if (e.target.closest && e.target.closest('textarea,input,button')) return; e.preventDefault(); }, { passive: false });
+  pad.addEventListener('selectstart', function (e) { e.preventDefault(); });
   pad.addEventListener('pointerdown', function (e) {
-    e.preventDefault(); var a = document.activeElement; if (a && a.blur && a.id === 'stk-t') a.blur();
+    e.preventDefault(); var a = document.activeElement; if (a && a.blur && a.id === 'stk-t') a.blur(); try { var sel = window.getSelection(); if (sel && sel.rangeCount) sel.removeAllRanges(); } catch (x) {}
     var h = pad.querySelector('.stk-hint'); if (h) h.hidden = true;
     cur = stkInkBegin(pad.querySelector('svg.stk-ink'), e, STK_LAST.ink, 9); cur.id = e.pointerId; try { pad.setPointerCapture(e.pointerId); } catch (x) {}
   });
