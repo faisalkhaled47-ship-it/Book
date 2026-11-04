@@ -482,8 +482,9 @@ html.kb nav.tabs{display:none!important}html.kb .rd-bar{display:none!important}
 .tabs-pick input{width:20px;height:20px;accent-color:var(--accent)}
 .stk-pad,.stk-pad *,.stk-ed .stk-cs,.stk-ed .actions{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 /* Bloom levels in التقويم */
-.bl-panel{background:var(--panel);border:1px solid var(--rule);border-radius:16px;padding:12px 14px;margin-bottom:14px}
-.bl-h{margin:0 0 8px;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.bl-panel .bl-bar{margin-top:12px}
+.bl-on{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.bl-list.notag .bl-tag{display:none}
 .bl-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .bl-chip{appearance:none;font:inherit;font-size:13px;border:1.5px solid var(--rule);background:var(--panel-2,var(--panel));color:var(--ink-2,var(--ink));border-radius:999px;padding:5px 12px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
 .bl-chip b{font-weight:800}
@@ -498,3 +499,4 @@ html.kb nav.tabs{display:none!important}html.kb .rd-bar{display:none!important}
 .bl-list[data-f="4"] [data-bl]:not([data-bl="4"]),.bl-list[data-f="5"] [data-bl]:not([data-bl="5"]),.bl-list[data-f="6"] [data-bl]:not([data-bl="6"]),
 .bl-list[data-f] .lq:not([data-bl]),.bl-list[data-f] .citem:not([data-bl]){display:none}
 .bl-chip.bl1{border-color:#5b6b82}.bl-chip.bl2{border-color:#2a7fd4}.bl-chip.bl3{border-color:#1f9d6b}.bl-chip.bl4{border-color:#d98a0b}.bl-chip.bl5{border-color:#d1495b}.bl-chip.bl6{border-color:#7b4fd6}
+.bl-list[data-f] .q-skipped{display:none}

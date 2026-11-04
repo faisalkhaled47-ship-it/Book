@@ -2517,9 +2517,20 @@ L_TAB.eval = function (a, b, l) {
     '<button class="btn ghost sm" data-act="bl-bulk" data-k="' + esc(k) + '" data-s="unit">دروس الوحدة</button><button class="btn ghost sm" data-act="bl-bulk" data-k="' + esc(k) + '" data-s="all">كل دروس الكتاب</button></div>' : '';
   var note = !tagged ? 'أسئلة هذا الدرس بلا مستويات بعد. «رتّب التقويم» يصنّفها ويكمل الناقص: 8 اختيار و5 صح وخطأ و4 مقالية تغطي المستويات الستة.'
     : missing.length ? 'ينقصه: ' + missing.join('، ') + '.' : 'يغطي المستويات الستة.';
-  return '<section class="bl-panel"><p class="bl-h"><b>مستويات بلوم</b> <span class="small muted">' + esc(note) + '</span></p>' + bar + tools + '</section>' +
-    '<div class="bl-list"' + (f ? ' data-f="' + f + '"' : '') + '>' + BL_BASE(a, b, l) + '</div>';
+  var notag = P.bltag === false;
+  var top = f ? '<p class="bl-on small"><span class="bl-tag bl' + f + '">' + BLOOM[f - 1] + '</span>يعرض أسئلة هذا المستوى فقط · <button type="button" class="btn ghost sm" data-act="bl-f" data-k="' + esc(k) + '" data-n="0">أظهر الكل</button></p>' : '';
+  var panel = '<details class="panel gen ai-fold bl-panel" data-fold="bloom"' + (foldOpen('bloom', false) || f ? ' open' : '') + ' style="margin-top:16px"><summary class="hh">' + ico('chart', 'blue') + 'مستويات بلوم<span class="small muted">' + esc(note) + '</span></summary>' +
+    bar + '<div class="actions bl-acts"><button type="button" class="btn ghost sm" data-act="bl-tag">' + (notag ? 'أظهر مستوى كل سؤال بجانبه' : 'أخفِ مستوى كل سؤال') + '</button></div>' + tools + '</details>';
+  var body = BL_BASE(a, b, l);
+  if (f) { // a section with no question of this level loses its heading too
+    var cut = body.indexOf('<details class="panel gen'), head = cut < 0 ? body : body.slice(0, cut), rest = cut < 0 ? '' : body.slice(cut), parts = head.split('<h3 class="sec-h">');
+    head = parts[0] + parts.slice(1).map(function (x) { return x.indexOf('data-bl="' + f + '"') >= 0 ? '<h3 class="sec-h">' + x : x.slice(x.indexOf('</h3>') + 5); }).join('');
+    if (head.indexOf('data-bl="' + f + '"') < 0) head += '<p class="muted">لا أسئلة بمستوى «' + BLOOM[f - 1] + '» في هذا الدرس.</p>';
+    body = head + rest;
+  }
+  return top + '<div class="bl-list' + (notag ? ' notag' : '') + '"' + (f ? ' data-f="' + f + '"' : '') + '>' + body + '</div>' + panel;
 };
+ACT['bl-tag'] = function () { P.bltag = P.bltag === false; savePref(); render(true); };
 ACT['bl-f'] = function (el) { var k = el.getAttribute('data-k'), n = +el.getAttribute('data-n'); if (n) BL_F[k] = n; else delete BL_F[k]; render(true); };
 
 function blAsk(x, rec) {
