@@ -1290,10 +1290,10 @@ var GAME_SYS = [
   '- شاشة بداية فيها اسم اللعبة وطريقة اللعب في سطرين وزر «ابدأ»، واختيار «لاعب واحد» أو «فريقان» إن ناسب نوع اللعبة (في الفريقين يتناوب الدور وتظهر نقاط كل فريق).',
   '- نقاط ومستويات أو جولات، ومؤقت اختياري يمكن إيقافه، وتغذية راجعة فورية لكل إجابة: تأثير بصري للصح والخطأ وجملة قصيرة تشرح السبب.',
   '- شاشة نهاية فيها النتيجة ومراجعة سريعة لما أخطأ فيه الطالب مع الإجابة الصحيحة، وزر «العب مرة أخرى» يخلط الترتيب.',
-  '- زر صغير واضح «تجاهل السؤال» مع كل سؤال أو بطاقة أو عنصر: يخرجه من اللعبة فورًا دون أن يُحسب صحًا أو خطأً ودون أن تتغير النقاط أو الدور، ويُكمل اللعب بما بعده (للمعلم حين يظهر سؤال عن جزء لم يُشرح بعد). وإن قلّت العناصر عن جولة كاملة انتهت اللعبة بما بقي. وتذكر شاشة النهاية عدد ما تُجوهل.',
+  '- لازم في كل لعبة مهما كان نوعها: زر صغير واضح بنص «تجاهل السؤال» حرفيًا مع كل سؤال أو بطاقة أو عنصر: يخرجه من اللعبة فورًا دون أن يُحسب صحًا أو خطأً ودون أن تتغير النقاط أو الدور، ويُكمل اللعب بما بعده (للمعلم حين يظهر سؤال عن جزء لم يُشرح بعد). وإن قلّت العناصر عن جولة كاملة انتهت اللعبة بما بقي. وتذكر شاشة النهاية عدد ما تُجوهل.',
   '- 10 إلى 16 عنصرًا (سؤالًا أو بطاقة أو مفهومًا) مأخوذة من محتوى الدرس نفسه ومصطلحاته، دقيقة علميًا، وبعربية فصيحة قصيرة الجمل، تتدرج من السهل إلى الأصعب.',
   '- اللعب ينبغي أن يُعلّم: يفكر الطالب في المفهوم ليفوز، لا يخمّن. لا عنف ولا محتوى غير لائق، ومناسبة لطلاب بنين في المرحلة المتوسطة.',
-  'قبل أن تكتب، تجنب الأخطاء الشائعة: عناصر تخرج من حدود الشاشة على الجوال، نص يتداخل مع غيره، سحب لا يعمل باللمس، زر «ابدأ» لا يعيد كل شيء، إجابة صحيحة تُحسب خطأً بسبب مقارنة نصوص (قارن بالمعرّفات لا بالنص).'
+  'قبل أن تكتب، تجنب الأخطاء الشائعة: نسيان زر «تجاهل السؤال» (وعرّف window.skipQuestion بدالته)، عناصر تخرج من حدود الشاشة على الجوال، نص يتداخل مع غيره، سحب لا يعمل باللمس، زر «ابدأ» لا يعيد كل شيء، إجابة صحيحة تُحسب خطأً بسبب مقارنة نصوص (قارن بالمعرّفات لا بالنص).'
 ].join('\n');
 var LKIND = {
   lab: { pre: 'l:', sys: LAB_SYS, the: 'التجربة', a: 'تجربة', run: 'شغّل التجربة', close: 'أغلق التجربة', fold: 'lab', fallback: 'تجربة افتراضية',
@@ -1435,7 +1435,7 @@ ACT['lab-gen'] = function (el) {
       (kind === 'game' ? labNotYet(x, notYet) : '') +
       (total > 1 ? '\n\nهذه ' + K.a + ' رقم ' + (i + 1) + ' من ' + total + ' مختلفة النوع، فاختر نوعًا لم يُستعمل.' : '') +
       '\n\nاكتب صفحة HTML الآن، مختصرة (أقل من 28 ألف حرف) ومكتملة حتى </html>.';
-    return labWrite(ask, function (m) { prog(m + tag); }, K.writing, K.sys).then(function (html) {
+    return labWrite(ask, function (m) { prog(m + tag); }, K.writing, K.sys).then(function (html) { return kind === 'game' && !gHasSkip(html) ? gskipFix(x, html, LABGEN, function (m) { prog(m); })['catch'](function (e) { if (e.code === 'stop') throw e; return html; }) : html; }).then(function (html) {
       var tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html), hm = /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
       var title = ((tm && tm[1]) || (hm && hm[1].replace(/<[^>]+>/g, '')) || K.fallback).trim().slice(0, 90);
       var lab = { id: 'x' + Date.now().toString(36), title: title, html: html, idea: idea.slice(0, 300), at: Date.now(), model: aiModel() };
@@ -1487,7 +1487,7 @@ ACT['lab-fix'] = function (el) {
   prog('يقرأ ' + K.the + ' الحالية…');
   var ask = labCtx(x.b, x.l) + '\n\nهذه صفحة ' + K.the + ' الحالية:\n' + lab.html + '\n\n' + (note ? 'ملاحظات المعلم بعد تجربتها:\n' + note + '\n\n' : '') + (errs.length ? 'أخطاء برمجية ظهرت أثناء تشغيلها:\n' + errs.join('\n') + '\n\n' : '') +
     'أعد كتابة الصفحة كاملة بعد إصلاح كل ما سبق، مع الإبقاء على فكرتها وما يعمل فيها، ومراجعة الأخطاء الشائعة المذكورة في التعليمات. أعد صفحة HTML كاملة فقط (أقل من 28 ألف حرف) ومكتملة حتى </html>.';
-  labWrite(ask, prog, 'يكتب Claude النسخة المعدّلة…', K.sys).then(function (html) {
+  labWrite(ask, prog, 'يكتب Claude النسخة المعدّلة…', K.sys).then(function (html) { return kind === 'game' && !gHasSkip(html) ? gskipFix(x, html, LABGEN, function (m) { prog(m); })['catch'](function (e) { if (e.code === 'stop') throw e; return html; }) : html; }).then(function (html) {
     clearInterval(tick); wake(false);
     var tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
     lab.prev = { html: lab.html, title: lab.title, at: lab.at };
@@ -2604,6 +2604,100 @@ ACT['bl-bulk-go'] = function () {
     doneModal('<h2>' + (stopped ? 'أُوقف' : done ? 'رُتّب تقويم ' + cnt(done, WORDS.lesson) : 'لم يكتمل الترتيب') + '</h2>' +
       (done ? '<p class="muted">كل سؤال عليه مستواه في تبويب «التقويم». راجع الأسئلة قبل عرضها.</p>' : '') +
       (failed.length ? '<p class="small bad">تعذّر ' + cnt(failed.length, WORDS.lesson) + ': ' + esc(aiMsg(failed[0].e)) + ' اضغط الزر نفسه مرة أخرى ليكمل الناقص فقط.</p>' : ''));
+    if (done) render(true);
+  });
+};
+/* ---------- «تجاهل السؤال» in every game: added by a small patch from Claude (the rest of the game is left as it is),
+   to games made before the button was asked for, and to any new game that came without it ---------- */
+function gHasSkip(html) { return /تجاهل\s*(ال)?سؤال|skipQuestion/.test(html || ''); }
+var GSKIP_SYS = [
+  'أنت مبرمج ألعاب تعليمية بـ HTML وJavaScript. أمامك كود لعبة تعمل. أضف إليها زر «تجاهل السؤال» ولا تغيّر شيئًا آخر فيها.',
+  'سلوك الزر:',
+  '- يظهر مع كل سؤال أو بطاقة أو عنصر أثناء اللعب (لا في شاشة البداية ولا النهاية)، صغيرًا واضحًا (44 بكسل ارتفاعًا على الأقل) بنص «تجاهل السؤال» حرفيًا، بأسلوب أزرار اللعبة نفسها، ولا يغطي الأسئلة أو الخيارات.',
+  '- عند الضغط: يخرج العنصر الحالي من اللعبة فورًا، لا يُحسب صحًا ولا خطأً، ولا تتغير النقاط ولا الدور ولا وسائل المساعدة، ويُوقف مؤقت هذا العنصر إن وُجد، وينقص العدد الكلي (مثل «السؤال 3 من 15» يصير من 14)، ثم ينتقل إلى ما بعده بالطريقة نفسها التي تنتقل بها اللعبة بعد الإجابة. وإن لم يبقَ شيء انتقلت إلى شاشة النهاية بما لُعب.',
+  '- لا يعود العنصر المتجاهَل في الجولة نفسها، وتذكر شاشة النهاية عدد ما تُجوهل إن كان أكثر من صفر.',
+  '- عرّف أيضًا window.skipQuestion بالدالة نفسها.',
+  'أعد JSON فقط، دون أي نص أو علامات ``` قبله أو بعده: {"edits":[{"find":"نص من الكود","replace":"النص البديل"}]}',
+  '- find نص منسوخ حرفيًا من الكود (بمسافاته وعلامات الترقيم نفسها)، متصل، ويظهر في الكود مرة واحدة فقط: سطر أو بضعة أسطر مميزة. replace ما يحل محله كاملًا (أعد فيه النص الأصلي إن بقي، مع إضافتك قبله أو بعده).',
+  '- من 2 إلى 8 تعديلات صغيرة: عادة واحد في CSS، وواحد في HTML أو في الدالة التي تعرض العنصر لإظهار الزر، وواحد يضيف دالة التجاهل قبل </script> الأخير. الكود الناتج سليم بلا أخطاء.'
+].join('\n');
+function gPatch(html, edits) { // every edit must find its text exactly once, or the patch is not used
+  if (!Array.isArray(edits) || !edits.length) return null;
+  var out = html.replace(/\r\n/g, '\n');
+  for (var i = 0; i < edits.length; i++) {
+    var e = edits[i], f = e && typeof e.find === 'string' ? e.find.replace(/\r\n/g, '\n') : '', r = e && typeof e.replace === 'string' ? e.replace : null;
+    if (!f || r == null) return null;
+    var at = out.indexOf(f); if (at < 0 || out.indexOf(f, at + 1) >= 0) return null;
+    out = out.slice(0, at) + r + out.slice(at + f.length);
+  }
+  if (!/<\/html>/i.test(out) || !gHasSkip(out)) return null;
+  var re = /<script[^>]*>([\s\S]*?)<\/script>/gi, m; // the patched code must still parse
+  while ((m = re.exec(out))) { try { new Function(m[1]); } catch (e) { if (e instanceof SyntaxError) return null; } }
+  return out;
+}
+function gskipFix(x, html, ctl, prog) { // the patched page; if the patch does not fit, the page is written again with the button
+  return claude(GSKIP_SYS, [{ type: 'text', text: 'كود اللعبة:\n' + html + '\n\nأعد JSON التعديلات.' }], 8000, function (n) { if (prog) prog('يضيف Claude الزر… ' + num(n) + ' حرفًا'); }, ctl).then(function (res) {
+    var o = null; try { o = parseJSON(res); } catch (e) { if (e.code === 'stop') throw e; }
+    var p = o && gPatch(html, o.edits); if (p) return p;
+    var ask = (x ? labCtx(x.b, x.l) + '\n\n' : '') + 'هذه صفحة اللعبة الحالية:\n' + html + '\n\nأعد كتابة الصفحة كاملة كما هي مع إضافة زر «تجاهل السؤال» مع كل سؤال أو عنصر (يخرجه دون أن يُحسب صحًا أو خطأً ودون تغيير النقاط أو الدور، وينتقل لما بعده، وwindow.skipQuestion)، دون تغيير شيء آخر. أعد صفحة HTML كاملة فقط (أقل من 28 ألف حرف) ومكتملة حتى </html>.';
+    return labWrite(ask, prog || function () {}, 'يكتب Claude اللعبة مع الزر…', GAME_SYS, ctl).then(function (h2) { if (!gHasSkip(h2)) throw aiErr('json', 'لم يُضف الزر'); return h2; });
+  });
+}
+function gskipKeep(x, lab, html) { var labs = labsOf(x.b, x.l, 'game'), L = labs.filter(function (y) { return y.id === lab.id; })[0]; if (!L) return; L.prev = { html: L.html, title: L.title, at: L.at }; L.html = html; L.at = Date.now(); labsSave(x.b, x.l, labs, 'game'); delete LAB_ERR[L.id]; }
+
+/* the games tab: a note on each game without the button, and the button added to all of them at once */
+var GSKIP_BASE = L_TAB.game, GSKIP_JOBS = null;
+function gskipJobs(b, l0, scope) {
+  var jobs = [];
+  b.lessons.forEach(function (l) {
+    if (scope === 'lesson' && l !== l0) return;
+    if (scope === 'unit' && (l.unit || '') !== (l0.unit || '')) return;
+    labsOf(b, l, 'game').forEach(function (g) { if (!gHasSkip(g.html)) jobs.push({ b: b, l: l, g: g }); });
+  });
+  return jobs;
+}
+L_TAB.game = function (a, b, l) {
+  var h = GSKIP_BASE(a, b, l), k = lk(b, l), here = gskipJobs(b, l, 'lesson'), book = gskipJobs(b, l, 'all');
+  here.forEach(function (j) { // after the game's own buttons
+    var mark = '<p class="small bad lab-err" data-id="' + j.g.id + '"';
+    h = h.replace(mark, '<p class="small gskip-note">ليس فيها زر «تجاهل السؤال».' + (P.ai.key ? ' <button class="btn ghost sm" data-act="gskip" data-k="' + esc(k) + '" data-s="lesson">أضفه إلى ' + (here.length > 1 ? 'ألعاب هذا الدرس' : 'هذه اللعبة') + '</button>' : '') + '</p>' + mark);
+  });
+  if (book.length && P.ai.key) {
+    var unit = gskipJobs(b, l, 'unit').length;
+    h += '<div class="ws-bulk" style="margin-top:14px"><b>زر «تجاهل السؤال» لكل الألعاب</b><p class="small muted">' + cnt(book.length, ['لعبة واحدة', 'لعبتان', 'ألعاب', 'لعبة']) + ' في الكتاب بلا زر التجاهل. يضيفه Claude إلى كل لعبة ولا يغيّر غيره، وتبقى النسخة السابقة لكل لعبة.</p><div class="actions">' +
+      (unit ? '<button class="btn ghost sm" data-act="gskip" data-k="' + esc(k) + '" data-s="unit">ألعاب هذه الوحدة (' + num(unit) + ')</button>' : '') +
+      '<button class="btn ghost sm" data-act="gskip" data-k="' + esc(k) + '" data-s="all">كل ألعاب الكتاب (' + num(book.length) + ')</button></div></div>';
+  }
+  return h;
+};
+ACT['gskip'] = function (el) {
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return;
+  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  var jobs = gskipJobs(x.b, x.l, el.getAttribute('data-s')); if (!jobs.length) { toast('كل الألعاب فيها زر التجاهل'); return; }
+  if (jobs.length === 1) { GSKIP_JOBS = jobs; ACT['gskip-go'](); return; }
+  GSKIP_JOBS = jobs;
+  openModal(card('<h2>زر «تجاهل السؤال» · ' + cnt(jobs.length, ['لعبة واحدة', 'لعبتان', 'ألعاب', 'لعبة']) + '</h2><p class="muted">يُضاف إلى 3 ألعاب معًا، فيستغرق نحو ' + cnt(Math.max(1, Math.round(jobs.length / 3)), ['دقيقة واحدة', 'دقيقتين', 'دقائق', 'دقيقة']) + '. أبقِ التطبيق مفتوحًا. ويبقى لكل لعبة زر «ارجع للنسخة السابقة».</p>' +
+    '<div class="actions"><button class="btn" data-act="gskip-go">ابدأ</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
+};
+ACT['gskip-go'] = function () {
+  var jobs = GSKIP_JOBS; GSKIP_JOBS = null; if (!jobs) return; closeModal();
+  LABGEN = { stopped: false, ctls: [] }; wake(true);
+  var total = jobs.length, done = 0, failed = [], next = 0, live = {}, prog = progModal('Claude يضيف زر «تجاهل السؤال»', 'lab-stop');
+  function show() { prog('جاهز ' + num(done) + ' من ' + num(total) + (Object.keys(live).length ? ' · يعمل على ' + Object.keys(live).length + ' الآن' : ''), (done + failed.length) / total * 100); }
+  function worker() {
+    if (LABGEN.stopped || next >= total) return Promise.resolve();
+    var j = jobs[next], id = next++, ctl = {}; LABGEN.ctls.push(ctl); live[id] = 1; show();
+    return gskipFix(j, j.g.html, ctl, total === 1 ? function (m) { prog(m); } : null).then(function (html) { gskipKeep(j, j.g, html); done++; }, function (e) { if (e.code !== 'stop') failed.push({ j: j, e: e }); })
+      .then(function () { delete live[id]; show(); return worker(); });
+  }
+  show();
+  Promise.all([worker(), worker(), worker()]).then(function () {
+    wake(false); var md = document.getElementById('modal'); md.__busy = false;
+    var stopped = LABGEN.stopped && done + failed.length < total;
+    if (done && !failed.length && total === 1) { closeModal(); route.lab = jobs[0].g.id; render(true); toast('أُضيف زر «تجاهل السؤال». جرّب اللعبة، وإن لم تعجبك فارجع للنسخة السابقة', 4500); return; }
+    doneModal('<h2>' + (stopped ? 'أُوقف' : done ? 'أُضيف الزر إلى ' + cnt(done, ['لعبة واحدة', 'لعبتين', 'ألعاب', 'لعبة']) : 'لم يُضف الزر') + '</h2>' +
+      (done ? '<p class="muted">جرّب كل لعبة قبل الحصة؛ ولكل لعبة زر «ارجع للنسخة السابقة».</p>' : '') +
+      (failed.length ? '<p class="small bad">تعذّر ' + cnt(failed.length, ['لعبة واحدة', 'لعبتان', 'ألعاب', 'لعبة']) + ': ' + esc(failed[0].e.code === 'cut' ? labCutMsg(failed[0].e) : aiMsg(failed[0].e)) + ' اضغط الزر نفسه مرة أخرى ليكمل الناقص فقط.</p>' : ''));
     if (done) render(true);
   });
 };
