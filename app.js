@@ -897,8 +897,8 @@ function cleanAid(o) {
     acts: arr(o.acts).map(function (x) { return x && typeof x === 'object' ? { t: str(x.t), d: str(x.d), mins: +x.mins || 0 } : null; }).filter(function (x) { return x && x.t; }),
     quiz: {
       mcq: arr(q.mcq).filter(function (x) { return x && Array.isArray(x.o) && x.o.length === 4 && [0, 1, 2, 3].indexOf(+x.a) >= 0; }).map(function (x) { return { q: str(x.q), o: x.o.map(str), a: +x.a, e: str(x.e), lv: str(x.lv) }; }),
-      tf: arr(q.tf).filter(function (x) { return x && typeof x.a === 'boolean'; }).map(function (x) { return { q: str(x.q), a: x.a, e: str(x.e) }; }),
-      short: arr(q.short).filter(function (x) { return x && x.q; }).map(function (x) { return { q: str(x.q), a: str(x.a) }; })
+      tf: arr(q.tf).filter(function (x) { return x && typeof x.a === 'boolean'; }).map(function (x) { return { q: str(x.q), a: x.a, e: str(x.e), lv: str(x.lv) }; }),
+      short: arr(q.short).filter(function (x) { return x && x.q; }).map(function (x) { return { q: str(x.q), a: str(x.a), lv: str(x.lv) }; })
     }
   };
   a.figs.forEach(function (f, k) { f.n = k; });
@@ -1175,7 +1175,7 @@ var L_TAB = {
       '<div class="actions" style="margin-top:0"><button class="btn ghost sm tint hue-violet" data-act="pv-open" data-k="' + esc(k) + '" data-from="quiz">' + rIcon('present') + 'اعرض الأسئلة على الطلاب</button><button class="btn ghost sm" data-act="q-copy" data-k="' + esc(k) + '">انسخ الأسئلة</button><button class="btn ghost sm" data-act="q-reset" data-k="' + esc(k) + '">أعد الحل</button></div>';
     if (qz.mcq.length) h += '<h3 class="sec-h">اختيار من متعدد</h3>' + qz.mcq.map(function (q, i) { return mcqHtml(k + ':m' + i, q, i + 1); }).join('');
     if (qz.tf.length) h += '<h3 class="sec-h">صح أو خطأ</h3>' + qz.tf.map(function (q, i) { return tfHtml(k + ':t' + i, q, i + 1); }).join('');
-    if (qz.short.length) h += '<h3 class="sec-h">أسئلة مقالية قصيرة</h3>' + qz.short.map(function (q, i) { return qSkipped(k, q) ? qSkipRow(k, q, 'سؤال ' + (i + 1)) : '<details class="citem"><summary><span class="i-num">' + (i + 1) + '</span> ' + fx(q.q) + '<button type="button" class="q-skip" data-act="q-skip" data-k="' + esc(k) + '" data-s="' + qSig(q) + '">تجاهل</button></summary><div class="c-a">' + fx(q.a) + '</div></details>'; }).join('');
+    if (qz.short.length) h += '<h3 class="sec-h">أسئلة مقالية قصيرة</h3>' + qz.short.map(function (q, i) { return qSkipped(k, q) ? qSkipRow(k, q, 'سؤال ' + (i + 1)) : '<details class="citem"' + bloomAttr(q.lv) + '><summary><span class="i-num">' + (i + 1) + '</span> ' + bloomTag(q.lv) + fx(q.q) + '<button type="button" class="q-skip" data-act="q-skip" data-k="' + esc(k) + '" data-s="' + qSig(q) + '">تجاهل</button></summary><div class="c-a">' + fx(q.a) + '</div></details>'; }).join('');
     return h;
   },
   sum: function (a, b, l) {
@@ -1211,7 +1211,7 @@ ACT['q-skip'] = function (el, e) {
 function mcqHtml(id, q, no) {
   var ch = ANS[id], done = ch != null, k = id.replace(/:(m|t)\d+$/, '');
   if (qSkipped(k, q)) return qSkipRow(k, q, 'سؤال ' + no);
-  return '<article class="qcard lq"><p class="q-meta">سؤال ' + no + (q.lv ? ' · ' + esc(q.lv) : '') + qSkipBtn(id, q) + '</p><h3 class="q-text">' + fx(q.q) + '</h3><div class="opts">' + q.o.map(function (o, k) {
+  return '<article class="qcard lq"' + bloomAttr(q.lv) + '><p class="q-meta">سؤال ' + no + (bloomTag(q.lv) || (q.lv ? ' · ' + esc(q.lv) : '')) + qSkipBtn(id, q) + '</p><h3 class="q-text">' + fx(q.q) + '</h3><div class="opts">' + q.o.map(function (o, k) {
     var cls = done ? (k === q.a ? ' right' : k === ch ? ' wrong' : ' dim') : '';
     return '<button class="opt' + cls + '" data-act="lq-opt" data-id="' + esc(id) + '" data-k="' + k + '"' + (done ? ' disabled' : '') + '><span class="lt">' + LET[k] + '</span><span>' + fx(o) + '</span></button>';
   }).join('') + '</div>' + (done ? '<div class="explain ' + (ch === q.a ? 'ok' : 'no') + '"><p><b>' + (ch === q.a ? 'إجابة صحيحة.' : 'الإجابة الصحيحة (' + LET[q.a] + ').') + '</b> ' + fx(q.e) + '</p></div>' : '') + '</article>';
@@ -1219,7 +1219,7 @@ function mcqHtml(id, q, no) {
 function tfHtml(id, q, no) {
   var ch = ANS[id], done = ch != null, k = id.replace(/:(m|t)\d+$/, '');
   if (qSkipped(k, q)) return qSkipRow(k, q, 'عبارة ' + no);
-  return '<article class="qcard lq"><p class="q-meta">عبارة ' + no + qSkipBtn(id, q) + '</p><h3 class="q-text">' + fx(q.q) + '</h3><div class="opts tf">' + [[1, 'صح'], [0, 'خطأ']].map(function (x) {
+  return '<article class="qcard lq"' + bloomAttr(q.lv) + '><p class="q-meta">عبارة ' + no + bloomTag(q.lv) + qSkipBtn(id, q) + '</p><h3 class="q-text">' + fx(q.q) + '</h3><div class="opts tf">' + [[1, 'صح'], [0, 'خطأ']].map(function (x) {
     var v = !!x[0], cls = done ? (v === q.a ? ' right' : (ch === x[0] ? ' wrong' : ' dim')) : '';
     return '<button class="opt' + cls + '" data-act="lq-tf" data-id="' + esc(id) + '" data-k="' + x[0] + '"' + (done ? ' disabled' : '') + '><span>' + x[1] + '</span></button>';
   }).join('') + '</div>' + (done ? '<div class="explain ' + (!!ch === q.a ? 'ok' : 'no') + '"><p><b>' + (q.a ? 'العبارة صحيحة.' : 'العبارة خاطئة.') + '</b> ' + fx(q.e) + '</p></div>' : '') + '</article>';
@@ -1637,8 +1637,9 @@ ACT['fig-stop'] = function () { if (FIGGEN) { FIGGEN.stopped = true; if (FIGGEN.
 var QGEN_SYS = [
   'أنت معلم علوم خبير في المرحلة المتوسطة في المملكة العربية السعودية ومُعدّ اختبارات.',
   'اكتب أسئلة تقويم جديدة عن الدرس المعطى بحسب طلب المعلم، دقيقة علميًا، بعربية فصيحة واضحة، من محتوى الدرس، ولا تكرر الأسئلة الموجودة.',
-  'أعد JSON فقط دون أي نص أو علامات ``` قبله أو بعده: {"mcq":[{"q":"السؤال","o":["","","",""],"a":0,"e":"تفسير الإجابة الصحيحة","lv":"تذكر|فهم|تطبيق|تحليل"}],"tf":[{"q":"عبارة","a":true,"e":"التفسير"}],"short":[{"q":"سؤال مقالي قصير","a":"الإجابة النموذجية"}]}',
+  'أعد JSON فقط دون أي نص أو علامات ``` قبله أو بعده: {"mcq":[{"q":"السؤال","o":["","","",""],"a":0,"e":"تفسير الإجابة الصحيحة","lv":"تذكر|فهم|تطبيق|تحليل|تقويم|إبداع"}],"tf":[{"q":"عبارة","a":true,"e":"التفسير","lv":"…"}],"short":[{"q":"سؤال مقالي قصير","a":"الإجابة النموذجية","lv":"…"}]}',
   '- الاختيار من متعدد: أربعة خيارات، وa رقم الصحيح من 0 إلى 3 موزعًا بين الأسئلة، والخيارات الخاطئة معقولة ومن مفاهيم الدرس.',
+  '- lv في كل سؤال مستواه في تصنيف بلوم المعدّل بحسب العملية العقلية المطلوبة فعلًا: تذكر، فهم، تطبيق، تحليل، تقويم، إبداع.',
   '- اترك أي نوع لم يُطلب قائمة فارغة. التزم بالعدد المطلوب. ضع المصطلح المهم بين ** ** والرموز والوحدات بين ` `.'
 ].join('\n');
 var QGEN = null;
@@ -1649,7 +1650,7 @@ L_TAB.eval = function (a, b, l) {
     (ai ? '<label class="field"><span>ماذا تريد؟ (اختياري)</span><textarea id="qg-ask" rows="2" placeholder="مثال: أسئلة على تحولات الطاقة في الأجهزة المنزلية، بمستوى تطبيق وتحليل، تناسب اختبارًا قصيرًا"></textarea></label>' +
       '<div class="qg-opts"><label><span class="small">النوع</span><select id="qg-type"><option value="mix">متنوعة</option><option value="mcq">اختيار من متعدد</option><option value="tf">صح أو خطأ</option><option value="short">مقالية قصيرة</option></select></label>' +
       '<label><span class="small">العدد</span><select id="qg-n"><option>3</option><option selected>5</option><option>8</option><option>10</option></select></label>' +
-      '<label><span class="small">المستوى</span><select id="qg-lv"><option value="">متدرج</option><option>تذكر</option><option>فهم</option><option>تطبيق</option><option>تحليل</option></select></label></div>' +
+      '<label><span class="small">المستوى</span><select id="qg-lv"><option value="">متدرج</option><option>تذكر</option><option>فهم</option><option>تطبيق</option><option>تحليل</option><option>تقويم</option><option>إبداع</option></select></label></div>' +
       '<div class="actions"><button class="btn" data-act="qg-run" data-k="' + esc(k) + '">' + svgI('spark') + 'أنشئ الأسئلة</button>' +
       (nAdd ? '<button class="btn ghost sm danger" data-act="qg-undo" data-k="' + esc(k) + '">احذف آخر ما أضافه (' + nAdd + ')</button>' : '') + '</div>' +
       '<p class="small muted">تُضاف في آخر الأسئلة أعلاه، وتدخل في «اعرض الأسئلة على الطلاب» و«انسخ الأسئلة».</p>'
@@ -2463,6 +2464,138 @@ ACT['film-bulk'] = function (el) {
     '<div class="actions"><button class="btn" data-act="film-bulk-go">ابدأ</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
 };
 ACT['film-bulk-go'] = function () { var jobs = FILM_JOBS; FILM_JOBS = null; if (!jobs) return; closeModal(); filmRun(jobs, 'Claude يصمّم مقاطع الدروس'); };
+/* ---------- «التقويم» حسب مستويات بلوم (المعدّل): كل سؤال عليه مستواه، والتقويم يُعاد ترتيبه ليغطي المستويات الستة ---------- */
+var BLOOM = ['تذكر', 'فهم', 'تطبيق', 'تحليل', 'تقويم', 'إبداع'];
+function bloomLv(v) { // what Claude or an older helper wrote, as one of the six
+  v = plain(v).replace(/[ً-ْ]/g, '').replace(/^ال/, '').trim(); if (!v) return '';
+  if (/^(تذكر|معرف|حفظ|استرجاع)/.test(v)) return 'تذكر';
+  if (/^(فهم|استيعاب)/.test(v)) return 'فهم';
+  if (/^تطبيق/.test(v)) return 'تطبيق';
+  if (/^تحليل/.test(v)) return 'تحليل';
+  if (/^(تقويم|تقييم)/.test(v)) return 'تقويم';
+  if (/^(إبداع|ابداع|ابتكار|تركيب|إنشاء|انشاء|ابتكار)/.test(v)) return 'إبداع';
+  return '';
+}
+function bloomN(lv) { return BLOOM.indexOf(bloomLv(lv)) + 1; } // 1..6, or 0
+function bloomTag(lv) { var n = bloomN(lv); return n ? '<span class="bl-tag bl' + n + '">' + BLOOM[n - 1] + '</span>' : ''; }
+function bloomAttr(lv) { var n = bloomN(lv); return n ? ' data-bl="' + n + '"' : ''; }
+
+var BL_SYS = [
+  'أنت معلم علوم خبير في المرحلة المتوسطة في المملكة العربية السعودية، ومتخصص في بناء الاختبارات وفق تصنيف بلوم المعدّل (أندرسون وكراثول): تذكر، فهم، تطبيق، تحليل، تقويم، إبداع.',
+  'أمامك محتوى درس وأسئلة تقويمه الحالية. أعد بناء تقويم الدرس ليغطي المستويات الستة بهذا التوزيع بالضبط:',
+  '- mcq (اختيار من متعدد) 8 أسئلة: تذكر 2، فهم 2، تطبيق 2، تحليل 1، تقويم 1.',
+  '- tf (صح أو خطأ) 5 عبارات: تذكر 2، فهم 2، تحليل 1.',
+  '- short (مقالية قصيرة) 4 أسئلة: تطبيق 1، تحليل 1، تقويم 1، إبداع 1.',
+  'القواعد:',
+  '- أبقِ السؤال الحالي كما هو حرفيًا إن كان صالحًا ويناسب مستوى ما زال ناقصًا، وصنّفه بدقة. أعد صياغة الضعيف أو استبدله، وأضف ما يلزم لإكمال التوزيع. لا تكرر سؤالًا.',
+  '- صنّف بحسب العملية العقلية التي يحتاجها الطالب فعلًا، لا بحسب الفعل المكتوب: سؤال «قارن» جوابه نص في الكتاب = تذكر.',
+  '- تذكر: استرجاع حقيقة أو تعريف كما ورد. فهم: تفسير أو تصنيف أو مثال أو تلخيص بأسلوب الطالب. تطبيق: استعمال المفهوم أو القانون في موقف جديد أو مسألة. تحليل: تمييز الأجزاء والعلاقات والأسباب، واستنتاج من بيانات أو موقف. تقويم: حكم مبرَّر بمعيار (أي الحلول أفضل؟ هل الاستنتاج صحيح؟ ولماذا). إبداع: تصميم أو اقتراح أو تخطيط شيء جديد (تجربة، حل، نموذج) يجمع أفكار الدرس.',
+  '- كل الأسئلة من محتوى الدرس ومناسبة لطالب المتوسط، بعربية فصيحة واضحة قصيرة. في mcq أربعة خيارات معقولة من مفاهيم الدرس، وa رقم الصحيح من 0 إلى 3 موزعًا بين الأسئلة. وفي tf اجعل نحو نصف العبارات خاطئة. وفي short إجابة نموذجية مختصرة، ولسؤال الإبداع معايير ما يُقبل منه.',
+  '- ضع المصطلح المهم بين ** ** والرموز والوحدات بين ` `.',
+  'أعد JSON فقط دون أي نص أو علامات ``` قبله أو بعده، وlv واحدة من الكلمات الست حرفيًا:',
+  '{"mcq":[{"q":"السؤال","o":["","","",""],"a":0,"e":"تفسير الإجابة الصحيحة","lv":"تذكر"}],"tf":[{"q":"عبارة","a":true,"e":"التفسير","lv":"فهم"}],"short":[{"q":"سؤال","a":"الإجابة النموذجية","lv":"إبداع"}]}'
+].join('\n');
+
+var BL_F = {}; // the level shown in each lesson's تقويم (filter), this session only
+var BLGEN = null, BL_JOBS = null;
+function blCounts(k, qz) {
+  var c = [0, 0, 0, 0, 0, 0, 0];
+  qLive(k, qz.mcq).concat(qLive(k, qz.tf), qLive(k, qz.short)).forEach(function (q) { c[bloomN(q.lv)]++; });
+  return c;
+}
+var BL_BASE = L_TAB.eval;
+L_TAB.eval = function (a, b, l) {
+  var k = lk(b, l), rec = aidOf(b, l), qz = a.quiz, ai = !!P.ai.key;
+  if (!qz.mcq.length && !qz.tf.length && !qz.short.length) return BL_BASE(a, b, l);
+  var c = blCounts(k, qz), f = BL_F[k] || 0, tagged = c[1] + c[2] + c[3] + c[4] + c[5] + c[6];
+  var bar = '<div class="bl-bar" role="group" aria-label="مستويات بلوم"><button type="button" class="bl-chip' + (f ? '' : ' on') + '" data-act="bl-f" data-k="' + esc(k) + '" data-n="0">الكل</button>' +
+    BLOOM.map(function (w, i) { return '<button type="button" class="bl-chip bl' + (i + 1) + (f === i + 1 ? ' on' : '') + (c[i + 1] ? '' : ' none') + '" data-act="bl-f" data-k="' + esc(k) + '" data-n="' + (i + 1) + '">' + w + ' <b>' + num(c[i + 1]) + '</b></button>'; }).join('') +
+    (c[0] && tagged ? '<span class="small muted">بلا مستوى: ' + num(c[0]) + '</span>' : '') + '</div>';
+  var missing = BLOOM.filter(function (w, i) { return !c[i + 1]; });
+  var tools = ai ? '<div class="actions bl-acts"><button class="btn sm" data-act="bl-run" data-k="' + esc(k) + '">' + svgI('spark') + (rec && rec.bloom ? 'أعد ترتيبه حسب بلوم' : 'رتّب التقويم حسب مستويات بلوم') + '</button>' +
+    (rec && rec.qprev ? '<button class="btn ghost sm" data-act="bl-undo" data-k="' + esc(k) + '">ارجع للتقويم السابق</button>' : '') +
+    '<button class="btn ghost sm" data-act="bl-bulk" data-k="' + esc(k) + '" data-s="unit">دروس الوحدة</button><button class="btn ghost sm" data-act="bl-bulk" data-k="' + esc(k) + '" data-s="all">كل دروس الكتاب</button></div>' : '';
+  var note = !tagged ? 'أسئلة هذا الدرس بلا مستويات بعد. «رتّب التقويم» يصنّفها ويكمل الناقص: 8 اختيار و5 صح وخطأ و4 مقالية تغطي المستويات الستة.'
+    : missing.length ? 'ينقصه: ' + missing.join('، ') + '.' : 'يغطي المستويات الستة.';
+  return '<section class="bl-panel"><p class="bl-h"><b>مستويات بلوم</b> <span class="small muted">' + esc(note) + '</span></p>' + bar + tools + '</section>' +
+    '<div class="bl-list"' + (f ? ' data-f="' + f + '"' : '') + '>' + BL_BASE(a, b, l) + '</div>';
+};
+ACT['bl-f'] = function (el) { var k = el.getAttribute('data-k'), n = +el.getAttribute('data-n'); if (n) BL_F[k] = n; else delete BL_F[k]; render(true); };
+
+function blAsk(x, rec) {
+  var qz = rec.d.quiz, i = 0;
+  function line(q, t) { return (++i) + ') [' + t + (bloomLv(q.lv) ? ' · ' + bloomLv(q.lv) : '') + '] ' + plain(q.q) + (q.o ? ' | ' + q.o.map(plain).join(' / ') + ' | الصحيح: ' + plain(q.o[q.a]) : t === 'صح أو خطأ' ? ' | ' + (q.a ? 'صحيحة' : 'خاطئة') : ''); }
+  var have = qz.mcq.map(function (q) { return line(q, 'اختيار'); }).concat(qz.tf.map(function (q) { return line(q, 'صح أو خطأ'); }), qz.short.map(function (q) { return line(q, 'مقالي'); })).join('\n');
+  var sk = (S.skip[lk(x.b, x.l)] || []).length ? qz.mcq.concat(qz.tf, qz.short).filter(function (q) { return qSkipped(lk(x.b, x.l), q); }).map(function (q) { return '- ' + plain(q.q); }).join('\n') : '';
+  return 'الدرس: ' + x.l.title + '\n\nمحتوى الدرس:\n' + aidText(rec.d) + '\n\nأسئلة التقويم الحالية:\n' + (have || '(لا يوجد)') +
+    (sk ? '\n\nأسئلة تجاهلها المعلم لأن وقت شرحها لم يأتِ (إن أبقيتها فانسخها حرفيًا):\n' + sk : '') + '\n\nأعد JSON التقويم الجديد.';
+}
+function blOne(x, onText, ctl) {
+  var rec = aidOf(x.b, x.l); if (!rec) return Promise.reject(aiErr('json'));
+  return claude(BL_SYS, [{ type: 'text', text: blAsk(x, rec) }], 12000, onText, ctl).then(function (res) {
+    var o = parseJSON(res), got = cleanAid({ goals: ['-'], quiz: { mcq: o.mcq, tf: o.tf, short: o.short } }).quiz;
+    [got.mcq, got.tf, got.short].forEach(function (L) { L.forEach(function (q) { q.lv = bloomLv(q.lv); }); });
+    var total = got.mcq.length + got.tf.length + got.short.length;
+    if (total < 8) throw aiErr('json');
+    var r = aidOf(x.b, x.l); r.qprev = { quiz: r.d.quiz, qadd: r.qadd || null, bloom: r.bloom || 0 }; delete r.qadd;
+    r.d.quiz = got; r.bloom = Date.now(); r.at = Date.now(); AIDS[r.k] = r; dbPut('aids', r);
+    return total;
+  });
+}
+ACT['bl-run'] = function (el) {
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x || !aidOf(x.b, x.l)) return;
+  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  BLGEN = { stopped: false }; wake(true);
+  var prog = progModal('Claude يرتّب التقويم حسب بلوم', 'bl-stop');
+  blOne(x, function (c) { prog('يكتب… ' + num(c) + ' حرفًا'); }, BLGEN).then(function (n) {
+    wake(false); var m = document.getElementById('modal'); m.__busy = false; closeModal(); delete BL_F[lk(x.b, x.l)]; render(true);
+    toast('رُتّب التقويم: ' + cnt(n, WORDS.q) + ' على المستويات الستة', 3500);
+  })['catch'](function (e) { wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم يكتمل الترتيب') + '</h2><p class="muted">' + (e.code === 'stop' ? 'بقي التقويم كما كان.' : esc(aiMsg(e)) + ' بقي التقويم كما كان.') + '</p>'); });
+};
+ACT['bl-stop'] = function () { if (BLGEN) { BLGEN.stopped = true; if (BLGEN.abort) BLGEN.abort(); (BLGEN.ctls || []).forEach(function (c) { c.stopped = true; if (c.abort) c.abort(); }); } };
+ACT['bl-undo'] = function (el) {
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var r = aidOf(x.b, x.l); if (!r || !r.qprev) return;
+  var cur = { quiz: r.d.quiz, qadd: r.qadd || null, bloom: r.bloom || 0 }, p = r.qprev;
+  r.d.quiz = p.quiz; if (p.qadd) r.qadd = p.qadd; else delete r.qadd; if (p.bloom) r.bloom = p.bloom; else delete r.bloom;
+  r.qprev = cur; r.at = Date.now(); AIDS[r.k] = r; dbPut('aids', r); delete BL_F[r.k]; render(true);
+  toast('رجع التقويم السابق (والمرتّب محفوظ: اضغط مرة أخرى للتبديل)');
+};
+ACT['bl-bulk'] = function (el) {
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return;
+  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  var scope = el.getAttribute('data-s'), all = [], jobs = [];
+  x.b.lessons.forEach(function (l) {
+    if (scope === 'unit' && (l.unit || '') !== (x.l.unit || '')) return;
+    var r = aidOf(x.b, l); if (!r) return; all.push(l); if (!r.bloom) jobs.push({ b: x.b, l: l });
+  });
+  if (!all.length) { toast('لا دروس جاهزة المساعد في ' + (scope === 'unit' ? 'هذه الوحدة' : 'الكتاب')); return; }
+  if (!jobs.length) { toast('كل الدروس الجاهزة رُتّب تقويمها من قبل. لإعادة درس افتحه واضغط «أعد ترتيبه».', 4000); return; }
+  BL_JOBS = jobs;
+  openModal(card('<h2>ترتيب التقويم حسب بلوم · ' + cnt(jobs.length, WORDS.lesson) + '</h2><p class="muted">' + (all.length > jobs.length ? 'الدروس المرتّبة من قبل (' + num(all.length - jobs.length) + ') لا تُعاد. ' : '') +
+    'تُرتّب 3 دروس معًا، فيستغرق نحو ' + cnt(Math.max(1, Math.round(jobs.length / 3 * 1.5)), ['دقيقة واحدة', 'دقيقتين', 'دقائق', 'دقيقة']) + '. أبقِ التطبيق مفتوحًا. ويبقى لكل درس زر «ارجع للتقويم السابق».</p>' +
+    '<div class="actions"><button class="btn" data-act="bl-bulk-go">ابدأ</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
+};
+ACT['bl-bulk-go'] = function () {
+  var jobs = BL_JOBS; BL_JOBS = null; if (!jobs) return; closeModal();
+  BLGEN = { stopped: false, ctls: [] }; wake(true);
+  var total = jobs.length, done = 0, failed = [], next = 0, live = {}, prog = progModal('Claude يرتّب التقويم حسب بلوم', 'bl-stop');
+  function show() { var n = 0; Object.keys(live).forEach(function (k) { n += live[k]; }); prog('جاهز ' + num(done) + ' من ' + num(total) + (Object.keys(live).length ? ' · يكتب ' + Object.keys(live).length + ' الآن (' + num(n) + ' حرفًا)' : ''), (done + failed.length) / total * 100); }
+  function worker() {
+    if (BLGEN.stopped || next >= total) return Promise.resolve();
+    var j = jobs[next], id = next++, ctl = { stopped: false }; BLGEN.ctls.push(ctl); live[id] = 0; show();
+    return blOne(j, function (c) { live[id] = c; show(); }, ctl).then(function () { done++; }, function (e) { if (e.code !== 'stop') failed.push({ j: j, e: e }); })
+      .then(function () { delete live[id]; show(); return worker(); });
+  }
+  show();
+  Promise.all([worker(), worker(), worker()]).then(function () {
+    wake(false); var md = document.getElementById('modal'); md.__busy = false;
+    var stopped = BLGEN.stopped && done + failed.length < total;
+    doneModal('<h2>' + (stopped ? 'أُوقف' : done ? 'رُتّب تقويم ' + cnt(done, WORDS.lesson) : 'لم يكتمل الترتيب') + '</h2>' +
+      (done ? '<p class="muted">كل سؤال عليه مستواه في تبويب «التقويم». راجع الأسئلة قبل عرضها.</p>' : '') +
+      (failed.length ? '<p class="small bad">تعذّر ' + cnt(failed.length, WORDS.lesson) + ': ' + esc(aiMsg(failed[0].e)) + ' اضغط الزر نفسه مرة أخرى ليكمل الناقص فقط.</p>' : ''));
+    if (done) render(true);
+  });
+};
 
 /* ---------- presenting a lesson to the class: one idea per screen ---------- */
 var PV = null;
@@ -2996,7 +3129,7 @@ var LESSON_SYS = [
   '"maps":[{"t":"عنوان الخريطة","r":{"t":"المفهوم الرئيس","c":[{"l":"كلمة الربط","t":"مفهوم","c":[{"t":"مفهوم فرعي"}]}]}}],',
   '"mis":["تصور خاطئ شائع ← التصحيح"],"life":["ربط بالحياة اليومية والبيئة السعودية"],"sum":["نقاط الخلاصة"],',
   '"acts":[{"t":"اسم نشاط صفي قصير","d":"خطواته بإيجاز، دون مواد كيميائية أو أدوات خطرة","mins":5}],"hw":["واجب منزلي قصير"],',
-  '"quiz":{"mcq":[{"q":"السؤال","o":["","","",""],"a":0,"e":"تفسير الإجابة الصحيحة","lv":"تذكر|فهم|تطبيق|تحليل"}],"tf":[{"q":"عبارة","a":true,"e":"التفسير"}],"short":[{"q":"سؤال مقالي قصير","a":"الإجابة النموذجية"}]}}',
+  '"quiz":{"mcq":[{"q":"السؤال","o":["","","",""],"a":0,"e":"تفسير الإجابة الصحيحة","lv":"تذكر|فهم|تطبيق|تحليل|تقويم|إبداع"}],"tf":[{"q":"عبارة","a":true,"e":"التفسير","lv":"…"}],"short":[{"q":"سؤال مقالي قصير","a":"الإجابة النموذجية","lv":"…"}]}}',
   'القواعد:',
   '- exp يغطي الدرس كله بترتيب الكتاب، من 3 إلى 7 فقرات. page رقم الصفحة المطبوع في الكتاب الذي تتناوله الفقرة. fig رقم الرسم من figs (يبدأ من 0) أو -1.',
   '- body قائمة عناصر، كل عنصر واحد من: نص فقرة، أو {"h":"عنوان فرعي"}، أو {"ul":["…"]}، أو {"ol":["خطوات"]}، أو {"box":{"k":"ex|pit|note|key|q|life","h":"عنوان الصندوق","b":["…"]}} (ex مثال، pit انتبه، note ملاحظة، key تذكّر، q سؤال يطرحه المعلم على الطلاب، life ربط بالحياة)، أو {"tb":{"t":"عنوان الجدول","hd":["…"],"r":[["…"]]}}.',
@@ -3004,7 +3137,7 @@ var LESSON_SYS = [
   '- ضع المصطلح المهم بين ** ** ليظهر غامقًا، والرموز والصيغ والوحدات اللاتينية بين ` ` مثل `H2O` و`m/s`.',
   '- figs من 2 إلى 4 رسوم SVG توضيحية أصلية بسيطة واضحة (لا تحاول نسخ صور الكتاب): viewBox="0 0 600 400" أو نحوه، نص عربي font-size بين 18 و24 مع text-anchor="middle" و fill="#1B2621"، ألوان هادئة، أسهم بـ marker عند الحاجة. لا تستعمل style ولا script ولا image ولا foreignObject ولا روابط، فقط: svg g rect circle ellipse path polygon polyline line text tspan defs marker linearGradient stop title.',
   '- maps خريطة مفاهيم واحدة أو اثنتان، بعمق لا يتجاوز ثلاثة مستويات.',
-  '- quiz: 8 أسئلة اختيار من متعدد متدرجة الصعوبة (a رقم الخيار الصحيح من 0 إلى 3، والخيارات الخاطئة معقولة)، و5 عبارات صح أو خطأ، و4 أسئلة مقالية قصيرة، كلها من محتوى الدرس.',
+  '- quiz: 8 أسئلة اختيار من متعدد متدرجة الصعوبة (a رقم الخيار الصحيح من 0 إلى 3، والخيارات الخاطئة معقولة)، و5 عبارات صح أو خطأ، و4 أسئلة مقالية قصيرة، كلها من محتوى الدرس. وزّعها على مستويات بلوم المعدّل بحسب العملية العقلية المطلوبة (mcq: تذكر 2، فهم 2، تطبيق 2، تحليل 1، تقويم 1؛ tf: تذكر 2، فهم 2، تحليل 1؛ short: تطبيق، تحليل، تقويم، إبداع)، وlv في كل سؤال كلمة واحدة من: تذكر، فهم، تطبيق، تحليل، تقويم، إبداع.',
   '- لا تضف معلومات علمية من خارج الدرس إلا للتوضيح والربط بالحياة، ولا تذكر أرقام صفحات غير موجودة.'
 ].join('\n');
 var TOC_SYS = [

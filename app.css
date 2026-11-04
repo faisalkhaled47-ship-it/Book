@@ -481,3 +481,20 @@ html.kb nav.tabs{display:none!important}html.kb .rd-bar{display:none!important}
 .tabs-pick .tp{display:flex;align-items:center;gap:8px;font-size:15px;padding:6px 8px;border-radius:10px;background:var(--panel-2,rgba(0,0,0,.03));cursor:pointer}
 .tabs-pick input{width:20px;height:20px;accent-color:var(--accent)}
 .stk-pad,.stk-pad *,.stk-ed .stk-cs,.stk-ed .actions{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+/* Bloom levels in التقويم */
+.bl-panel{background:var(--panel);border:1px solid var(--rule);border-radius:16px;padding:12px 14px;margin-bottom:14px}
+.bl-h{margin:0 0 8px;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.bl-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.bl-chip{appearance:none;font:inherit;font-size:13px;border:1.5px solid var(--rule);background:var(--panel-2,var(--panel));color:var(--ink-2,var(--ink));border-radius:999px;padding:5px 12px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.bl-chip b{font-weight:800}
+.bl-chip.none{opacity:.5}
+.bl-chip.on{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.bl-chip.bl1.on{background:#5b6b82;border-color:#5b6b82}.bl-chip.bl2.on{background:#2a7fd4;border-color:#2a7fd4}.bl-chip.bl3.on{background:#1f9d6b;border-color:#1f9d6b}
+.bl-chip.bl4.on{background:#d98a0b;border-color:#d98a0b}.bl-chip.bl5.on{background:#d1495b;border-color:#d1495b}.bl-chip.bl6.on{background:#7b4fd6;border-color:#7b4fd6}
+.bl-acts{margin-top:10px}
+.bl-tag{display:inline-block;font-size:12px;font-weight:800;border-radius:999px;padding:1px 9px;margin-inline:6px;vertical-align:middle;line-height:1.7;color:#fff}
+.bl-tag.bl1{background:#5b6b82}.bl-tag.bl2{background:#2a7fd4}.bl-tag.bl3{background:#1f9d6b}.bl-tag.bl4{background:#d98a0b}.bl-tag.bl5{background:#d1495b}.bl-tag.bl6{background:#7b4fd6}
+.bl-list[data-f="1"] [data-bl]:not([data-bl="1"]),.bl-list[data-f="2"] [data-bl]:not([data-bl="2"]),.bl-list[data-f="3"] [data-bl]:not([data-bl="3"]),
+.bl-list[data-f="4"] [data-bl]:not([data-bl="4"]),.bl-list[data-f="5"] [data-bl]:not([data-bl="5"]),.bl-list[data-f="6"] [data-bl]:not([data-bl="6"]),
+.bl-list[data-f] .lq:not([data-bl]),.bl-list[data-f] .citem:not([data-bl]){display:none}
+.bl-chip.bl1{border-color:#5b6b82}.bl-chip.bl2{border-color:#2a7fd4}.bl-chip.bl3{border-color:#1f9d6b}.bl-chip.bl4{border-color:#d98a0b}.bl-chip.bl5{border-color:#d1495b}.bl-chip.bl6{border-color:#7b4fd6}
