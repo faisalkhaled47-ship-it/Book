@@ -359,9 +359,11 @@ function wake(on) {
 })();
 
 (function () { // typing in a text field: the bottom bar steps aside, as in native apps where the keyboard covers it
-  function typing(el) { return !!el && (el.tagName === 'TEXTAREA' || el.isContentEditable || (el.tagName === 'INPUT' && !/^(button|submit|reset|checkbox|radio|range|color|file|image|hidden)$/i.test(el.type || ''))); }
-  document.addEventListener('focusin', function (e) { if (typing(e.target)) document.documentElement.classList.add('kb'); });
-  document.addEventListener('focusout', function () { setTimeout(function () { if (!typing(document.activeElement)) document.documentElement.classList.remove('kb'); }, 60); });
+  function typing(el) { return !!el && el.isConnected !== false && (el.tagName === 'TEXTAREA' || el.isContentEditable || (el.tagName === 'INPUT' && !/^(button|submit|reset|checkbox|radio|range|color|file|image|hidden|date|time|datetime-local|month|week)$/i.test(el.type || ''))); }
+  var kbT = 0;
+  function kbCheck() { if (!typing(document.activeElement)) { document.documentElement.classList.remove('kb'); clearInterval(kbT); kbT = 0; } }
+  document.addEventListener('focusin', function (e) { if (typing(e.target)) { document.documentElement.classList.add('kb'); if (!kbT) kbT = setInterval(kbCheck, 400); } }); // a field removed by a redraw never sends focusout, so the bar is brought back by this check too
+  document.addEventListener('focusout', function () { setTimeout(kbCheck, 60); });
 })();
 
 /* ---------- the book reader: PDF pages with a writing layer ---------- */
