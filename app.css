@@ -501,3 +501,7 @@ html.kb nav.tabs{display:none!important}html.kb .rd-bar{display:none!important}
 .bl-chip.bl1{border-color:#5b6b82}.bl-chip.bl2{border-color:#2a7fd4}.bl-chip.bl3{border-color:#1f9d6b}.bl-chip.bl4{border-color:#d98a0b}.bl-chip.bl5{border-color:#d1495b}.bl-chip.bl6{border-color:#7b4fd6}
 .bl-list[data-f] .q-skipped{display:none}
 .gskip-note{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 0;color:var(--ink-2,var(--ink))}
+
+/* iPhone zooms in on a field whose text is under 16px, and the page stays zoomed: fields keep 16px on touch screens */
+@media (pointer:coarse){input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{font-size:16px!important}}
+html,body{overflow-x:clip}
