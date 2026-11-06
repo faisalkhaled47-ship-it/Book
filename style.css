@@ -952,3 +952,13 @@ html:not([data-skin=pro]) .xa-bar{bottom:calc(16px + env(safe-area-inset-bottom,
   .tab{padding:8px 9px 9px;font-size:14px}
   nav.tabs{justify-content:space-between}
 }
+
+/* settings groups that fold */
+.set-grp>.bk-h{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:15.5px;color:var(--ink);margin:0;-webkit-tap-highlight-color:transparent}
+.bk-tog{appearance:none;border:0;background:var(--panel-2,rgba(0,0,0,.05));color:var(--ink-2);width:32px;height:32px;border-radius:10px;display:inline-grid;place-items:center;margin-inline-start:auto;flex:none;cursor:pointer}
+.bk-tog svg{width:18px;height:18px;transition:transform .2s}
+.set-grp:not(.bk-closed)>.bk-h .bk-tog svg{transform:rotate(180deg)}
+.set-grp.bk-closed>:not(.bk-h){display:none!important}
+.set-grp>.set-sec.set-in{border-top:1px dashed var(--rule);padding:12px 0 4px}
+.set-grp>h3+.set-sec.set-in{border-top:0;padding-top:4px}
+.set-sub{font-size:13px;font-weight:700;color:var(--ink-2);margin:0}

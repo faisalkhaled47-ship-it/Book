@@ -4542,10 +4542,41 @@ function settingsHtml() {
     '<section class="set-sec"><h3>النسخ الاحتياطي</h3><p class="small muted">' + (S.backupAt ? 'آخر نسخة: ' + relDay(S.backupAt) + '. ' : '') + 'يحفظ الدروس ومساعدها وكتابتك على الصفحات وسبوراتك وملاحظاتك وتقدم فصولك في ملف واحد، دون ملفات الكتب نفسها (تضيفها مرة أخرى فتعود إليها كتابتها)، ودون مقاطع الفيديو التي أضفتها من جهازك لكبر حجمها؛ روابط يوتيوب تدخل فيها.</p>' +
     '<div class="actions" style="margin-top:0"><button class="btn" data-act="backup-save">احفظ نسخة احتياطية</button><button class="btn ghost" data-act="backup-restore">استعد من ملف</button></div></section>' +
     '<section class="set-sec"><h3>التخزين على الجهاز</h3><p class="small muted" id="storage-info">…</p>' + (STANDALONE ? '' : '<p class="hint">' + INSTALL + '</p>') + '<div class="actions" style="margin-top:0"><button class="btn ghost sm danger" data-act="reset">احذف كل بيانات التطبيق</button></div></section>' +
-    '<p class="small muted" style="text-align:center;margin:14px 0 4px;line-height:1.7">كتابي · الإصدار ' + esc(VERSION) + (window.KITABI_BUILT ? '<br>' + esc(window.KITABI_BUILT) : '') + '</p>');
+    '<p class="small muted about-ver" style="text-align:center;margin:14px 0 4px;line-height:1.7">كتابي · الإصدار ' + esc(VERSION) + (window.KITABI_BUILT ? '<br>' + esc(window.KITABI_BUILT) : '') + '</p>');
 }
+/* the settings in a few groups like مصروفي and إتقان: each group folds to its title, and stays as you left it */
+var BK_GROUPS = [
+  ['المظهر', ['المظهر', 'الخط', 'تبويبات الدرس']],
+  ['التدريس والتقويم', ['فصولي', 'التقويم الدراسي']],
+  ['الذكاء الاصطناعي (Claude)', ['الذكاء الاصطناعي']],
+  ['البيانات والمزامنة', ['المزامنة', 'النسخ الاحتياطي', 'التخزين على الجهاز']]
+];
+var BK_CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+function bkOpenMap() { try { return JSON.parse(localStorage.getItem('kitabi.setOpen') || '{}') || {}; } catch (e) { return {}; } }
+function bkTitle(sec) { var h = sec.firstElementChild; return h && /^H[34]$/.test(h.tagName) ? h.textContent.replace(/\s+/g, ' ').trim() : ''; }
+function bkSettings() {
+  var m = document.getElementById('modal'), sheet = m && m.querySelector('.sheet'); if (!sheet || sheet.querySelector(':scope > .set-grp')) return;
+  var secs = Array.prototype.slice.call(sheet.querySelectorAll(':scope > .set-sec')), used = [], op = bkOpenMap(), ver = sheet.querySelector(':scope > .about-ver');
+  BK_GROUPS.forEach(function (g) {
+    var mem = []; g[1].forEach(function (t) { secs.forEach(function (sc) { if (used.indexOf(sc) < 0 && bkTitle(sc).indexOf(t) === 0) { mem.push(sc); used.push(sc); } }); });
+    if (!mem.length) return;
+    var box = document.createElement('section'); box.className = 'set-sec set-grp' + (op[g[0]] ? '' : ' bk-closed'); box.setAttribute('data-g', g[0]);
+    box.innerHTML = '<h3 class="bk-h">' + esc(g[0]) + '<button type="button" class="bk-tog" aria-label="فتح وإغلاق">' + BK_CHEV + '</button></h3>';
+    mem.forEach(function (sc) { var h = sc.firstElementChild; if (h && h.tagName === 'H3') { var h4 = document.createElement('h4'); h4.className = 'set-sub'; h4.innerHTML = h.innerHTML; sc.replaceChild(h4, h); } sc.classList.add('set-in'); box.appendChild(sc); });
+    sheet.appendChild(box);
+  });
+  secs.forEach(function (sc) { if (used.indexOf(sc) < 0) sheet.appendChild(sc); });
+  if (ver) sheet.appendChild(ver);
+}
+document.addEventListener('click', function (e) {
+  var h = e.target.closest && e.target.closest('.set-grp > .bk-h'); if (!h) return;
+  var g = h.parentNode, open = g.classList.contains('bk-closed'), m = bkOpenMap();
+  g.classList.toggle('bk-closed', !open); if (open) m[g.getAttribute('data-g')] = 1; else delete m[g.getAttribute('data-g')];
+  try { localStorage.setItem('kitabi.setOpen', JSON.stringify(m)); } catch (x) {}
+});
 ACT.settings = function () {
   openModal(settingsHtml(), true);
+  bkSettings();
   if (navigator.storage && navigator.storage.estimate) Promise.all([navigator.storage.estimate()['catch'](function () { return null; }), navigator.storage.persisted ? navigator.storage.persisted()['catch'](function () { return null; }) : null]).then(function (r) {
     var el = document.getElementById('storage-info'); if (!el) return; var t = [];
     if (r[0] && r[0].usage != null) t.push('المساحة المستخدمة نحو ' + Math.max(0.1, r[0].usage / 1048576).toFixed(1) + ' م.ب.');
