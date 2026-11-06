@@ -4542,7 +4542,7 @@ function settingsHtml() {
     '<section class="set-sec"><h3>النسخ الاحتياطي</h3><p class="small muted">' + (S.backupAt ? 'آخر نسخة: ' + relDay(S.backupAt) + '. ' : '') + 'يحفظ الدروس ومساعدها وكتابتك على الصفحات وسبوراتك وملاحظاتك وتقدم فصولك في ملف واحد، دون ملفات الكتب نفسها (تضيفها مرة أخرى فتعود إليها كتابتها)، ودون مقاطع الفيديو التي أضفتها من جهازك لكبر حجمها؛ روابط يوتيوب تدخل فيها.</p>' +
     '<div class="actions" style="margin-top:0"><button class="btn" data-act="backup-save">احفظ نسخة احتياطية</button><button class="btn ghost" data-act="backup-restore">استعد من ملف</button></div></section>' +
     '<section class="set-sec"><h3>التخزين على الجهاز</h3><p class="small muted" id="storage-info">…</p>' + (STANDALONE ? '' : '<p class="hint">' + INSTALL + '</p>') + '<div class="actions" style="margin-top:0"><button class="btn ghost sm danger" data-act="reset">احذف كل بيانات التطبيق</button></div></section>' +
-    '<section class="set-sec"><h3>عن التطبيق</h3><p class="small muted">كتابي، الإصدار ' + esc(VERSION) + '. لا خادم ولا حساب: الكتب وكل ما تكتبه على هذا الجهاز وحده.</p><div class="actions"><button class="btn ghost" data-act="app-update">تحديث التطبيق الآن</button></div></section>');
+    '<section class="set-sec"><h3>عن التطبيق</h3><p class="small muted">كتابي · الإصدار ' + esc(VERSION) + (window.KITABI_BUILT ? '<br>' + esc(window.KITABI_BUILT) : '') + '</p><div class="actions"><button class="btn ghost" data-act="app-update">تحديث التطبيق الآن</button></div></section>');
 }
 ACT.settings = function () {
   openModal(settingsHtml(), true);
