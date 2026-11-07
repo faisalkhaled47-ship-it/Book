@@ -972,7 +972,7 @@ function noBook() {
     '<p class="muted">يُحفظ الكتاب وكل ما تكتبه على هذا الجهاز فقط، ولا يُرفع إلى أي مكان.</p>' +
     (STANDALONE ? '' : '<p class="hint">' + INSTALL + '</p>') +
     '<div class="actions"><button class="btn" data-act="book-add">أضف كتاب العلوم (PDF)</button></div>' +
-    '<ol class="steps small muted"><li>اختر ملف الكتاب من تطبيق «الملفات».</li><li>حدّد دروسه: من فهرس الملف، أو يقرأ الذكاء الاصطناعي الفهرس، أو تكتبها بنفسك، أو من ملف دروس جاهز.</li><li>جهّز مساعد كل درس بضغطة، واكتب على صفحات الكتاب بالقلم.</li></ol></section>';
+    '<ol class="steps small muted"><li>اختر ملف الكتاب من تطبيق «الملفات».</li><li>حدّد دروسه: من فهرس الملف، أو يقرأ المساعد الذكي الفهرس، أو تكتبها بنفسك، أو من ملف دروس جاهز.</li><li>جهّز مساعد كل درس بضغطة، واكتب على صفحات الكتاب بالقلم.</li></ol></section>';
 }
 
 /* ---------- lessons list ---------- */
@@ -1016,7 +1016,7 @@ function setupPanel(b) {
   return '<section class="panel"><h2 class="hh">' + ico('book', 'teal') + 'حدّد دروس «' + esc(b.title) + '»</h2><p class="muted">يحتاج التطبيق أن يعرف كل درس وصفحاته في الكتاب، ثم يجهّز لكل درس مساعده. اختر طريقة:</p>' +
     '<div class="setup">' +
     '<button class="setup-o" data-act="toc-outline"><b>من فهرس الملف</b><span class="small muted">إن كان ملف PDF يحوي فهرسًا (إشارات مرجعية)</span></button>' +
-    '<button class="setup-o" data-act="toc-ai"><b>يقرأ الذكاء الاصطناعي فهرس الكتاب</b><span class="small muted">' + (ai ? 'تحدد صفحات الفهرس فيستخرج الوحدات والدروس وصفحاتها' : 'يحتاج مفتاح API من الإعدادات') + '</span></button>' +
+    '<button class="setup-o" data-act="toc-ai"><b>يقرأ المساعد الذكي فهرس الكتاب</b><span class="small muted">' + (ai ? 'تحدد صفحات الفهرس فيستخرج الوحدات والدروس وصفحاتها' : 'يحتاج مفتاح API من الإعدادات') + '</span></button>' +
     '<button class="setup-o" data-act="pack-add"><b>من ملف دروس جاهز</b><span class="small muted">ملف JSON أو PDF أعدّه لك Claude أو زميل، فيه الدروس ومساعدها</span></button>' +
     '<button class="setup-o" data-act="lessons-edit"><b>أكتبها بنفسي</b><span class="small muted">اسم كل درس وصفحة بدايته ونهايته</span></button></div></section>';
 }
@@ -1070,7 +1070,7 @@ ACT['toc-outline'] = function () {
         toast('استُخرج ' + cnt(list.length, WORDS.lesson) + ' من فهرس الملف؛ راجعها من «عدّل قائمة الدروس»', 4000);
       });
     });
-  })['catch'](function (e) { openModal(card('<h2>لا يحوي الملف فهرسًا</h2><p class="muted">' + (e && e.message === 'none' ? 'ملف الكتاب بلا إشارات مرجعية. استعمل قراءة الفهرس بالذكاء الاصطناعي، أو اكتب الدروس بنفسك.' : 'تعذّرت قراءة الملف.') + '</p><div class="actions"><button class="btn" data-act="modal-close">حسنًا</button></div>')); });
+  })['catch'](function (e) { openModal(card('<h2>لا يحوي الملف فهرسًا</h2><p class="muted">' + (e && e.message === 'none' ? 'ملف الكتاب بلا إشارات مرجعية. استعمل قراءة الفهرس بالمساعد الذكي، أو اكتب الدروس بنفسك.' : 'تعذّرت قراءة الملف.') + '</p><div class="actions"><button class="btn" data-act="modal-close">حسنًا</button></div>')); });
 };
 function destPage(doc, dest) {
   return Promise.resolve(typeof dest === 'string' ? doc.getDestination(dest) : dest).then(function (d) {
@@ -1112,7 +1112,7 @@ VIEWS.lesson = function () {
   }
   h += '<div class="l-nav">' + (prev ? '<button class="btn ghost sm" data-act="lesson" data-k="' + esc(lk(b, prev)) + '">→ ' + esc(prev.title) + '</button>' : '<span></span>') + (next ? '<button class="btn ghost sm" data-act="lesson" data-k="' + esc(lk(b, next)) + '">' + esc(next.title) + ' ←</button>' : '<span></span>') + '</div>';
   if (a) h += '<details class="l-more"><summary class="small muted">عن مساعد هذا الدرس</summary><p class="small muted">' + (a.src === 'ai' ? 'أُعدّ من صفحات الدرس ' + relDay(a.at) + '. راجع دقته قبل عرضه على الطلاب.' : 'من ملف دروس أُضيف ' + relDay(a.at) + '.') + '</p>' +
-    '<div class="actions"><button class="btn ghost sm" data-act="gen-one" data-k="' + esc(k) + '">' + svgI('spark') + 'أعد تجهيزه بالذكاء</button><button class="btn ghost sm danger" data-act="aid-del" data-k="' + esc(k) + '">احذف المساعد</button></div></details>';
+    '<div class="actions"><button class="btn ghost sm" data-act="gen-one" data-k="' + esc(k) + '">' + svgI('spark') + 'أعد تجهيزه بالمساعد الذكي</button><button class="btn ghost sm danger" data-act="aid-del" data-k="' + esc(k) + '">احذف المساعد</button></div></details>';
   return h + '</div>';
 };
 function taughtBar(b, l) {
@@ -1128,10 +1128,10 @@ ACT.taught = function (el) {
 function genPanel(b, l) {
   var ai = !!P.ai.key, np = Math.min(l.to - l.from + 1, MAX_PAGES);
   return '<section class="panel gen"><h2 class="hh">' + ico('spark', 'violet') + 'جهّز مساعد هذا الدرس</h2>' +
-    '<p class="muted">يقرأ الذكاء الاصطناعي صفحات الدرس (' + cnt(np, WORDS.page) + ') ويكتب: الأهداف والمفردات والفكرة الرئيسة، وشرحًا مرتبًا بفقراته ورسومًا توضيحية، وخريطة مفاهيم، وأسئلة تقويم بإجاباتها، وملخصًا وأنشطة وربطًا بالحياة.</p>' +
+    '<p class="muted">يقرأ المساعد الذكي صفحات الدرس (' + cnt(np, WORDS.page) + ') ويكتب: الأهداف والمفردات والفكرة الرئيسة، وشرحًا مرتبًا بفقراته ورسومًا توضيحية، وخريطة مفاهيم، وأسئلة تقويم بإجاباتها، وملخصًا وأنشطة وربطًا بالحياة.</p>' +
     (ai ? '<label class="field"><span>توجيه إضافي (اختياري)</span><input type="text" id="gen-extra" placeholder="مثال: ركّز على المفاهيم الخاطئة، وأكثِر من أسئلة التطبيق"></label>' +
       '<div class="actions"><button class="btn" data-act="gen-one" data-k="' + esc(lk(b, l)) + '">' + svgI('spark') + 'جهّز المساعد</button></div><p class="small muted">' + costLine(np) + '</p>'
-      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي، أو أضف ملف دروس جاهزًا.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button><button class="btn ghost" data-act="pack-add">أضف ملف دروس</button></div>') + '</section>';
+      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← المساعد الذكي، أو أضف ملف دروس جاهزًا.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button><button class="btn ghost" data-act="pack-add">أضف ملف دروس</button></div>') + '</section>';
 }
 ACT.ltab = function (el) { route.tab = el.getAttribute('data-tab'); var y = window.scrollY; render(); var st = document.querySelector('.subtabs'); if (st) { var top = st.getBoundingClientRect().top + window.scrollY - 8; window.scrollTo(0, Math.min(y, top)); } };
 ACT['open-pages'] = function (el) { var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; S.cur = x.b.id; go('read', { page: x.l.from, back: route.k }); };
@@ -1366,7 +1366,7 @@ function labTab(b, l, kind) {
       '<div class="actions"><button class="btn" data-act="lab-gen" data-k="' + esc(k) + '"' + kd + '>' + svgI('spark') + K.btn + '</button><button class="btn ghost" data-act="lab-ideas" data-k="' + esc(k) + '"' + kd + '>اقترح عليّ أفكارًا</button></div>' +
       '<p class="small muted">' + labCost(kind) + '</p>' +
       (kind === 'lab' ? '<div class="ws-bulk"><b>تجربتان لكل درس دفعة واحدة</b><p class="small muted">تجربتان مختلفتان مبتكرتان لكل درس جُهّز مساعده ولم تكتمل له تجربتان.</p><div class="actions"><button class="btn ghost sm" data-act="lab-bulk" data-k="' + esc(k) + '" data-s="unit">دروس هذه الوحدة</button><button class="btn ghost sm" data-act="lab-bulk" data-k="' + esc(k) + '" data-s="all">كل دروس الكتاب</button></div></div>' : '')
-      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
+      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← المساعد الذكي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
   return h;
 }
 L_TAB.lab = function (a, b, l) { return labTab(b, l, 'lab'); };
@@ -1590,7 +1590,7 @@ L_TAB.figs = function (a, b, l) {
         : '<button class="btn ghost sm" data-act="fig-ref-img" data-k="' + esc(k) + '">' + svgI('image') + 'أرفق صورة يحاكيها</button><span class="small muted">أو</span><label class="fig-pg"><span class="small">صفحة الكتاب</span><input type="number" inputmode="numeric" id="fig-pg" placeholder="' + l.from + '"></label><button class="btn ghost sm" data-act="fig-ref-page" data-k="' + esc(k) + '">أرفقها</button>') + '</div>' +
       '<div class="actions"><label class="fig-n"><span class="small">عدد الرسوم</span><select id="fig-n"><option>1</option><option selected>2</option><option>3</option></select></label><button class="btn" data-act="fig-gen" data-k="' + esc(k) + '">' + svgI('spark') + 'ارسم</button></div>' +
       '<p class="small muted">الرسوم توضيحية مبسطة (SVG)، لا صور واقعية.</p>'
-      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
+      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← المساعد الذكي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
   return h + photoPanel(b, l);
 };
 ICONS.image = ICONS.image || '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 3.5 3 3-2.5L20 17"/>';
@@ -1656,7 +1656,7 @@ L_TAB.eval = function (a, b, l) {
       '<div class="actions"><button class="btn" data-act="qg-run" data-k="' + esc(k) + '">' + svgI('spark') + 'أنشئ الأسئلة</button>' +
       (nAdd ? '<button class="btn ghost sm danger" data-act="qg-undo" data-k="' + esc(k) + '">احذف آخر ما أضافه (' + nAdd + ')</button>' : '') + '</div>' +
       '<p class="small muted">تُضاف في آخر الأسئلة أعلاه، وتدخل في «اعرض الأسئلة على الطلاب» و«انسخ الأسئلة».</p>'
-      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
+      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← المساعد الذكي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
 };
 ACT['qg-run'] = function (el) {
   var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var rec = aidOf(x.b, x.l); if (!rec) return;
@@ -1929,7 +1929,7 @@ L_TAB.ws = function (a, b, l) {
       '<div class="actions"><button class="btn" data-act="ws-gen" data-k="' + esc(k) + '"' + (nq ? '' : ' disabled') + '>' + svgI('spark') + 'صمّم الأوراق</button></div>' +
       '<p class="small muted">' + (nq ? 'كل ورقة: صفحة أسئلة للطالب، ونموذج إجابة منفصل لك. تُصمَّم حتى 3 أوراق معًا في دقيقة إلى ثلاث.' : 'لا أسئلة في «التقويم» لهذا الدرس (أو كلها متجاهلة).') + '</p>' +
       '<div class="ws-bulk"><b>ورقتان لكل درس دفعة واحدة</b><p class="small muted">بطابعين مختلفين، للدروس التي جُهّز مساعدها ولم تكتمل لها ورقتان.</p><div class="actions"><button class="btn ghost sm" data-act="ws-bulk" data-k="' + esc(k) + '" data-s="unit">دروس هذه الوحدة</button><button class="btn ghost sm" data-act="ws-bulk" data-k="' + esc(k) + '" data-s="all">كل دروس الكتاب</button></div></div>'
-      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
+      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← المساعد الذكي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
   return h;
 };
 ACT['ws-style'] = function (el) { el.classList.toggle('on'); }; // several can be chosen: one sheet each
@@ -2390,7 +2390,7 @@ L_TAB.film = function (a, b, l) {
     (ai ? '<label class="field"><span>ملاحظاتك (اختياري)</span><textarea id="film-idea" rows="2" placeholder="مثال: ركّز على محطة توليد الكهرباء، وأمثلة من المطبخ"></textarea></label>' +
       '<div class="actions"><button class="btn" data-act="film-gen" data-k="' + esc(k) + '">' + svgI('spark') + 'صمّم المقطع</button></div><p class="small muted">يستغرق دقيقة إلى ثلاث. شاهده قبل الحصة.</p>' +
       '<div class="ws-bulk"><b>مقطع لكل درس دفعة واحدة</b><p class="small muted">للدروس التي جُهّز مساعدها وليس لها مقطع.</p><div class="actions"><button class="btn ghost sm" data-act="film-bulk" data-k="' + esc(k) + '" data-s="unit">دروس هذه الوحدة</button><button class="btn ghost sm" data-act="film-bulk" data-k="' + esc(k) + '" data-s="all">كل دروس الكتاب</button></div></div>'
-      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← الذكاء الاصطناعي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
+      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← المساعد الذكي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
   return h;
 };
 function filmFind(el) { var x = lessonByKey(el.getAttribute('data-k')); if (!x) return null; var list = filmsOf(x.b, x.l), fm = list.filter(function (y) { return y.id === el.getAttribute('data-id'); })[0]; return fm ? { x: x, list: list, fm: fm } : null; }
@@ -4530,7 +4530,7 @@ function settingsHtml() {
   var m = aiModel(), known = MODELS.some(function (x) { return x[0] === m; });
   return sheet('الإعدادات',
     '<section class="set-sec"><h3>المظهر</h3>' + segBtns('pref-theme', P.theme || 'auto', [['auto', 'تلقائي'], ['light', 'فاتح'], ['dark', 'داكن']]) + '</section>' +
-    '<section class="set-sec"><h3>الذكاء الاصطناعي (Claude)</h3><p class="small muted">لتجهيز مساعد الدروس وقراءة الفهرس. ضع مفتاح API من حسابك في منصة Claude للمطورين (<a href="https://platform.claude.com/" target="_blank" rel="noopener">platform.claude.com</a>) برصيد مدفوع مسبقًا. يبقى المفتاح على هذا الجهاز فقط، ويُرسَل مباشرة إلى Anthropic مع صور صفحات الدرس، ولا يدخل في النسخة الاحتياطية.</p>' +
+    '<section class="set-sec"><h3>المساعد الذكي (Claude)</h3><p class="small muted">لتجهيز مساعد الدروس وقراءة الفهرس. ضع مفتاح API من حسابك في منصة Claude للمطورين (<a href="https://platform.claude.com/" target="_blank" rel="noopener">platform.claude.com</a>) برصيد مدفوع مسبقًا. يبقى المفتاح على هذا الجهاز فقط، ويُرسَل مباشرة إلى Anthropic مع صور صفحات الدرس، ولا يدخل في النسخة الاحتياطية.</p>' +
     '<label class="field"><span>مفتاح API</span><input type="password" id="ai-key" autocomplete="off" autocapitalize="off" spellcheck="false" dir="ltr" placeholder="sk-ant-…" value="' + esc(P.ai.key || '') + '"></label>' +
     '<label class="field"><span>النموذج</span><select id="ai-model">' + MODELS.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === m ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '<option value="custom"' + (known ? '' : ' selected') + '>نموذج آخر…</option></select></label>' +
     (known ? '' : '<label class="field"><span>اسم النموذج</span><input type="text" id="ai-custom" dir="ltr" value="' + esc(m) + '"></label>') +
@@ -4548,7 +4548,7 @@ function settingsHtml() {
 var BK_GROUPS = [
   ['المظهر', ['المظهر', 'الخط', 'تبويبات الدرس']],
   ['التدريس والتقويم', ['فصولي', 'التقويم الدراسي']],
-  ['الذكاء الاصطناعي (Claude)', ['الذكاء الاصطناعي']],
+  ['المساعد الذكي (Claude)', ['المساعد الذكي']],
   ['البيانات والمزامنة', ['المزامنة', 'النسخ الاحتياطي', 'التخزين على الجهاز']]
 ];
 var BK_CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
