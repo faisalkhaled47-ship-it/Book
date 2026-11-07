@@ -4530,11 +4530,12 @@ function settingsHtml() {
   var m = aiModel(), known = MODELS.some(function (x) { return x[0] === m; });
   return sheet('الإعدادات',
     '<section class="set-sec"><h3>المظهر</h3>' + segBtns('pref-theme', P.theme || 'auto', [['auto', 'تلقائي'], ['light', 'فاتح'], ['dark', 'داكن']]) + '</section>' +
-    '<section class="set-sec"><h3>المساعد الذكي</h3><p class="small muted">لتجهيز مساعد الدروس وقراءة الفهرس. ضع مفتاح API من حسابك في منصة Claude للمطورين (<a href="https://platform.claude.com/" target="_blank" rel="noopener">platform.claude.com</a>) برصيد مدفوع مسبقًا. يبقى المفتاح على هذا الجهاز فقط، ويُرسَل مباشرة إلى Anthropic مع صور صفحات الدرس، ولا يدخل في النسخة الاحتياطية.</p>' +
+        '<section class="set-sec ai-sec"><h3>المساعد الذكي</h3><p class="small muted">لتجهيز مساعد الدروس وقراءة الفهرس واختيار النموذج.</p>' +
     '<label class="field"><span>مفتاح API</span><input type="password" id="ai-key" autocomplete="off" autocapitalize="off" spellcheck="false" dir="ltr" placeholder="sk-ant-…" value="' + esc(P.ai.key || '') + '"></label>' +
     '<label class="field"><span>النموذج</span><select id="ai-model">' + MODELS.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === m ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '<option value="custom"' + (known ? '' : ' selected') + '>نموذج آخر…</option></select></label>' +
     (known ? '' : '<label class="field"><span>اسم النموذج</span><input type="text" id="ai-custom" dir="ltr" value="' + esc(m) + '"></label>') +
-    '<div class="actions" style="margin-top:0"><button class="btn ghost sm" data-act="ai-test">جرّب المفتاح</button><span class="small muted" id="ai-test-out"></span></div></section>' +
+    '<div class="actions" style="margin-top:0"><button class="btn ai-test-btn" data-act="ai-test">جرّب المفتاح</button><span class="small muted" id="ai-test-out"></span></div>' +
+    '<p class="small muted">من <a href="https://platform.claude.com/" target="_blank" rel="noopener">platform.claude.com</a>، برصيد مدفوع مسبقًا. يبقى المفتاح على هذا الجهاز فقط، ويُرسَل مباشرة إلى Anthropic مع صور صفحات الدرس، ولا يدخل في النسخة الاحتياطية.</p></section>' +
     syncSec() +
     '<section class="set-sec"><h3>فصولي</h3><label class="field"><span>أسماء الفصول التي تدرّسها، تفصل بينها بفاصلة</span><input type="text" id="classes" placeholder="1/1، 1/2، 2/1" value="' + esc(P.classes.join('، ')) + '"></label><p class="small muted">تعلّم في كل درس الفصول التي شرحته لها، وترى تقدم كل فصل في الرئيسية.</p></section>' +
     '<section class="set-sec"><h3>التقويم الدراسي</h3>' + segBtns('pref-region', P.region === 'west' ? 'west' : 'std', [['std', 'باقي مناطق المملكة'], ['west', 'مكة والمدينة وجدة والطائف']]) + '</section>' +
@@ -4562,6 +4563,7 @@ function bkSettings() {
     if (!mem.length) return;
     var box = document.createElement('section'); box.className = 'set-sec set-grp' + (op[g[0]] ? '' : ' bk-closed'); box.setAttribute('data-g', g[0]);
     box.innerHTML = '<h3 class="bk-h">' + esc(g[0]) + '<button type="button" class="bk-tog" aria-label="فتح وإغلاق">' + BK_CHEV + '</button></h3>';
+    if (mem.length === 1 && bkTitle(mem[0]) === g[0]) { var h0 = mem[0].firstElementChild; if (h0) h0.remove(); mem[0].classList.add('set-in'); mem[0].classList.add('set-solo'); if (g[0] === 'المساعد الذكي') { var bh = box.querySelector('.bk-h'), st = document.createElement('span'), on0 = !!P.ai.key; st.className = 'ai-state' + (on0 ? ' on' : ''); st.textContent = on0 ? 'مفعّل' : 'غير مفعّل'; bh.insertBefore(st, bh.querySelector('.bk-tog')); } box.appendChild(mem[0]); sheet.appendChild(box); return; }
     mem.forEach(function (sc) { var h = sc.firstElementChild; if (h && h.tagName === 'H3') { var h4 = document.createElement('h4'); h4.className = 'set-sub'; h4.innerHTML = h.innerHTML; sc.replaceChild(h4, h); } sc.classList.add('set-in'); box.appendChild(sc); });
     sheet.appendChild(box);
   });
