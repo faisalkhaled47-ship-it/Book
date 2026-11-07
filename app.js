@@ -404,7 +404,7 @@ VIEWS.read = function () {
   return '<div class="rd' + (route.present ? ' present' : '') + '" id="rd">' +
     '<div class="rd-head"><button class="rd-title" data-act="rd-goto"><b id="rd-lesson">' + esc(b.title) + '</b><span id="rd-pno">…</span></button>' +
     '<div class="rd-hb">' + clkPill() + (route.back && lessonByKey(route.back) ? '<button class="rd-hbtn rd-back" data-act="back-lesson">' + rIcon('back') + '<span>عُد إلى الدرس</span></button>' : '<button class="rd-hbtn" data-act="rd-aid">' + rIcon('aid') + '<span>مساعد الدرس</span></button>') +
-    '<button class="rd-hbtn rd-solve" data-act="rd-solve" aria-label="حلّ أسئلة الصفحة مع Claude">' + rIcon('spark') + '<span>حلّ الأسئلة</span></button>' +
+    '<button class="rd-hbtn rd-solve" data-act="rd-solve" aria-label="حلّ أسئلة الصفحة مع المساعد">' + rIcon('spark') + '<span>حلّ الأسئلة</span></button>' +
     '<button class="rd-hbtn" data-act="rd-present" aria-label="وضع العرض">' + rIcon(route.present ? 'exit' : 'present') + '<span>' + (route.present ? 'إنهاء العرض' : 'عرض') + '</span></button></div></div>' +
     '<div class="rd-x" id="rd-x"><div class="rd-pages" id="rd-pages" style="--z:' + o.zoom + '"><p class="muted rd-wait">جارٍ فتح الكتاب…</p></div></div>' +
     (route.present ? '<div class="rd-nav"><button data-act="rd-step" data-d="-1" aria-label="الصفحة السابقة">' + rIcon('up') + '</button><button data-act="rd-step" data-d="1" aria-label="الصفحة التالية">' + rIcon('down') + '</button></div>' : '') +
@@ -1017,7 +1017,7 @@ function setupPanel(b) {
     '<div class="setup">' +
     '<button class="setup-o" data-act="toc-outline"><b>من فهرس الملف</b><span class="small muted">إن كان ملف PDF يحوي فهرسًا (إشارات مرجعية)</span></button>' +
     '<button class="setup-o" data-act="toc-ai"><b>يقرأ المساعد الذكي فهرس الكتاب</b><span class="small muted">' + (ai ? 'تحدد صفحات الفهرس فيستخرج الوحدات والدروس وصفحاتها' : 'يحتاج مفتاح API من الإعدادات') + '</span></button>' +
-    '<button class="setup-o" data-act="pack-add"><b>من ملف دروس جاهز</b><span class="small muted">ملف JSON أو PDF أعدّه لك Claude أو زميل، فيه الدروس ومساعدها</span></button>' +
+    '<button class="setup-o" data-act="pack-add"><b>من ملف دروس جاهز</b><span class="small muted">ملف JSON أو PDF أعدّه لك المساعد أو زميل، فيه الدروس ومساعدها</span></button>' +
     '<button class="setup-o" data-act="lessons-edit"><b>أكتبها بنفسي</b><span class="small muted">اسم كل درس وصفحة بدايته ونهايته</span></button></div></section>';
 }
 
@@ -1131,7 +1131,7 @@ function genPanel(b, l) {
     '<p class="muted">يقرأ المساعد الذكي صفحات الدرس (' + cnt(np, WORDS.page) + ') ويكتب: الأهداف والمفردات والفكرة الرئيسة، وشرحًا مرتبًا بفقراته ورسومًا توضيحية، وخريطة مفاهيم، وأسئلة تقويم بإجاباتها، وملخصًا وأنشطة وربطًا بالحياة.</p>' +
     (ai ? '<label class="field"><span>توجيه إضافي (اختياري)</span><input type="text" id="gen-extra" placeholder="مثال: ركّز على المفاهيم الخاطئة، وأكثِر من أسئلة التطبيق"></label>' +
       '<div class="actions"><button class="btn" data-act="gen-one" data-k="' + esc(lk(b, l)) + '">' + svgI('spark') + 'جهّز المساعد</button></div><p class="small muted">' + costLine(np) + '</p>'
-      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← المساعد الذكي، أو أضف ملف دروس جاهزًا.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button><button class="btn ghost" data-act="pack-add">أضف ملف دروس</button></div>') + '</section>';
+      : '<p class="hint">أضف مفتاح المساعد الذكي من الإعدادات ← المساعد الذكي، أو أضف ملف دروس جاهزًا.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button><button class="btn ghost" data-act="pack-add">أضف ملف دروس</button></div>') + '</section>';
 }
 ACT.ltab = function (el) { route.tab = el.getAttribute('data-tab'); var y = window.scrollY; render(); var st = document.querySelector('.subtabs'); if (st) { var top = st.getBoundingClientRect().top + window.scrollY - 8; window.scrollTo(0, Math.min(y, top)); } };
 ACT['open-pages'] = function (el) { var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; S.cur = x.b.id; go('read', { page: x.l.from, back: route.k }); };
@@ -1300,14 +1300,14 @@ var GAME_SYS = [
 var LKIND = {
   lab: { pre: 'l:', sys: LAB_SYS, the: 'التجربة', a: 'تجربة', run: 'شغّل التجربة', close: 'أغلق التجربة', fold: 'lab', fallback: 'تجربة افتراضية',
     intro: 'تجارب افتراضية تفاعلية لهذا الدرس: يغيّر الطالب المتغيرات بإصبعه ويلاحظ ويسجّل ويستنتج. اعرضها على جهاز العرض أو أعطِ الآيباد لطالب.',
-    first: 'صمّم تجربة افتراضية لهذا الدرس', more: 'صمّم تجربة أخرى', label: 'فكرة التجربة (اختياري)', btn: 'صمّم التجربة', made: 'يصمّم التجربة', writing: 'يكتب Claude التجربة…',
+    first: 'صمّم تجربة افتراضية لهذا الدرس', more: 'صمّم تجربة أخرى', label: 'فكرة التجربة (اختياري)', btn: 'صمّم التجربة', made: 'يصمّم التجربة', writing: 'يكتب المساعد التجربة…',
     ph: 'مثال: كرة على مسار متعرج تتحول طاقتها بين الوضع والحركة، مع منزلق للارتفاع والكتلة', pick: 'اختر أنت فكرة التجربة الأنسب والأكثر إبداعًا لهذا الدرس.', ask: 'فكرة المعلم للتجربة: ',
     ideas: 'أنت مصمم مختبرات علوم افتراضية للمرحلة المتوسطة في السعودية. اقترح 4 أفكار متنوعة ومبدعة لتجارب افتراضية تفاعلية عن الدرس المعطى، يغيّر فيها الطالب متغيرًا ويلاحظ أثره.',
     fixes: ['لا أقدر أحرّك الجسم باللمس', 'الأعمدة أو الرسوم تخرج من حدودها', 'الرسم البياني لا يُرسم أثناء الحركة', 'الأرقام لا تتطابق مع الحركة', 'كبّر الخط والأزرار للعرض', 'اجعلها أبسط وأوضح للطلاب', 'أضف مقارنة بين محاولتين'],
     fixPh: 'مثال: عمودا الحركية والكلية يخرجان من أعلى الرسم، والرسم البياني فارغ، وزر «ارمِ الكرة» يبدو معطلًا' },
   game: { pre: 'g:', sys: GAME_SYS, the: 'اللعبة', a: 'لعبة', run: 'العب', close: 'أغلق اللعبة', fold: 'game', fallback: 'لعبة تعليمية',
     intro: 'ألعاب تعليمية تفاعلية عن هذا الدرس، من محتواه ومصطلحاته: لطالب واحد على الآيباد، أو لفريقين على جهاز العرض. تستطيع تصميم أكثر من لعبة بأنواع مختلفة.',
-    first: 'صمّم لعبة لهذا الدرس', more: 'صمّم لعبة أخرى', label: 'نوع اللعبة أو فكرتها (اختياري)', btn: 'صمّم اللعبة', made: 'يصمّم اللعبة', writing: 'يكتب Claude اللعبة…',
+    first: 'صمّم لعبة لهذا الدرس', more: 'صمّم لعبة أخرى', label: 'نوع اللعبة أو فكرتها (اختياري)', btn: 'صمّم اللعبة', made: 'يصمّم اللعبة', writing: 'يكتب المساعد اللعبة…',
     ph: 'مثال: سباق بين فريقين، كل إجابة صحيحة تقدّم سيارة الفريق خطوة، عن أشكال الطاقة وتحولاتها', pick: 'اختر أنت نوع اللعبة الأنسب والأمتع لهذا الدرس.', ask: 'نوع اللعبة أو فكرتها كما طلبها المعلم: ',
     types: ['مسابقة فريقين على جهاز العرض', 'اسحب كل مصطلح إلى تعريفه', 'بطاقات الذاكرة: طابق المفهوم بمثاله', 'صنّف العناصر في مجموعات', 'سباق مع الزمن: صح أو خطأ', 'رتّب الخطوات أو السلسلة', 'لغز الكلمات من مفردات الدرس', 'من سيربح المليون'],
     ideas: 'أنت مصمم ألعاب تعليمية للمرحلة المتوسطة في السعودية. اقترح 4 أفكار متنوعة ومبتكرة لألعاب تعليمية إلكترونية عن الدرس المعطى، بأنواع لعب مختلفة، يتعلم فيها الطالب المفاهيم وهو يلعب.',
@@ -1354,7 +1354,7 @@ function labTab(b, l, kind) {
       '<button class="btn ghost sm" data-act="lab-edit"' + q + '>' + svgI('spark') + 'عدّلها أو أصلحها</button>' +
       (lab.prev ? '<button class="btn ghost sm" data-act="lab-undo"' + q + '>ارجع للنسخة السابقة</button>' : '') +
       '<button class="btn ghost sm danger" data-act="lab-del"' + q + '>احذف</button></div>' +
-      '<p class="small bad lab-err" data-id="' + lab.id + '"' + ((LAB_ERR[lab.id] || []).length ? '' : ' hidden') + '>ظهرت أخطاء برمجية في ' + (kind === 'game' ? 'هذه اللعبة' : 'هذه التجربة') + '؛ اضغط «عدّلها أو أصلحها» ليصلحها Claude.</p>' +
+      '<p class="small bad lab-err" data-id="' + lab.id + '"' + ((LAB_ERR[lab.id] || []).length ? '' : ' hidden') + '>ظهرت أخطاء برمجية في ' + (kind === 'game' ? 'هذه اللعبة' : 'هذه التجربة') + '؛ اضغط «عدّلها أو أصلحها» ليصلحها المساعد.</p>' +
       '</article>';
   }).join('');
   h += '<details class="panel gen ai-fold" data-fold="' + K.fold + '"' + (foldOpen(K.fold, !labs.length) ? ' open' : '') + '><summary class="hh">' + ico(kind === 'game' ? 'game' : 'spark', 'violet') + (labs.length ? K.more : K.first) + '</summary>' +
@@ -1366,7 +1366,7 @@ function labTab(b, l, kind) {
       '<div class="actions"><button class="btn" data-act="lab-gen" data-k="' + esc(k) + '"' + kd + '>' + svgI('spark') + K.btn + '</button><button class="btn ghost" data-act="lab-ideas" data-k="' + esc(k) + '"' + kd + '>اقترح عليّ أفكارًا</button></div>' +
       '<p class="small muted">' + labCost(kind) + '</p>' +
       (kind === 'lab' ? '<div class="ws-bulk"><b>تجربتان لكل درس دفعة واحدة</b><p class="small muted">تجربتان مختلفتان مبتكرتان لكل درس جُهّز مساعده ولم تكتمل له تجربتان.</p><div class="actions"><button class="btn ghost sm" data-act="lab-bulk" data-k="' + esc(k) + '" data-s="unit">دروس هذه الوحدة</button><button class="btn ghost sm" data-act="lab-bulk" data-k="' + esc(k) + '" data-s="all">كل دروس الكتاب</button></div></div>' : '')
-      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← المساعد الذكي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
+      : '<p class="hint">أضف مفتاح المساعد الذكي من الإعدادات ← المساعد الذكي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
   return h;
 }
 L_TAB.lab = function (a, b, l) { return labTab(b, l, 'lab'); };
@@ -1392,7 +1392,7 @@ ACT['lab-del'] = function (el) {
   labsSave(x.b, x.l, labsOf(x.b, x.l, kind).filter(function (y) { return y.id !== id; }), kind); render(true); toast(kind === 'game' ? 'حُذفت اللعبة' : 'حُذفت التجربة');
 };
 ACT['lab-ideas'] = function (el) {
-  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var box = document.getElementById('lab-ideas'); if (box) box.innerHTML = '<p class="small muted">يفكّر Claude…</p>';
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var box = document.getElementById('lab-ideas'); if (box) box.innerHTML = '<p class="small muted">يفكّر المساعد…</p>';
   claude(LKIND[lkind(el)].ideas + ' أعد JSON فقط: {"ideas":[{"t":"عنوان قصير","d":"وصف في جملة: ماذا يغيّر الطالب وماذا يلاحظ"}]}', [{ type: 'text', text: labCtx(x.b, x.l) }], 1200, null)
     .then(function (res) {
       var o = parseJSON(res), ideas = (o.ideas || []).filter(function (i) { return i && i.t; }).slice(0, 6);
@@ -1425,10 +1425,10 @@ function labWrite(ask, prog, verb, sys, ctl) { // the page, with one continuatio
 function labCutMsg(e) { return 'طالت صفحة التجربة أكثر من الحد المسموح للرد حتى مع التكملة، فلم تُحفظ' + (e.chars ? ' (وصل ' + num(e.chars) + ' حرفًا' + (e.toks ? ' في ' + num(e.toks) + ' وحدة' : '') + ')' : '') + '. أعد المحاولة بفكرة أبسط تركّز على متغير واحد.'; }
 ACT['lab-gen'] = function (el) {
   var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var kind = lkind(el), K = LKIND[kind];
-  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  if (!P.ai.key) { toast('أضف مفتاح المساعد الذكي أولًا'); ACT.settings(); return; }
   var t = document.getElementById('lab-idea'), idea = t ? t.value.trim() : '', sk = document.getElementById('lab-skip'), notYet = sk ? sk.value.trim() : '', ns = document.getElementById('lab-n'), total = kind === 'game' && ns ? clamp(+ns.value || 1, 1, 3) : 1;
   LABGEN = { stopped: false }; wake(true);
-  var t0 = Date.now(), made = [], i = 0, prog = progModal('Claude ' + K.made, 'lab-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / (1600 * total), 4, 95) + '%'; }, 500);
+  var t0 = Date.now(), made = [], i = 0, prog = progModal('المساعد ' + K.made, 'lab-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / (1600 * total), 4, 95) + '%'; }, 500);
   function one() {
     var tag = total > 1 ? ' (' + (i + 1) + ' من ' + total + ')' : '', have = labsOf(x.b, x.l, kind).map(function (y) { return y.title; });
     prog('يقرأ الدرس و' + K.made + tag + '…');
@@ -1470,9 +1470,9 @@ window.addEventListener('message', function (e) {
 });
 ACT['lab-edit'] = function (el) {
   var k = el.getAttribute('data-k'), id = el.getAttribute('data-id'), x = lessonByKey(k), kind = lkind(el), K = LKIND[kind]; if (!x) return;
-  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  if (!P.ai.key) { toast('أضف مفتاح المساعد الذكي أولًا'); ACT.settings(); return; }
   var errs = LAB_ERR[id] || [];
-  openModal(card('<h2>عدّل ' + K.the + ' أو أصلحها</h2><p class="small muted">صف ما رأيته أو ما تريد تغييره، ويعيد Claude كتابة ' + K.the + '. تبقى النسخة الحالية فتستطيع الرجوع إليها.</p>' +
+  openModal(card('<h2>عدّل ' + K.the + ' أو أصلحها</h2><p class="small muted">صف ما رأيته أو ما تريد تغييره، ويعيد المساعد كتابة ' + K.the + '. تبقى النسخة الحالية فتستطيع الرجوع إليها.</p>' +
     (errs.length ? '<p class="small bad">سيُرسل معها ' + cnt(errs.length, ['خطأ برمجي واحد', 'خطآن برمجيان', 'أخطاء برمجية', 'خطأً برمجيًا']) + ' ظهر أثناء تشغيلها.</p>' : '') +
     '<div class="lab-ideas">' + K.fixes.map(function (f) { return '<button type="button" class="lab-idea lab-fix" data-act="lab-fix-pick" data-v="' + esc(f) + '"><span>' + esc(f) + '</span></button>'; }).join('') + '</div>' +
     '<label class="field"><span>ملاحظاتك</span><textarea id="lab-note" rows="3" placeholder="' + esc(K.fixPh) + '"></textarea></label>' +
@@ -1485,11 +1485,11 @@ ACT['lab-fix'] = function (el) {
   var t = document.getElementById('lab-note'), note = t ? t.value.trim() : '', errs = LAB_ERR[id] || [];
   if (!note && !errs.length) { toast('اكتب ما تريد تغييره، أو اختر من الاقتراحات'); return; }
   LABGEN = { stopped: false }; wake(true);
-  var t0 = Date.now(), prog = progModal('Claude يعدّل ' + K.the, 'lab-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 1800, 4, 95) + '%'; }, 500);
+  var t0 = Date.now(), prog = progModal('المساعد يعدّل ' + K.the, 'lab-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 1800, 4, 95) + '%'; }, 500);
   prog('يقرأ ' + K.the + ' الحالية…');
   var ask = labCtx(x.b, x.l) + '\n\nهذه صفحة ' + K.the + ' الحالية:\n' + lab.html + '\n\n' + (note ? 'ملاحظات المعلم بعد تجربتها:\n' + note + '\n\n' : '') + (errs.length ? 'أخطاء برمجية ظهرت أثناء تشغيلها:\n' + errs.join('\n') + '\n\n' : '') +
     'أعد كتابة الصفحة كاملة بعد إصلاح كل ما سبق، مع الإبقاء على فكرتها وما يعمل فيها، ومراجعة الأخطاء الشائعة المذكورة في التعليمات. أعد صفحة HTML كاملة فقط (أقل من 28 ألف حرف) ومكتملة حتى </html>.';
-  labWrite(ask, prog, 'يكتب Claude النسخة المعدّلة…', K.sys).then(function (html) { return kind === 'game' && !gHasSkip(html) ? gskipFix(x, html, LABGEN, function (m) { prog(m); })['catch'](function (e) { if (e.code === 'stop') throw e; return html; }) : html; }).then(function (html) {
+  labWrite(ask, prog, 'يكتب المساعد النسخة المعدّلة…', K.sys).then(function (html) { return kind === 'game' && !gHasSkip(html) ? gskipFix(x, html, LABGEN, function (m) { prog(m); })['catch'](function (e) { if (e.code === 'stop') throw e; return html; }) : html; }).then(function (html) {
     clearInterval(tick); wake(false);
     var tm = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
     lab.prev = { html: lab.html, title: lab.title, at: lab.at };
@@ -1510,7 +1510,7 @@ ACT['lab-undo'] = function (el) {
 var LAB_JOBS = null;
 ACT['lab-bulk'] = function (el) {
   var x = lessonByKey(el.getAttribute('data-k')); if (!x) return;
-  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  if (!P.ai.key) { toast('أضف مفتاح المساعد الذكي أولًا'); ACT.settings(); return; }
   var scope = el.getAttribute('data-s'), jobs = [];
   x.b.lessons.forEach(function (l) {
     if (scope === 'unit' && (l.unit || '') !== (x.l.unit || '')) return;
@@ -1526,7 +1526,7 @@ ACT['lab-bulk'] = function (el) {
 ACT['lab-bulk-go'] = function () {
   var jobs = LAB_JOBS; LAB_JOBS = null; if (!jobs) return; closeModal();
   LABGEN = { stopped: false, ctls: [] }; wake(true);
-  var total = jobs.length, done = [], failed = [], next = 0, live = {}, prog = progModal('Claude يصمّم التجارب', 'lab-stop');
+  var total = jobs.length, done = [], failed = [], next = 0, live = {}, prog = progModal('المساعد يصمّم التجارب', 'lab-stop');
   function show() { var n = 0; Object.keys(live).forEach(function (k) { n += live[k]; }); prog('جاهز ' + done.length + ' من ' + total + (Object.keys(live).length ? ' · يكتب ' + Object.keys(live).length + ' الآن (' + num(n) + ' حرفًا)' : ''), (done.length + failed.length) / total * 100); }
   function one(j, id) {
     var ctl = {}; LABGEN.ctls.push(ctl);
@@ -1583,14 +1583,14 @@ L_TAB.figs = function (a, b, l) {
   if (extra.length) h += '<h3 class="sec-h">رسومي الإضافية</h3><div class="figs">' + extra.map(function (f) {
     return '<div class="fig-x">' + (f.img ? figure({ img: f.img, cap: f.cap }) : figure({ svg: f.svg, cap: f.cap }, true)) + (f.img && f.credit ? '<p class="fig-cr small muted">' + esc(f.credit) + '</p>' : '') + '<div class="fig-xa"><span class="small muted">' + (f.from === 'photo' ? 'صورة حرة' : f.from === 'image' ? 'محاكاة صورة' : f.from === 'page' ? 'من صفحة ' + esc(f.page || '') : 'من وصفك') + ' · ' + relDay(f.at) + '</span><button class="link small danger" data-act="fig-del" data-k="' + esc(k) + '" data-id="' + f.id + '">احذف</button></div></div>';
   }).join('') + '</div>';
-  h += '<details class="panel gen ai-fold" data-fold="fig"' + (foldOpen('fig', !!ref) ? ' open' : '') + ' style="margin-top:16px"><summary class="hh">' + ico('spark', 'violet') + 'ارسم مع Claude<span class="small muted">رسوم إضافية أو محاكاة صورة</span></summary>' +
+  h += '<details class="panel gen ai-fold" data-fold="fig"' + (foldOpen('fig', !!ref) ? ' open' : '') + ' style="margin-top:16px"><summary class="hh">' + ico('spark', 'violet') + 'ارسم مع المساعد<span class="small muted">رسوم إضافية أو محاكاة صورة</span></summary>' +
     (ai ? '<p class="small muted">صف الرسم الذي تريده، أو أعطه صورة أو صفحة من الكتاب ليحاكيها برسم توضيحي نظيف بتسميات عربية.</p>' +
       '<label class="field"><span>ماذا يرسم؟</span><textarea id="fig-idea" rows="2" placeholder="مثال: مخطط يوضح تحول الطاقة في المصباح الكهربائي من كهربائية إلى ضوئية وحرارية، بأسهم ونسب"></textarea></label>' +
       '<div class="fig-ref">' + (ref ? '<img src="' + ref.src + '" alt="الصورة المرفقة"><span class="small">' + (ref.page ? 'صفحة ' + esc(ref.page) + ' من الكتاب' : 'صورة مرفقة') + '</span><button class="link small" data-act="fig-ref-x">أزلها</button>'
         : '<button class="btn ghost sm" data-act="fig-ref-img" data-k="' + esc(k) + '">' + svgI('image') + 'أرفق صورة يحاكيها</button><span class="small muted">أو</span><label class="fig-pg"><span class="small">صفحة الكتاب</span><input type="number" inputmode="numeric" id="fig-pg" placeholder="' + l.from + '"></label><button class="btn ghost sm" data-act="fig-ref-page" data-k="' + esc(k) + '">أرفقها</button>') + '</div>' +
       '<div class="actions"><label class="fig-n"><span class="small">عدد الرسوم</span><select id="fig-n"><option>1</option><option selected>2</option><option>3</option></select></label><button class="btn" data-act="fig-gen" data-k="' + esc(k) + '">' + svgI('spark') + 'ارسم</button></div>' +
       '<p class="small muted">الرسوم توضيحية مبسطة (SVG)، لا صور واقعية.</p>'
-      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← المساعد الذكي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
+      : '<p class="hint">أضف مفتاح المساعد الذكي من الإعدادات ← المساعد الذكي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
   return h + photoPanel(b, l);
 };
 ICONS.image = ICONS.image || '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 3.5 3 3-2.5L20 17"/>';
@@ -1612,7 +1612,7 @@ ACT['fig-del'] = function (el) {
 };
 ACT['fig-gen'] = function (el) {
   var k = el.getAttribute('data-k'), x = lessonByKey(k); if (!x) return;
-  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  if (!P.ai.key) { toast('أضف مفتاح المساعد الذكي أولًا'); ACT.settings(); return; }
   var t = document.getElementById('fig-idea'), idea = t ? t.value.trim() : '', ref = FIG_REF && FIG_REF.k === k ? FIG_REF : null, n = +(document.getElementById('fig-n') || {}).value || 2;
   if (!idea && !ref) { toast('صف الرسم، أو أرفق صورة أو صفحة يحاكيها'); return; }
   var a = aidOf(x.b, x.l), content = [];
@@ -1620,9 +1620,9 @@ ACT['fig-gen'] = function (el) {
   content.push({ type: 'text', text: 'الدرس: ' + x.l.title + (a && a.d.idea ? '\nالفكرة الرئيسة: ' + a.d.idea : '') + (a && a.d.vocab ? '\nالمفردات: ' + a.d.vocab.map(function (v) { return v.t; }).join('، ') : '') +
     '\n\n' + (ref ? 'حاكِ ' + (ref.page ? 'الشكل في صفحة الكتاب المرفقة' : 'الصورة المرفقة') + ' برسم توضيحي. ' : '') + (idea ? 'طلب المعلم: ' + idea : '') + '\nارسم ' + (n === 1 ? 'رسمًا واحدًا' : n === 2 ? 'رسمين مختلفين' : 'ثلاثة رسوم مختلفة') + (ref && n > 1 ? ' (الأول محاكاة الصورة، والباقي رسوم مكملة لها)' : '') + '. أعد JSON المطلوب.' });
   FIGGEN = { stopped: false }; wake(true);
-  var t0 = Date.now(), prog = progModal('Claude يرسم', 'fig-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 900, 4, 95) + '%'; }, 400);
+  var t0 = Date.now(), prog = progModal('المساعد يرسم', 'fig-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 900, 4, 95) + '%'; }, 400);
   prog(ref ? 'يقرأ الصورة ويرسم…' : 'يرسم…');
-  claude(FIG_SYS, content, 16000, function (c) { prog('يرسم Claude… ' + num(c) + ' حرفًا'); }, FIGGEN).then(function (res) {
+  claude(FIG_SYS, content, 16000, function (c) { prog('يرسم المساعد… ' + num(c) + ' حرفًا'); }, FIGGEN).then(function (res) {
     clearInterval(tick); wake(false);
     var o = parseJSON(res), got = (Array.isArray(o.figs) ? o.figs : []).map(function (f) { return { svg: cleanSvg(f && f.svg), cap: str(f && f.cap).slice(0, 200) }; }).filter(function (f) { return f.svg; });
     if (!got.length) throw aiErr('json');
@@ -1648,7 +1648,7 @@ var QGEN = null;
 var QGEN_BASE = L_TAB.eval;
 L_TAB.eval = function (a, b, l) {
   var k = lk(b, l), rec = aidOf(b, l), add = rec && rec.qadd, ai = !!P.ai.key, nAdd = add ? add.mcq + add.tf + add.short : 0;
-  return QGEN_BASE(a, b, l) + '<details class="panel gen ai-fold" data-fold="qgen"' + (foldOpen('qgen', false) ? ' open' : '') + ' style="margin-top:16px"><summary class="hh">' + ico('spark', 'violet') + 'أسئلة إضافية مع Claude<span class="small muted">اطلب أسئلة بالنوع والمستوى الذي تريده</span></summary>' +
+  return QGEN_BASE(a, b, l) + '<details class="panel gen ai-fold" data-fold="qgen"' + (foldOpen('qgen', false) ? ' open' : '') + ' style="margin-top:16px"><summary class="hh">' + ico('spark', 'violet') + 'أسئلة إضافية مع المساعد<span class="small muted">اطلب أسئلة بالنوع والمستوى الذي تريده</span></summary>' +
     (ai ? '<label class="field"><span>ماذا تريد؟ (اختياري)</span><textarea id="qg-ask" rows="2" placeholder="مثال: أسئلة على تحولات الطاقة في الأجهزة المنزلية، بمستوى تطبيق وتحليل، تناسب اختبارًا قصيرًا"></textarea></label>' +
       '<div class="qg-opts"><label><span class="small">النوع</span><select id="qg-type"><option value="mix">متنوعة</option><option value="mcq">اختيار من متعدد</option><option value="tf">صح أو خطأ</option><option value="short">مقالية قصيرة</option></select></label>' +
       '<label><span class="small">العدد</span><select id="qg-n"><option>3</option><option selected>5</option><option>8</option><option>10</option></select></label>' +
@@ -1656,18 +1656,18 @@ L_TAB.eval = function (a, b, l) {
       '<div class="actions"><button class="btn" data-act="qg-run" data-k="' + esc(k) + '">' + svgI('spark') + 'أنشئ الأسئلة</button>' +
       (nAdd ? '<button class="btn ghost sm danger" data-act="qg-undo" data-k="' + esc(k) + '">احذف آخر ما أضافه (' + nAdd + ')</button>' : '') + '</div>' +
       '<p class="small muted">تُضاف في آخر الأسئلة أعلاه، وتدخل في «اعرض الأسئلة على الطلاب» و«انسخ الأسئلة».</p>'
-      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← المساعد الذكي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
+      : '<p class="hint">أضف مفتاح المساعد الذكي من الإعدادات ← المساعد الذكي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
 };
 ACT['qg-run'] = function (el) {
   var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var rec = aidOf(x.b, x.l); if (!rec) return;
-  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  if (!P.ai.key) { toast('أضف مفتاح المساعد الذكي أولًا'); ACT.settings(); return; }
   var ask = (document.getElementById('qg-ask') || {}).value || '', type = (document.getElementById('qg-type') || {}).value || 'mix', n = +(document.getElementById('qg-n') || {}).value || 5, lv = (document.getElementById('qg-lv') || {}).value || '';
   var TYPE = { mix: 'متنوعة بين اختيار من متعدد وصح أو خطأ ومقالية قصيرة', mcq: 'اختيار من متعدد فقط', tf: 'صح أو خطأ فقط', short: 'مقالية قصيرة فقط' }, qz = rec.d.quiz;
   var have = qz.mcq.map(function (q) { return '- ' + q.q; }).concat(qz.tf.map(function (q) { return '- ' + q.q; }), qz.short.map(function (q) { return '- ' + q.q; })).join('\n').replace(/\*\*|`/g, '');
   var text = 'الدرس: ' + x.l.title + '\n\nمحتوى الدرس:\n' + aidText(rec.d) + '\n\nالأسئلة الموجودة (لا تكررها):\n' + (have || '(لا يوجد)') +
     '\n\nالمطلوب: ' + n + ' أسئلة ' + TYPE[type] + (lv ? '، بمستوى ' + lv : '، متدرجة الصعوبة') + '.' + (ask.trim() ? '\nطلب المعلم: ' + ask.trim() : '') + '\nأعد JSON المطلوب.';
   QGEN = { stopped: false }; wake(true);
-  var t0 = Date.now(), prog = progModal('Claude يكتب الأسئلة', 'qg-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 500, 4, 95) + '%'; }, 300);
+  var t0 = Date.now(), prog = progModal('المساعد يكتب الأسئلة', 'qg-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 500, 4, 95) + '%'; }, 300);
   claude(QGEN_SYS, [{ type: 'text', text: text }], 8000, function (c) { prog('يكتب… ' + num(c) + ' حرفًا'); }, QGEN).then(function (res) {
     clearInterval(tick); wake(false);
     var o = parseJSON(res), got = cleanAid({ goals: ['-'], quiz: { mcq: o.mcq, tf: o.tf, short: o.short } }).quiz, total = got.mcq.length + got.tf.length + got.short.length;
@@ -1684,7 +1684,7 @@ ACT['qg-undo'] = function (el) {
   var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; var r = aidOf(x.b, x.l); if (!r || !r.qadd) return;
   var qz = r.d.quiz, ad = r.qadd;
   qz.mcq.splice(qz.mcq.length - ad.mcq, ad.mcq); qz.tf.splice(qz.tf.length - ad.tf, ad.tf); qz.short.splice(qz.short.length - ad.short, ad.short);
-  delete r.qadd; r.at = Date.now(); AIDS[r.k] = r; dbPut('aids', r); render(true); toast('حُذفت الأسئلة التي أضافها Claude آخر مرة');
+  delete r.qadd; r.at = Date.now(); AIDS[r.k] = r; dbPut('aids', r); render(true); toast('حُذفت الأسئلة التي أضافها المساعد آخر مرة');
 };
 
 /* ---------- «الرسوم»: a real picture for the lesson, free to use, from Wikimedia Commons ----------
@@ -1929,7 +1929,7 @@ L_TAB.ws = function (a, b, l) {
       '<div class="actions"><button class="btn" data-act="ws-gen" data-k="' + esc(k) + '"' + (nq ? '' : ' disabled') + '>' + svgI('spark') + 'صمّم الأوراق</button></div>' +
       '<p class="small muted">' + (nq ? 'كل ورقة: صفحة أسئلة للطالب، ونموذج إجابة منفصل لك. تُصمَّم حتى 3 أوراق معًا في دقيقة إلى ثلاث.' : 'لا أسئلة في «التقويم» لهذا الدرس (أو كلها متجاهلة).') + '</p>' +
       '<div class="ws-bulk"><b>ورقتان لكل درس دفعة واحدة</b><p class="small muted">بطابعين مختلفين، للدروس التي جُهّز مساعدها ولم تكتمل لها ورقتان.</p><div class="actions"><button class="btn ghost sm" data-act="ws-bulk" data-k="' + esc(k) + '" data-s="unit">دروس هذه الوحدة</button><button class="btn ghost sm" data-act="ws-bulk" data-k="' + esc(k) + '" data-s="all">كل دروس الكتاب</button></div></div>'
-      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← المساعد الذكي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
+      : '<p class="hint">أضف مفتاح المساعد الذكي من الإعدادات ← المساعد الذكي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
   return h;
 };
 ACT['ws-style'] = function (el) { el.classList.toggle('on'); }; // several can be chosen: one sheet each
@@ -1948,7 +1948,7 @@ function wsQuestions(x) { // the lesson's questions as the sheet must keep them,
 }
 var WSGEN = null;
 function wsWrite(ask, prog) {
-  return claude(WS_SYS, [{ type: 'text', text: ask }], 24000, function (n) { prog('يكتب Claude الورقة… ' + num(n) + ' حرفًا'); }, WSGEN).then(function (res) {
+  return claude(WS_SYS, [{ type: 'text', text: ask }], 24000, function (n) { prog('يكتب المساعد الورقة… ' + num(n) + ' حرفًا'); }, WSGEN).then(function (res) {
     var s = res.text, i = s.search(/<!DOCTYPE html|<html[\s>]/i), j = s.toLowerCase().lastIndexOf('</html>');
     if (i < 0 || j < i) throw aiErr(res.stop === 'max_tokens' ? 'cut' : 'json');
     return s.slice(i, j + 7);
@@ -2018,14 +2018,14 @@ function wsOpts() {
 }
 ACT['ws-gen'] = function (el) {
   var x = lessonByKey(el.getAttribute('data-k')); if (!x) return;
-  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  if (!P.ai.key) { toast('أضف مفتاح المساعد الذكي أولًا'); ACT.settings(); return; }
   var o = wsOpts(), styles = Array.prototype.map.call(document.querySelectorAll('.lab-types .chip.on'), function (c) { return c.getAttribute('data-v'); }), have = wsOf(x.b, x.l).map(function (w) { return w.title; });
   var jobs = (styles.length ? styles : ['']).map(function (st) { return { x: x, o: Object.assign({}, o, { style: st, others: have }) }; });
-  wsRun(jobs, jobs.length > 1 ? 'Claude يصمّم ' + cnt(jobs.length, ['ورقة واحدة', 'ورقتين', 'أوراق', 'ورقة']) : 'Claude يصمّم ورقة العمل', function (d) { return d.map(function (r) { return '«' + esc(r.w.title) + '»'; }).join('، ') + '.'; });
+  wsRun(jobs, jobs.length > 1 ? 'المساعد يصمّم ' + cnt(jobs.length, ['ورقة واحدة', 'ورقتين', 'أوراق', 'ورقة']) : 'المساعد يصمّم ورقة العمل', function (d) { return d.map(function (r) { return '«' + esc(r.w.title) + '»'; }).join('، ') + '.'; });
 };
 ACT['ws-bulk'] = function (el) { // two sheets, in two different looks, for every lesson still without them
   var x = lessonByKey(el.getAttribute('data-k')); if (!x) return;
-  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  if (!P.ai.key) { toast('أضف مفتاح المساعد الذكي أولًا'); ACT.settings(); return; }
   var scope = el.getAttribute('data-s'), o = wsOpts(), jobs = [];
   x.b.lessons.forEach(function (l, li) {
     if (scope === 'unit' && (l.unit || '') !== (x.l.unit || '')) return;
@@ -2041,7 +2041,7 @@ ACT['ws-bulk'] = function (el) { // two sheets, in two different looks, for ever
   WS_JOBS = jobs;
 };
 var WS_JOBS = null;
-ACT['ws-bulk-go'] = function () { var jobs = WS_JOBS; WS_JOBS = null; if (!jobs) return; closeModal(); wsRun(jobs, 'Claude يصمّم أوراق العمل', function (d) { var ls = {}; d.forEach(function (r) { ls[r.j.x.l.title] = 1; }); return 'عدد الدروس: ' + cnt(Object.keys(ls).length, WORDS.lesson) + '. تجدها في تبويب «ورقة العمل» لكل درس.'; }); };
+ACT['ws-bulk-go'] = function () { var jobs = WS_JOBS; WS_JOBS = null; if (!jobs) return; closeModal(); wsRun(jobs, 'المساعد يصمّم أوراق العمل', function (d) { var ls = {}; d.forEach(function (r) { ls[r.j.x.l.title] = 1; }); return 'عدد الدروس: ' + cnt(Object.keys(ls).length, WORDS.lesson) + '. تجدها في تبويب «ورقة العمل» لكل درس.'; }); };
 ACT['ws-stop'] = function () { if (WSGEN) { WSGEN.stopped = true; if (WSGEN.abort) WSGEN.abort(); (WSGEN.ctls || []).forEach(function (c) { if (c.abort) c.abort(); }); } };
 function wsName(f, mode) { return (f.x.l.title + ' - ' + f.w.title + (mode === 'key' ? ' - نموذج الإجابة' : '')).replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 90) + '.html'; }
 function wsB64(str) { var b = new TextEncoder().encode(str), bin = ''; for (var i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
@@ -2066,9 +2066,9 @@ ACT['ws-del'] = function (el) {
   var f = wsFind(el); if (!f) return; wsSave(f.x.b, f.x.l, f.list.filter(function (y) { return y !== f.w; })); render(true); toast('حُذفت الورقة');
 };
 ACT['ws-edit'] = function (el) {
-  var f = wsFind(el); if (!f) return; if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  var f = wsFind(el); if (!f) return; if (!P.ai.key) { toast('أضف مفتاح المساعد الذكي أولًا'); ACT.settings(); return; }
   var fixes = ['صحّح خطأ في سؤال أو إجابة', 'أبسط وأقل ازدحامًا', 'أشكال أسئلة أكثر تشويقًا', 'ألوان أهدأ', 'مساحات إجابة أكبر', 'أسئلة أقل'];
-  openModal(card('<h2>عدّل ورقة العمل</h2><p class="small muted">صف ما تريد تغييره، ويعيد Claude كتابة الورقة. تبقى النسخة الحالية فتستطيع الرجوع إليها.</p>' +
+  openModal(card('<h2>عدّل ورقة العمل</h2><p class="small muted">صف ما تريد تغييره، ويعيد المساعد كتابة الورقة. تبقى النسخة الحالية فتستطيع الرجوع إليها.</p>' +
     '<div class="lab-ideas">' + fixes.map(function (t) { return '<button type="button" class="lab-idea lab-fix" data-act="lab-fix-pick" data-v="' + esc(t) + '"><span>' + esc(t) + '</span></button>'; }).join('') + '</div>' +
     '<label class="field"><span>ملاحظاتك</span><textarea id="lab-note" rows="3" placeholder="مثال: السؤال الثالث فاض إلى خارج الصفحة، وأريد المهمة الثانية عن المطبخ"></textarea></label>' +
     '<div class="actions"><button class="btn" data-act="ws-fix" data-k="' + esc(el.getAttribute('data-k')) + '" data-id="' + f.w.id + '">' + svgI('spark') + 'عدّلها</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
@@ -2077,7 +2077,7 @@ ACT['ws-fix'] = function (el) {
   var f = wsFind(el); if (!f) return; var t = document.getElementById('lab-note'), note = t ? t.value.trim() : '';
   if (!note) { toast('اكتب ما تريد تغييره، أو اختر من الاقتراحات'); return; }
   WSGEN = { stopped: false }; wake(true);
-  var t0 = Date.now(), prog = progModal('Claude يعدّل ورقة العمل', 'ws-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 1600, 4, 95) + '%'; }, 500);
+  var t0 = Date.now(), prog = progModal('المساعد يعدّل ورقة العمل', 'ws-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 1600, 4, 95) + '%'; }, 500);
   prog('يقرأ الورقة الحالية…');
   var ask = labCtx(f.x.b, f.x.l) + '\n\nأسئلة التقويم:\n' + wsQuestions(f.x) + '\n\nإعداد المعلم: ' + wsTeacher() + '\n\nهذه الورقة الحالية:\n<!DOCTYPE html><html><head><style>' + f.w.css + '</style></head><body>' + f.w.html + '</body></html>\n\nملاحظات المعلم:\n' + note + '\n\nأعد كتابة الورقة كاملة بعد تنفيذ الملاحظات، مع الإبقاء على ما يعمل فيها. أعد صفحة HTML كاملة فقط حتى </html>.';
   wsWrite(ask, prog).then(function (raw) {
@@ -2390,7 +2390,7 @@ L_TAB.film = function (a, b, l) {
     (ai ? '<label class="field"><span>ملاحظاتك (اختياري)</span><textarea id="film-idea" rows="2" placeholder="مثال: ركّز على محطة توليد الكهرباء، وأمثلة من المطبخ"></textarea></label>' +
       '<div class="actions"><button class="btn" data-act="film-gen" data-k="' + esc(k) + '">' + svgI('spark') + 'صمّم المقطع</button></div><p class="small muted">يستغرق دقيقة إلى ثلاث. شاهده قبل الحصة.</p>' +
       '<div class="ws-bulk"><b>مقطع لكل درس دفعة واحدة</b><p class="small muted">للدروس التي جُهّز مساعدها وليس لها مقطع.</p><div class="actions"><button class="btn ghost sm" data-act="film-bulk" data-k="' + esc(k) + '" data-s="unit">دروس هذه الوحدة</button><button class="btn ghost sm" data-act="film-bulk" data-k="' + esc(k) + '" data-s="all">كل دروس الكتاب</button></div></div>'
-      : '<p class="hint">أضف مفتاح Claude API من الإعدادات ← المساعد الذكي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
+      : '<p class="hint">أضف مفتاح المساعد الذكي من الإعدادات ← المساعد الذكي.</p><div class="actions"><button class="btn" data-act="settings">افتح الإعدادات</button></div>') + '</details>';
   return h;
 };
 function filmFind(el) { var x = lessonByKey(el.getAttribute('data-k')); if (!x) return null; var list = filmsOf(x.b, x.l), fm = list.filter(function (y) { return y.id === el.getAttribute('data-id'); })[0]; return fm ? { x: x, list: list, fm: fm } : null; }
@@ -2415,7 +2415,7 @@ function filmWrite(x, extra, ctl, onText, onArt) { // the scenes first, then eac
 function filmRun(jobs, title) { // one or many films, three at a time
   FILMGEN = { stopped: false, ctls: [] }; wake(true);
   var total = jobs.length, done = [], failed = [], next = 0, live = {}, art = null, prog = progModal(title, 'film-stop');
-  function show() { var n = 0; Object.keys(live).forEach(function (k) { n += live[k]; }); prog(total > 1 ? 'جاهز ' + done.length + ' من ' + total + (Object.keys(live).length ? ' · يعمل على ' + Object.keys(live).length + ' الآن' : '') : art ? 'يرسم Claude الرسوم… ' + art[0] + ' من ' + art[1] : 'يكتب Claude المشاهد… ' + num(n) + ' حرفًا', total > 1 ? (done.length + failed.length) / total * 100 : art ? 50 + art[0] / art[1] * 48 : null); }
+  function show() { var n = 0; Object.keys(live).forEach(function (k) { n += live[k]; }); prog(total > 1 ? 'جاهز ' + done.length + ' من ' + total + (Object.keys(live).length ? ' · يعمل على ' + Object.keys(live).length + ' الآن' : '') : art ? 'يرسم المساعد الرسوم… ' + art[0] + ' من ' + art[1] : 'يكتب المساعد المشاهد… ' + num(n) + ' حرفًا', total > 1 ? (done.length + failed.length) / total * 100 : art ? 50 + art[0] / art[1] * 48 : null); }
   function worker() {
     if (FILMGEN.stopped || next >= total) return Promise.resolve();
     var j = jobs[next], id = next++, ctl = {}; FILMGEN.ctls.push(ctl); live[id] = 0; show();
@@ -2438,14 +2438,14 @@ function filmRun(jobs, title) { // one or many films, three at a time
 }
 ACT['film-stop'] = function () { if (FILMGEN) { FILMGEN.stopped = true; (FILMGEN.ctls || []).forEach(function (c) { if (c.abort) c.abort(); }); } };
 ACT['film-gen'] = function (el) {
-  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; if (!P.ai.key) { toast('أضف مفتاح المساعد الذكي أولًا'); ACT.settings(); return; }
   var t = document.getElementById('film-idea'), idea = t ? t.value.trim() : '', have = filmsOf(x.b, x.l).map(function (y) { return y.title; });
-  filmRun([{ x: x, extra: (idea ? 'ملاحظات المعلم: ' + idea : '') + (have.length ? '\nمقاطع موجودة لهذا الدرس (اجعل هذا مختلفًا في الأمثلة والرسوم): ' + have.join('؛ ') : '') }], 'Claude يصمّم مقطع الدرس');
+  filmRun([{ x: x, extra: (idea ? 'ملاحظات المعلم: ' + idea : '') + (have.length ? '\nمقاطع موجودة لهذا الدرس (اجعل هذا مختلفًا في الأمثلة والرسوم): ' + have.join('؛ ') : '') }], 'المساعد يصمّم مقطع الدرس');
 };
 ACT['film-edit'] = function (el) {
-  var f = filmFind(el); if (!f) return; if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  var f = filmFind(el); if (!f) return; if (!P.ai.key) { toast('أضف مفتاح المساعد الذكي أولًا'); ACT.settings(); return; }
   var fixes = ['رسم لا يوضح الفكرة', 'رسوم أكثر', 'أمثلة أكثر من الحياة', 'أسئلة أكثر بين الشرح', 'أبسط للطلاب', 'نص يتداخل مع الرسم'];
-  openModal(card('<h2>عدّل المقطع</h2><p class="small muted">صف ما تريد تغييره، ويعيد Claude كتابة المقطع. تبقى النسخة الحالية فتستطيع الرجوع إليها.</p>' +
+  openModal(card('<h2>عدّل المقطع</h2><p class="small muted">صف ما تريد تغييره، ويعيد المساعد كتابة المقطع. تبقى النسخة الحالية فتستطيع الرجوع إليها.</p>' +
     '<div class="lab-ideas">' + fixes.map(function (t) { return '<button type="button" class="lab-idea lab-fix" data-act="lab-fix-pick" data-v="' + esc(t) + '"><span>' + esc(t) + '</span></button>'; }).join('') + '</div>' +
     '<label class="field"><span>ملاحظاتك</span><textarea id="lab-note" rows="3" placeholder="مثال: رسم محطة التوليد غير واضح، وأريد مثالًا عن السيارة الكهربائية"></textarea></label>' +
     '<div class="actions"><button class="btn" data-act="film-fix" data-k="' + esc(el.getAttribute('data-k')) + '" data-id="' + f.fm.id + '">' + svgI('spark') + 'عدّله</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
@@ -2453,11 +2453,11 @@ ACT['film-edit'] = function (el) {
 ACT['film-fix'] = function (el) {
   var f = filmFind(el); if (!f) return; var t = document.getElementById('lab-note'), note = t ? t.value.trim() : '';
   if (!note) { toast('اكتب ما تريد تغييره، أو اختر من الاقتراحات'); return; }
-  filmRun([{ x: f.x, fm: f.fm, extra: 'هذا JSON المقطع الحالي:\n' + JSON.stringify(f.fm.d) + '\n\nملاحظات المعلم بعد مشاهدته:\n' + note + '\n\nأعد JSON المقطع كاملًا بعد تنفيذ الملاحظات، مع الإبقاء على ما يعمل فيه.' }], 'Claude يعدّل المقطع');
+  filmRun([{ x: f.x, fm: f.fm, extra: 'هذا JSON المقطع الحالي:\n' + JSON.stringify(f.fm.d) + '\n\nملاحظات المعلم بعد مشاهدته:\n' + note + '\n\nأعد JSON المقطع كاملًا بعد تنفيذ الملاحظات، مع الإبقاء على ما يعمل فيه.' }], 'المساعد يعدّل المقطع');
 };
 var FILM_JOBS = null;
 ACT['film-bulk'] = function (el) {
-  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  var x = lessonByKey(el.getAttribute('data-k')); if (!x) return; if (!P.ai.key) { toast('أضف مفتاح المساعد الذكي أولًا'); ACT.settings(); return; }
   var scope = el.getAttribute('data-s'), jobs = [];
   x.b.lessons.forEach(function (l) { if (scope === 'unit' && (l.unit || '') !== (x.l.unit || '')) return; if (!aidOf(x.b, l) || filmsOf(x.b, l).length) return; jobs.push({ x: { b: x.b, l: l }, extra: '' }); });
   if (!jobs.length) { toast('كل الدروس الجاهزة لها مقطع من قبل'); return; }
@@ -2465,7 +2465,7 @@ ACT['film-bulk'] = function (el) {
   openModal(card('<h2>' + cnt(jobs.length, ['مقطع واحد', 'مقطعان', 'مقاطع', 'مقطعًا']) + '</h2><p class="muted">مقطع لكل درس، تُصمَّم 3 معًا، فتستغرق نحو ' + Math.max(2, Math.round(jobs.length / 3 * 2.5)) + ' دقيقة. أبقِ التطبيق مفتوحًا والآيباد يعمل؛ وتستطيع الإيقاف في أي وقت، وما اكتمل يبقى.</p>' +
     '<div class="actions"><button class="btn" data-act="film-bulk-go">ابدأ</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
 };
-ACT['film-bulk-go'] = function () { var jobs = FILM_JOBS; FILM_JOBS = null; if (!jobs) return; closeModal(); filmRun(jobs, 'Claude يصمّم مقاطع الدروس'); };
+ACT['film-bulk-go'] = function () { var jobs = FILM_JOBS; FILM_JOBS = null; if (!jobs) return; closeModal(); filmRun(jobs, 'المساعد يصمّم مقاطع الدروس'); };
 /* ---------- «التقويم» حسب مستويات بلوم (المعدّل): كل سؤال عليه مستواه، والتقويم يُعاد ترتيبه ليغطي المستويات الستة ---------- */
 var BLOOM = ['تذكر', 'فهم', 'تطبيق', 'تحليل', 'تقويم', 'إبداع'];
 function bloomLv(v) { // what Claude or an older helper wrote, as one of the six
@@ -2557,9 +2557,9 @@ function blOne(x, onText, ctl) {
 }
 ACT['bl-run'] = function (el) {
   var x = lessonByKey(el.getAttribute('data-k')); if (!x || !aidOf(x.b, x.l)) return;
-  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  if (!P.ai.key) { toast('أضف مفتاح المساعد الذكي أولًا'); ACT.settings(); return; }
   BLGEN = { stopped: false }; wake(true);
-  var prog = progModal('Claude يرتّب التقويم حسب بلوم', 'bl-stop');
+  var prog = progModal('المساعد يرتّب التقويم حسب بلوم', 'bl-stop');
   blOne(x, function (c) { prog('يكتب… ' + num(c) + ' حرفًا'); }, BLGEN).then(function (n) {
     wake(false); var m = document.getElementById('modal'); m.__busy = false; closeModal(); delete BL_F[lk(x.b, x.l)]; render(true);
     toast('رُتّب التقويم: ' + cnt(n, WORDS.q) + ' على المستويات الستة', 3500);
@@ -2575,7 +2575,7 @@ ACT['bl-undo'] = function (el) {
 };
 ACT['bl-bulk'] = function (el) {
   var x = lessonByKey(el.getAttribute('data-k')); if (!x) return;
-  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  if (!P.ai.key) { toast('أضف مفتاح المساعد الذكي أولًا'); ACT.settings(); return; }
   var scope = el.getAttribute('data-s'), all = [], jobs = [];
   x.b.lessons.forEach(function (l) {
     if (scope === 'unit' && (l.unit || '') !== (x.l.unit || '')) return;
@@ -2591,7 +2591,7 @@ ACT['bl-bulk'] = function (el) {
 ACT['bl-bulk-go'] = function () {
   var jobs = BL_JOBS; BL_JOBS = null; if (!jobs) return; closeModal();
   BLGEN = { stopped: false, ctls: [] }; wake(true);
-  var total = jobs.length, done = 0, failed = [], next = 0, live = {}, prog = progModal('Claude يرتّب التقويم حسب بلوم', 'bl-stop');
+  var total = jobs.length, done = 0, failed = [], next = 0, live = {}, prog = progModal('المساعد يرتّب التقويم حسب بلوم', 'bl-stop');
   function show() { var n = 0; Object.keys(live).forEach(function (k) { n += live[k]; }); prog('جاهز ' + num(done) + ' من ' + num(total) + (Object.keys(live).length ? ' · يكتب ' + Object.keys(live).length + ' الآن (' + num(n) + ' حرفًا)' : ''), (done + failed.length) / total * 100); }
   function worker() {
     if (BLGEN.stopped || next >= total) return Promise.resolve();
@@ -2638,11 +2638,11 @@ function gPatch(html, edits) { // every edit must find its text exactly once, or
   return out;
 }
 function gskipFix(x, html, ctl, prog) { // the patched page; if the patch does not fit, the page is written again with the button
-  return claude(GSKIP_SYS, [{ type: 'text', text: 'كود اللعبة:\n' + html + '\n\nأعد JSON التعديلات.' }], 8000, function (n) { if (prog) prog('يضيف Claude الزر… ' + num(n) + ' حرفًا'); }, ctl).then(function (res) {
+  return claude(GSKIP_SYS, [{ type: 'text', text: 'كود اللعبة:\n' + html + '\n\nأعد JSON التعديلات.' }], 8000, function (n) { if (prog) prog('يضيف المساعد الزر… ' + num(n) + ' حرفًا'); }, ctl).then(function (res) {
     var o = null; try { o = parseJSON(res); } catch (e) { if (e.code === 'stop') throw e; }
     var p = o && gPatch(html, o.edits); if (p) return p;
     var ask = (x ? labCtx(x.b, x.l) + '\n\n' : '') + 'هذه صفحة اللعبة الحالية:\n' + html + '\n\nأعد كتابة الصفحة كاملة كما هي مع إضافة زر «تجاهل السؤال» مع كل سؤال أو عنصر (يخرجه دون أن يُحسب صحًا أو خطأً ودون تغيير النقاط أو الدور، وينتقل لما بعده، وwindow.skipQuestion)، دون تغيير شيء آخر. أعد صفحة HTML كاملة فقط (أقل من 28 ألف حرف) ومكتملة حتى </html>.';
-    return labWrite(ask, prog || function () {}, 'يكتب Claude اللعبة مع الزر…', GAME_SYS, ctl).then(function (h2) { if (!gHasSkip(h2)) throw aiErr('json', 'لم يُضف الزر'); return h2; });
+    return labWrite(ask, prog || function () {}, 'يكتب المساعد اللعبة مع الزر…', GAME_SYS, ctl).then(function (h2) { if (!gHasSkip(h2)) throw aiErr('json', 'لم يُضف الزر'); return h2; });
   });
 }
 function gskipKeep(x, lab, html) { var labs = labsOf(x.b, x.l, 'game'), L = labs.filter(function (y) { return y.id === lab.id; })[0]; if (!L) return; L.prev = { html: L.html, title: L.title, at: L.at }; L.html = html; L.at = Date.now(); labsSave(x.b, x.l, labs, 'game'); delete LAB_ERR[L.id]; }
@@ -2666,7 +2666,7 @@ L_TAB.game = function (a, b, l) {
   });
   if (book.length && P.ai.key) {
     var unit = gskipJobs(b, l, 'unit').length;
-    h += '<div class="ws-bulk" style="margin-top:14px"><b>زر «تجاهل السؤال» لكل الألعاب</b><p class="small muted">' + cnt(book.length, ['لعبة واحدة', 'لعبتان', 'ألعاب', 'لعبة']) + ' في الكتاب بلا زر التجاهل. يضيفه Claude إلى كل لعبة ولا يغيّر غيره، وتبقى النسخة السابقة لكل لعبة.</p><div class="actions">' +
+    h += '<div class="ws-bulk" style="margin-top:14px"><b>زر «تجاهل السؤال» لكل الألعاب</b><p class="small muted">' + cnt(book.length, ['لعبة واحدة', 'لعبتان', 'ألعاب', 'لعبة']) + ' في الكتاب بلا زر التجاهل. يضيفه المساعد إلى كل لعبة ولا يغيّر غيره، وتبقى النسخة السابقة لكل لعبة.</p><div class="actions">' +
       (unit ? '<button class="btn ghost sm" data-act="gskip" data-k="' + esc(k) + '" data-s="unit">ألعاب هذه الوحدة (' + num(unit) + ')</button>' : '') +
       '<button class="btn ghost sm" data-act="gskip" data-k="' + esc(k) + '" data-s="all">كل ألعاب الكتاب (' + num(book.length) + ')</button></div></div>';
   }
@@ -2674,7 +2674,7 @@ L_TAB.game = function (a, b, l) {
 };
 ACT['gskip'] = function (el) {
   var x = lessonByKey(el.getAttribute('data-k')); if (!x) return;
-  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  if (!P.ai.key) { toast('أضف مفتاح المساعد الذكي أولًا'); ACT.settings(); return; }
   var jobs = gskipJobs(x.b, x.l, el.getAttribute('data-s')); if (!jobs.length) { toast('كل الألعاب فيها زر التجاهل'); return; }
   if (jobs.length === 1) { GSKIP_JOBS = jobs; ACT['gskip-go'](); return; }
   GSKIP_JOBS = jobs;
@@ -2684,7 +2684,7 @@ ACT['gskip'] = function (el) {
 ACT['gskip-go'] = function () {
   var jobs = GSKIP_JOBS; GSKIP_JOBS = null; if (!jobs) return; closeModal();
   LABGEN = { stopped: false, ctls: [] }; wake(true);
-  var total = jobs.length, done = 0, failed = [], next = 0, live = {}, prog = progModal('Claude يضيف زر «تجاهل السؤال»', 'lab-stop');
+  var total = jobs.length, done = 0, failed = [], next = 0, live = {}, prog = progModal('المساعد يضيف زر «تجاهل السؤال»', 'lab-stop');
   function show() { prog('جاهز ' + num(done) + ' من ' + num(total) + (Object.keys(live).length ? ' · يعمل على ' + Object.keys(live).length + ' الآن' : ''), (done + failed.length) / total * 100); }
   function worker() {
     if (LABGEN.stopped || next >= total) return Promise.resolve();
@@ -3262,7 +3262,7 @@ function aiMsg(e) {
   if (c === 401) return 'مفتاح API غير صحيح أو أُلغي. راجعه في الإعدادات.';
   if (c === 403) return 'المفتاح لا يملك صلاحية هذا الطلب.';
   if (c === 429) return 'تجاوزت حد الطلبات أو نفد الرصيد مؤقتًا. انتظر دقيقة ثم أعد المحاولة.';
-  if (c === 529 || c === 503 || c === 500) return 'خدمة Claude مزدحمة الآن. أعد المحاولة بعد قليل.';
+  if (c === 529 || c === 503 || c === 500) return 'خدمة المساعد مزدحمة الآن. أعد المحاولة بعد قليل.';
   if (c === 400) return 'رُفض الطلب: ' + (e.message || '') + (/credit|balance/i.test(e.message || '') ? ' (رصيد الحساب غير كافٍ)' : '');
   if (c === 404) return 'اسم النموذج غير معروف. اختر نموذجًا آخر من الإعدادات.';
   if (c === 'net') return 'لا اتصال بالإنترنت، أو حُجب الطلب.';
@@ -3318,8 +3318,8 @@ function genLesson(b, l, extra, prog, ctl) {
     return seq;
   }).then(function () {
     content.push({ type: 'text', text: 'الكتاب: ' + b.title + '\nالوحدة: ' + (l.unit || '') + (l.chap ? '\nالفصل: ' + l.chap : '') + '\nالدرس: ' + l.title + ' (الصفحات ' + l.from + '–' + l.to + ')' + (extra ? '\nتوجيه من المعلم: ' + extra : '') + '\nاكتب مساعد الدرس الآن بصيغة JSON المطلوبة.' });
-    prog('يكتب Claude مساعد الدرس…');
-    return claude(LESSON_SYS, content, 32000, function (n) { prog('يكتب Claude مساعد الدرس… ' + num(n) + ' حرفًا'); }, ctl);
+    prog('يكتب المساعد مساعد الدرس…');
+    return claude(LESSON_SYS, content, 32000, function (n) { prog('يكتب المساعد مساعد الدرس… ' + num(n) + ' حرفًا'); }, ctl);
   }).then(function (res) {
     var d = cleanAid(parseJSON(res));
     return storeAid(b, l, d, 'ai', { model: aiModel(), usage: res.usage }).then(function () { return d; });
@@ -3334,7 +3334,7 @@ function doneModal(html) { var m = document.getElementById('modal'); m.__busy = 
 var GEN = null;
 ACT['gen-one'] = function (el) {
   var x = lessonByKey(el.getAttribute('data-k')); if (!x) return;
-  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  if (!P.ai.key) { toast('أضف مفتاح المساعد الذكي أولًا'); ACT.settings(); return; }
   var ex = document.getElementById('gen-extra'), extra = ex ? ex.value.trim() : '';
   GEN = { stopped: false }; wake(true);
   var t0 = Date.now(), prog = progModal('تجهيز «' + x.l.title + '»', 'gen-stop'), tick = setInterval(function () { var bb = document.getElementById('ai-bar'); if (bb) bb.style.width = clamp((Date.now() - t0) / 1500, 4, 95) + '%'; }, 500);
@@ -3346,7 +3346,7 @@ ACT['gen-one'] = function (el) {
 ACT['gen-stop'] = function () { if (GEN) { GEN.stopped = true; if (GEN.abort) GEN.abort(); } var m = document.getElementById('modal'); m.__busy = false; closeModal(); wake(false); };
 ACT['gen-all'] = function () {
   var b = curBook(); if (!b) return;
-  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  if (!P.ai.key) { toast('أضف مفتاح المساعد الذكي أولًا'); ACT.settings(); return; }
   var todo = b.lessons.filter(function (l) { return !aidOf(b, l); }), pages = todo.reduce(function (s, l) { return s + Math.min(l.to - l.from + 1, MAX_PAGES); }, 0);
   var m = MODELS.filter(function (x) { return x[0] === aiModel(); })[0], usd = m ? ((3500 * todo.length + pages * 1600) * m[2] + 16000 * todo.length * m[3]) / 1e6 : 0;
   openModal(card('<h2>تجهيز ' + cnt(todo.length, WORDS.lesson) + '</h2><p class="muted">يُجهَّز درس بعد درس، ونحو دقيقتين لكل درس. تستطيع الإيقاف في أي وقت، وما اكتمل يبقى.</p><div class="actions"><button class="btn" data-act="gen-all-yes">ابدأ</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
@@ -3375,7 +3375,7 @@ ACT['gen-all-yes'] = function () {
 /* reading the table of contents */
 ACT['toc-ai'] = function () {
   var b = curBook();
-  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا'); ACT.settings(); return; }
+  if (!P.ai.key) { toast('أضف مفتاح المساعد الذكي أولًا'); ACT.settings(); return; }
   openModal(card('<h2>قراءة فهرس الكتاب</h2><p class="muted">اكتب أرقام صفحات الفهرس كما تظهر في عارض الكتاب (ترتيبها في الملف، من 1 إلى ' + (b.pages || '…') + '). تجدها في «الكتاب»: الرقم الثاني أعلى الصفحة.</p>' +
     '<div class="row2"><label class="field"><span>من صفحة</span><input type="number" inputmode="numeric" id="toc-a" value="' + (P.tocA || 3) + '" data-focus></label><label class="field"><span>إلى صفحة</span><input type="number" inputmode="numeric" id="toc-b" value="' + (P.tocB || 6) + '"></label></div>' +
     '<div class="actions"><button class="btn" data-act="toc-ai-yes">اقرأ الفهرس</button><button class="btn ghost" data-act="modal-close">إلغاء</button></div>'));
@@ -3392,8 +3392,8 @@ ACT['toc-ai-yes'] = function () {
     return seq.then(function () { return pageJpeg(doc, sample, 900, 0.7); }).then(function (d) { content.push({ type: 'text', text: 'صفحة العينة:' }); content.push(img(d)); });
   }).then(function () {
     content.push({ type: 'text', text: 'استخرج الدروس الآن بصيغة JSON المطلوبة.' });
-    prog('يقرأ Claude الفهرس…');
-    return claude(TOC_SYS, content, 12000, function (n) { prog('يقرأ Claude الفهرس… ' + num(n) + ' حرفًا'); }, GEN);
+    prog('يقرأ المساعد الفهرس…');
+    return claude(TOC_SYS, content, 12000, function (n) { prog('يقرأ المساعد الفهرس… ' + num(n) + ' حرفًا'); }, GEN);
   }).then(function (res) {
     var o = parseJSON(res), list = arr(o.lessons).filter(function (x) { return x && x.title && +x.from > 0; }).map(function (x) { return { id: uid('l'), unit: str(x.unit), chap: str(x.chap), title: str(x.title), from: +x.from, to: +x.to || 0 }; });
     if (!list.length) throw aiErr('json');
@@ -3494,9 +3494,9 @@ ACT['rd-solve'] = function () {
   var b = R.b, n = R.cur, rec = ansOf(b, n), l = lessonAtPage(b, n), pr = printedOf(b, n);
   var from = l ? l.from : pr, to = l ? (l.to || l.from) : pr;
   var list = rec && rec.items.length ? '<ol class="ans-list">' + rec.items.map(function (it) { return '<li><b>' + esc(it.n) + (it.q ? ' · ' + esc(it.q) : '') + '</b><span>' + fx(it.a) + '</span></li>'; }).join('') + '</ol>' : '';
-  openModal(sheet('حلّ أسئلة الكتاب مع Claude',
+  openModal(sheet('حلّ أسئلة الكتاب مع المساعد',
     '<section class="set-sec"><h3>صفحة ' + (pr >= 1 ? pr : n) + '</h3>' +
-    (rec ? (rec.items.length ? '<p class="small muted">حلّ Claude ' + cnt(rec.items.length, WORDS.q) + ' في هذه الصفحة. الإجابات مكتوبة على الصفحة: اضغط إجابة لتطويها إلى رقمها (فتكشفها للطلاب لاحقًا)، واسحبها لتنقلها إن غطّت شيئًا.</p>' + list : '<p class="small muted">لم يجد Claude أسئلة في هذه الصفحة.</p>') : '<p class="small muted">يقرأ Claude صورة الصفحة ويحل كل سؤال فيها، ثم تظهر الإجابة على الصفحة نفسها بجانب السؤال.</p>') +
+    (rec ? (rec.items.length ? '<p class="small muted">حلّ المساعد ' + cnt(rec.items.length, WORDS.q) + ' في هذه الصفحة. الإجابات مكتوبة على الصفحة: اضغط إجابة لتطويها إلى رقمها (فتكشفها للطلاب لاحقًا)، واسحبها لتنقلها إن غطّت شيئًا.</p>' + list : '<p class="small muted">لم يجد المساعد أسئلة في هذه الصفحة.</p>') : '<p class="small muted">يقرأ المساعد صورة الصفحة ويحل كل سؤال فيها، ثم تظهر الإجابة على الصفحة نفسها بجانب السؤال.</p>') +
     '<div class="actions" style="margin-top:0"><button class="btn" data-act="solve-run" data-from="' + pr + '" data-to="' + pr + '" data-redo="1">' + (rec ? 'أعد حلّ هذه الصفحة' : 'حلّ أسئلة هذه الصفحة') + '</button>' +
     (rec && rec.items.length ? '<button class="btn ghost sm danger" data-act="solve-del">احذف حلولها</button>' : '') + '</div></section>' +
     '<section class="set-sec"><h3>صفحات أكثر</h3><p class="small muted">للدرس كله ومراجعة الفصل والاختبار المقنن. تُتخطى الصفحات المحلولة من قبل، والصفحات التي لا أسئلة فيها لا يظهر عليها شيء.</p>' +
@@ -3512,7 +3512,7 @@ ACT['solve-del'] = function (el) {
 };
 ACT['solve-run'] = function (el) {
   var R = RD; if (!R) return;
-  if (!P.ai.key) { toast('أضف مفتاح Claude API أولًا من الإعدادات'); ACT.settings(); return; }
+  if (!P.ai.key) { toast('أضف مفتاح المساعد الذكي أولًا من الإعدادات'); ACT.settings(); return; }
   var b = R.b, f = el.getAttribute('data-from'), t = el.getAttribute('data-to'), redo = !!el.getAttribute('data-redo');
   if (f == null) { f = document.getElementById('sv-from').value; t = document.getElementById('sv-to').value; }
   var a = pdfPage(b, +f), z = pdfPage(b, +t); if (!isFinite(a) || !isFinite(z)) return; if (z < a) { var s = a; a = z; z = s; }
@@ -3520,7 +3520,7 @@ ACT['solve-run'] = function (el) {
   var pages = []; for (var n = a; n <= z; n++) if (redo || !ansOf(b, n)) pages.push(n);
   if (!pages.length) { toast('هذه الصفحات محلولة من قبل'); return; }
   SOLVE = { stopped: false }; wake(true);
-  var prog = progModal('Claude يحلّ الأسئلة', 'solve-stop'), done = 0, found = 0, failed = [];
+  var prog = progModal('المساعد يحلّ الأسئلة', 'solve-stop'), done = 0, found = 0, failed = [];
   pages.reduce(function (p, n, i) {
     return p.then(function () {
       if (SOLVE.stopped) throw aiErr('stop');
@@ -3531,7 +3531,7 @@ ACT['solve-run'] = function (el) {
     });
   }, Promise.resolve()).then(function () {
     wake(false); var first = pages.filter(function (n) { var r = ansOf(b, n); return r && r.items.length; })[0];
-    doneModal('<h2>' + (found ? 'حُلّ ' + cnt(found, WORDS.q) : 'لا أسئلة') + '</h2><p class="muted">' + (found ? 'في ' + cnt(pages.filter(function (n) { var r = ansOf(b, n); return r && r.items.length; }).length, ['صفحة واحدة', 'صفحتين', 'صفحات', 'صفحة']) + '. الإجابات مكتوبة على الصفحات بجانب كل سؤال؛ راجعها قبل أن تعرضها، واسحب أي إجابة إن احتاجت مكانًا أنسب.' : 'لم يجد Claude أسئلة في هذه الصفحات.') + (failed.length ? ' تعذّر حل الصفحات: ' + failed.join('، ') + '؛ أعد المحاولة لها.' : '') + '</p>');
+    doneModal('<h2>' + (found ? 'حُلّ ' + cnt(found, WORDS.q) : 'لا أسئلة') + '</h2><p class="muted">' + (found ? 'في ' + cnt(pages.filter(function (n) { var r = ansOf(b, n); return r && r.items.length; }).length, ['صفحة واحدة', 'صفحتين', 'صفحات', 'صفحة']) + '. الإجابات مكتوبة على الصفحات بجانب كل سؤال؛ راجعها قبل أن تعرضها، واسحب أي إجابة إن احتاجت مكانًا أنسب.' : 'لم يجد المساعد أسئلة في هذه الصفحات.') + (failed.length ? ' تعذّر حل الصفحات: ' + failed.join('، ') + '؛ أعد المحاولة لها.' : '') + '</p>');
     if (first && RD) { RD.cur = first; scrollToPage(first, true); trackPage(RD); }
   }, function (e) { wake(false); doneModal('<h2>' + (e.code === 'stop' ? 'أُوقف' : 'لم يكتمل الحل') + '</h2><p class="muted">' + (done ? 'حُلّت ' + cnt(done, ['صفحة واحدة', 'صفحتان', 'صفحات', 'صفحة']) + ' قبل التوقف. ' : '') + (e.code === 'stop' ? '' : esc(aiMsg(e))) + '</p>'); });
 };
@@ -4530,7 +4530,7 @@ function settingsHtml() {
   var m = aiModel(), known = MODELS.some(function (x) { return x[0] === m; });
   return sheet('الإعدادات',
     '<section class="set-sec"><h3>المظهر</h3>' + segBtns('pref-theme', P.theme || 'auto', [['auto', 'تلقائي'], ['light', 'فاتح'], ['dark', 'داكن']]) + '</section>' +
-    '<section class="set-sec"><h3>المساعد الذكي (Claude)</h3><p class="small muted">لتجهيز مساعد الدروس وقراءة الفهرس. ضع مفتاح API من حسابك في منصة Claude للمطورين (<a href="https://platform.claude.com/" target="_blank" rel="noopener">platform.claude.com</a>) برصيد مدفوع مسبقًا. يبقى المفتاح على هذا الجهاز فقط، ويُرسَل مباشرة إلى Anthropic مع صور صفحات الدرس، ولا يدخل في النسخة الاحتياطية.</p>' +
+    '<section class="set-sec"><h3>المساعد الذكي</h3><p class="small muted">لتجهيز مساعد الدروس وقراءة الفهرس. ضع مفتاح API من حسابك في منصة Claude للمطورين (<a href="https://platform.claude.com/" target="_blank" rel="noopener">platform.claude.com</a>) برصيد مدفوع مسبقًا. يبقى المفتاح على هذا الجهاز فقط، ويُرسَل مباشرة إلى Anthropic مع صور صفحات الدرس، ولا يدخل في النسخة الاحتياطية.</p>' +
     '<label class="field"><span>مفتاح API</span><input type="password" id="ai-key" autocomplete="off" autocapitalize="off" spellcheck="false" dir="ltr" placeholder="sk-ant-…" value="' + esc(P.ai.key || '') + '"></label>' +
     '<label class="field"><span>النموذج</span><select id="ai-model">' + MODELS.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === m ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '<option value="custom"' + (known ? '' : ' selected') + '>نموذج آخر…</option></select></label>' +
     (known ? '' : '<label class="field"><span>اسم النموذج</span><input type="text" id="ai-custom" dir="ltr" value="' + esc(m) + '"></label>') +
@@ -4548,7 +4548,7 @@ function settingsHtml() {
 var BK_GROUPS = [
   ['المظهر', ['المظهر', 'الخط', 'تبويبات الدرس']],
   ['التدريس والتقويم', ['فصولي', 'التقويم الدراسي']],
-  ['المساعد الذكي (Claude)', ['المساعد الذكي']],
+  ['المساعد الذكي', ['المساعد الذكي']],
   ['البيانات والمزامنة', ['المزامنة', 'النسخ الاحتياطي', 'التخزين على الجهاز']]
 ];
 var BK_CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
