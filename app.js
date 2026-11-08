@@ -1093,7 +1093,7 @@ document.addEventListener('change', function (e) {
   if (hid.length >= LTABS.length) { e.target.checked = true; toast('أبقِ تبويبًا واحدًا على الأقل'); return; }
   P.htabs = hid; savePref(); render(true);
 });
-var LTABS = [['goals', 'الأهداف'], ['exp', 'الشرح'], ['film', 'مقطع الدرس'], ['figs', 'الرسوم'], ['map', 'خريطة المفاهيم'], ['eval', 'التقويم'], ['ws', 'ورقة العمل'], ['lab', 'المختبر'], ['game', 'الألعاب'], ['sum', 'الملخص والأنشطة'], ['notes', 'ملاحظاتي']];
+var LTABS = [['goals', 'الأهداف'], ['exp', 'الشرح'], ['board', 'السبورة'], ['film', 'مقطع الدرس'], ['figs', 'الرسوم'], ['map', 'خريطة المفاهيم'], ['eval', 'التقويم'], ['ws', 'ورقة العمل'], ['lab', 'المختبر'], ['game', 'الألعاب'], ['sum', 'الملخص والأنشطة'], ['notes', 'ملاحظاتي']];
 VIEWS.lesson = function () {
   var x = lessonByKey(route.k || ''); if (!x) { route = { v: 'lessons' }; return VIEWS.lessons(); }
   var b = x.b, l = x.l, a = aidOf(b, l), k = lk(b, l), idx = b.lessons.indexOf(l);
@@ -3217,6 +3217,54 @@ document.addEventListener('change', function (e) {
   var id = t.getAttribute('data-ph-cap'), k = +t.getAttribute('data-k'), d = XC['p:' + id]; if (!d || !d.imgs[k]) return;
   d = JSON.parse(JSON.stringify(d)); d.imgs[k].cap = t.value.trim().slice(0, 200); d.t = Date.now(); xcPut('p:' + id, d);
 });
+/* ---------- «السبورة» tab: the lesson's board (the same one as «سبورتي») on the whole screen ---------- */
+var FSB = null, FSB_BACK = {}, FSB_SKIP = null;
+var FSB_UNMOUNT = boardsUnmount;
+boardsUnmount = function () { // a redraw of the page leaves the open full-screen board alone
+  var keep = NB_LIVE.filter(function (B) { return B.keep; });
+  NB_LIVE = NB_LIVE.filter(function (B) { return !B.keep; }); FSB_UNMOUNT(); NB_LIVE = keep;
+};
+L_TAB.board = function (a, b, l) {
+  var k = lk(b, l);
+  return '<section class="panel fsb-card"><h2 class="hh">' + ico('pen', 'amber') + 'السبورة</h2><p class="muted">سبورة الدرس على كامل الشاشة: اكتب بقلم الآيباد، ومرّر بإصبعك. وهي نفسها «سبورتي» في تبويب «ملاحظاتي»، فما تكتبه هنا تجده هناك.</p>' +
+    '<div class="actions"><button class="btn" data-act="fsb-open" data-k="' + esc(k) + '">' + svgI('pen') + 'افتح السبورة</button></div></section>';
+};
+function fsbOpen(k) {
+  if (FSB) return;
+  var x = lessonByKey(k), id = 'b:' + k;
+  var ov = document.createElement('div'); ov.className = 'fsb'; ov.id = 'fsb'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'السبورة');
+  ov.innerHTML = '<div class="fsb-top"><div class="fsb-tt"><b>السبورة</b>' + (x ? '<span class="small muted">' + esc(x.l.title) + '</span>' : '') + '</div><button type="button" class="btn sm" data-fsb="close">إغلاق</button></div><div class="fsb-body"><div class="fsb-slot"></div></div>';
+  document.body.appendChild(ov); document.documentElement.classList.add('fsb-on');
+  FSB = { ov: ov, k: k, B: null };
+  ov.addEventListener('click', function (e) { if (e.target.closest('[data-fsb="close"]')) fsbClose(); });
+  xcReady().then(function () {
+    if (!FSB || FSB.ov !== ov) return;
+    var host = ov.querySelector('.fsb-slot'), body = ov.querySelector('.fsb-body');
+    var d = XC[id] ? JSON.parse(JSON.stringify(XC[id])) : { k: id, h: NB_H0, s: [] };
+    var w = Math.max(280, body.clientWidth - 24), room = Math.max(300, body.clientHeight - 90); // the board fills the screen under its tools
+    d.h = Math.max(d.h || NB_H0, Math.ceil(room * NB_W / w));
+    nbMount(host, id, d); FSB.B = host.__nb; if (FSB.B) FSB.B.keep = true;
+  });
+}
+function fsbClose() {
+  if (!FSB) return; var F = FSB; FSB = null;
+  if (F.B) { if (F.B.saveT) F.B.flush(); if (F.B.ro) F.B.ro.disconnect(); NB_LIVE = NB_LIVE.filter(function (B) { return B !== F.B; }); }
+  F.ov.remove(); document.documentElement.classList.remove('fsb-on');
+  if (route.v === 'lesson' && route.tab === 'board') { FSB_SKIP = F.k; route.tab = FSB_BACK[F.k] || 'goals'; render(); }
+}
+ACT['fsb-open'] = function (el) { fsbOpen(el.getAttribute('data-k')); };
+var FSB_LTAB = ACT.ltab;
+ACT.ltab = function (el) { // choosing the tab opens the board; closing it goes back to the tab before
+  var t = el.getAttribute('data-tab'); if (t === 'board' && route.tab !== 'board') FSB_BACK[route.k || ''] = route.tab || 'goals';
+  FSB_SKIP = null; FSB_LTAB(el);
+};
+AFTER.push(function () {
+  if (route.v !== 'lesson' || route.tab !== 'board' || FSB) return;
+  var b = document.querySelector('#main [data-act="fsb-open"]'); if (!b) return;
+  var k = b.getAttribute('data-k'); if (FSB_SKIP === k) return;
+  FSB_BACK[k] = FSB_BACK[route.k || ''] || FSB_BACK[k] || 'goals'; fsbOpen(k);
+});
+document.addEventListener('keydown', function (e) { if (FSB && e.key === 'Escape') fsbClose(); });
 
 /* ---------- the AI: Claude API called from the device with the user's own key ---------- */
 var MODELS = [['claude-sonnet-5-5', 'Sonnet 5.5 · متوازن (مستحسن)', 2, 10], ['claude-opus-5-5', 'Opus 5.5 · الأدق', 4, 20], ['claude-haiku-5-5', 'Haiku 5.5 · الأسرع والأرخص', 0.1, 0.5]];

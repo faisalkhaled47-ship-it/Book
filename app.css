@@ -505,3 +505,11 @@ html.kb nav.tabs{display:none!important}html.kb .rd-bar{display:none!important}
 /* iPhone zooms in on a field whose text is under 16px, and the page stays zoomed: fields keep 16px on touch screens */
 @media (pointer:coarse){input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{font-size:16px!important}}
 html,body{overflow-x:clip}
+/* full-screen lesson board */
+html.fsb-on,html.fsb-on body{overflow:hidden}
+.fsb{position:fixed;inset:0;z-index:9000;background:var(--ground);display:flex;flex-direction:column;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.fsb-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-bottom:1px solid var(--rule);background:var(--panel)}
+.fsb-tt{display:grid;gap:1px;min-width:0}.fsb-tt span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fsb-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 12px 24px;overscroll-behavior:contain}
+.fsb-slot .nb-bar{position:sticky;top:-10px;z-index:2;background:var(--ground);padding:6px 0}
+html.fsb-on nav.tabs{display:none}
