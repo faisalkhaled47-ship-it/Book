@@ -511,5 +511,9 @@ html.fsb-on,html.fsb-on body{overflow:hidden}
 .fsb-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-bottom:1px solid var(--rule);background:var(--panel)}
 .fsb-tt{display:grid;gap:1px;min-width:0}.fsb-tt span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fsb-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 12px 24px;overscroll-behavior:contain}
-.fsb-slot .nb-bar{position:sticky;top:-10px;z-index:2;background:var(--ground);padding:6px 0}
+.fsb{touch-action:pan-x pan-y;-webkit-user-select:none;user-select:none}
+.fsb-body{padding-top:0}
+.fsb-slot .nb-bar{position:sticky;top:0;z-index:5;background:var(--ground);padding:8px 0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;box-shadow:0 1px 0 var(--rule)}
+.fsb-slot .nb-bar::-webkit-scrollbar{display:none}
+.fsb-slot .nb-bar>*{flex:none}
 html.fsb-on nav.tabs{display:none}

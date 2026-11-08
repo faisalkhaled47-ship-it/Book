@@ -3265,6 +3265,8 @@ AFTER.push(function () {
   FSB_BACK[k] = FSB_BACK[route.k || ''] || FSB_BACK[k] || 'goals'; fsbOpen(k);
 });
 document.addEventListener('keydown', function (e) { if (FSB && e.key === 'Escape') fsbClose(); });
+// no pinch-zoom while the board is open, so the fixed tool bar can never slide off the screen
+['gesturestart', 'gesturechange'].forEach(function (n) { document.addEventListener(n, function (e) { if (FSB) e.preventDefault(); }, { passive: false }); });
 
 /* ---------- the AI: Claude API called from the device with the user's own key ---------- */
 var MODELS = [['claude-sonnet-5-5', 'Sonnet 5.5 · متوازن (مستحسن)', 2, 10], ['claude-opus-5-5', 'Opus 5.5 · الأدق', 4, 20], ['claude-haiku-5-5', 'Haiku 5.5 · الأسرع والأرخص', 0.1, 0.5]];
